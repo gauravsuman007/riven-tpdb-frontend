@@ -1,12 +1,26 @@
 import { source } from "sveltekit-sse";
-import providers from "$lib/providers";
+import { gqlClient } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("logs");
 
 export type LogEntry = {
-    message?: string;
+    timestamp?: string | null;
+    level?: string | null;
+    message?: string | null;
+    target?: string | null;
 };
+
+const HISTORICAL_LOGS_QUERY = `
+    query GetLogs($limit: Int, $level: String) {
+        logs(limit: $limit, level: $level) {
+            timestamp
+            level
+            message
+            target
+        }
+    }
+`;
 
 export class LogStore {
     #logs = $state<LogEntry[]>([]);
@@ -60,21 +74,21 @@ export class LogStore {
         return this.#connectionStatus;
     }
 
-    async fetchHistoricalLogs() {
+    async fetchHistoricalLogs(limit = 500, level?: string) {
         try {
             this.#isLoadingHistorical = true;
             this.#historicalError = null;
 
-            const response = await providers.riven.GET("/api/v1/logs");
-            if (response.error) {
-                throw new Error(response.error);
-            }
-            // @ts-expect-error ignore
-            this.#historicalLogs = response.data?.logs || [];
+            const data = await gqlClient<{ logs: LogEntry[] }>(HISTORICAL_LOGS_QUERY, {
+                limit,
+                level: level ?? null
+            });
+
+            this.#historicalLogs = data.logs;
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : "Unknown error";
             logger.error("Failed to fetch historical logs:", e);
-            this.#historicalError = `Failed to fetch historical logs: ${message}`;
+            this.#historicalError = `Failed to fetch logs: ${message}`;
         } finally {
             this.#isLoadingHistorical = false;
         }

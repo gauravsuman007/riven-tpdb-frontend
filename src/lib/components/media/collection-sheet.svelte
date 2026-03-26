@@ -4,7 +4,7 @@
     import LandscapeCard from "$lib/components/media/landscape-card.svelte";
     import Loader2 from "@lucide/svelte/icons/loader-2";
     import { toast } from "svelte-sonner";
-    import providers from "$lib/providers";
+    import { gqlClient } from "$lib/graphql-client";
     import { createScopedLogger } from "$lib/logger";
     import { isMobileStore } from "$lib/stores/global.svelte";
     import type { CollectionDetails } from "$lib/providers/parser";
@@ -47,22 +47,25 @@
     async function requestAll() {
         if (!collectionData?.parts?.length) return;
         requestLoading = true;
-        const ids = collectionData.parts.map((p) => p.id.toString());
 
         try {
-            const response = await providers.riven.POST("/api/v1/items/add", {
-                body: {
-                    media_type: "movie",
-                    tmdb_ids: ids,
-                    tvdb_ids: []
-                }
-            });
+            // Add each movie in the collection
+            const results = await Promise.allSettled(
+                collectionData.parts.map((p) =>
+                    gqlClient<{ addItem: { id: number } }>(
+                        `mutation AddItem($itemType: MediaItemType!, $title: String!, $tmdbId: String) {
+                            addItem(itemType: $itemType, title: $title, tmdbId: $tmdbId) { id }
+                        }`,
+                        { itemType: "MOVIE", title: p.title ?? "Unknown", tmdbId: String(p.id) }
+                    )
+                )
+            );
 
-            if (response.data) {
-                toast.success("All movies in collection requested!");
+            const succeeded = results.filter((r) => r.status === "fulfilled").length;
+            if (succeeded > 0) {
+                toast.success(`${succeeded} movie(s) in collection requested!`);
                 open = false;
             } else {
-                logger.error("Error response:", response.error);
                 toast.error("Failed to request collection.");
             }
         } catch (e) {

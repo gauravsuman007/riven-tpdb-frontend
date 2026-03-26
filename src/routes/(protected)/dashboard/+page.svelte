@@ -250,7 +250,13 @@
                         labels={{ offset: 10 }}
                         points
                         padding={{ top: 16, bottom: 32, left: 32, right: 16 }}
-                        props={{ spline: { curve: curveCatmullRom } }}>
+                        props={{
+                            spline: { curve: curveCatmullRom },
+                            xAxis: {
+                                ticks: data.statistics?.media_year_releases?.map((d) => d.year) ?? [],
+                                format: (d: number) => String(d)
+                            }
+                        }}>
                         {#snippet tooltip()}
                             <Chart.Tooltip />
                         {/snippet}

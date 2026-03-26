@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import providers from "$lib/providers";
     import { Button } from "$lib/components/ui/button/index.js";
     import { toast } from "svelte-sonner";
     import { logStore, type LogEntry } from "$lib/stores/logs.svelte";
@@ -73,19 +72,7 @@
 
     async function handleUploadLogs() {
         try {
-            const response = await providers.riven.POST("/api/v1/upload_logs");
-            if (response.error) {
-                toast.error(`Failed to upload logs: ${response.error}`);
-            }
-
-            if (response.data?.success) {
-                navigator.clipboard.writeText(response.data.url);
-                toast.success("Logs uploaded! URL copied to clipboard.");
-            } else {
-                toast.error(
-                    "Failed to copy logs link. Make sure you are using https or localhost."
-                );
-            }
+            toast.info("Log upload is not supported in the new backend.");
         } catch (e) {
             logger.error("Failed to upload logs:", e);
         }

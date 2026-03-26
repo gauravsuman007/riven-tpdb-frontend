@@ -1,10 +1,9 @@
 <script lang="ts">
-    import providers from "$lib/providers";
+    import { gqlClient } from "$lib/graphql-client";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import Loader2 from "@lucide/svelte/icons/loader-2";
-    import type { ScrapeSeasonRequest } from "$lib/types";
     import SeasonSelector, { type SeasonInfo } from "./season-selector.svelte";
     import { createScopedLogger } from "$lib/logger";
     import { type Snippet } from "svelte";
@@ -68,68 +67,51 @@
     const hasRequestableSeasons = $derived(requestableSeasons.length > 0);
 
     async function addMediaItem(ids: (string | null | undefined)[], mediaType: string) {
-        const validIds = ids.filter((id): id is string => id !== null && id !== undefined);
+        const validNumericIds = ids
+            .filter((id): id is string => id !== null && id !== undefined)
+            .map(Number)
+            .filter((n) => !isNaN(n));
 
         try {
-            if (
-                mediaType === "tv" &&
-                seasons.length > 0 &&
-                sortedSelectedSeasonNumbers.length > 0 &&
-                externalId
-            ) {
-                const body: ScrapeSeasonRequest = {
-                    media_type: "tv",
-                    tvdb_id: externalId,
-                    season_numbers: sortedSelectedSeasonNumbers
-                };
+            if (mediaType === "tv") {
+                // Shows: always use addItem so seasons are properly tracked.
+                // The backend handles idempotency — if the show exists it merges seasons.
+                const itemTitle = title ?? "Unknown";
+                const selectedSeasonNumbers =
+                    sortedSelectedSeasonNumbers.length > 0 ? sortedSelectedSeasonNumbers : null;
 
-                // Use consolidated /auto endpoint with season_numbers
-                const response = await (providers.riven as any).POST("/api/v1/scrape/auto", {
-                    body: body
-                });
-
-                if (response.data || response.message) {
-                    // adjust check based on actual response
-                    toast.success("Media item requested successfully!");
-                    open = false;
-                } else {
-                    logger.error("Error response:", response.error);
-                    toast.error("Failed to request media item.");
-                }
-            } else if (validIds.length > 0) {
-                // Item already exists in Riven — use /retry so it immediately
-                // re-queues all missing episodes (clears scraped_at cooldowns recursively).
-                // Calling /items/add on an existing item is a no-op due to deduplication.
-                const response = await providers.riven.POST("/api/v1/items/retry", {
-                    body: { ids: validIds }
-                });
-
-                if (response.data) {
-                    toast.success("Retry requested successfully!");
-                    open = false;
-                } else {
-                    logger.error("Error response:", response.error);
-                    toast.error("Failed to retry media item.");
-                }
-            } else {
-                // Fallback: item not yet in Riven — add it fresh
-                const extIds = externalId ? [externalId] : validIds;
-
-                const response = await providers.riven.POST("/api/v1/items/add", {
-                    body: {
-                        media_type: mediaType as "movie" | "tv",
-                        tmdb_ids: mediaType === "movie" ? extIds : [],
-                        tvdb_ids: mediaType === "tv" ? extIds : []
+                await gqlClient<{ addItem: { id: number } }>(
+                    `mutation AddItem($itemType: MediaItemType!, $title: String!, $tvdbId: String, $seasons: [Int!]) {
+                        addItem(itemType: $itemType, title: $title, tvdbId: $tvdbId, seasons: $seasons) { id }
+                    }`,
+                    {
+                        itemType: "SHOW",
+                        title: itemTitle,
+                        tvdbId: externalId,
+                        seasons: selectedSeasonNumbers
                     }
-                });
-
-                if (response.data) {
-                    toast.success("Media item requested successfully!");
-                    open = false;
-                } else {
-                    logger.error("Error response:", response.error);
-                    toast.error("Failed to request media item.");
-                }
+                );
+                toast.success("Requested successfully!");
+                open = false;
+            } else if (validNumericIds.length > 0) {
+                // Movie already exists — retry to re-queue
+                await gqlClient<{ retryItems: number }>(
+                    `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
+                    { ids: validNumericIds }
+                );
+                toast.success("Request queued successfully!");
+                open = false;
+            } else {
+                // Movie not yet in Riven — add it fresh
+                const itemTitle = title ?? "Unknown";
+                await gqlClient<{ addItem: { id: number } }>(
+                    `mutation AddItem($itemType: MediaItemType!, $title: String!, $tmdbId: String) {
+                        addItem(itemType: $itemType, title: $title, tmdbId: $tmdbId) { id }
+                    }`,
+                    { itemType: "MOVIE", title: itemTitle, tmdbId: externalId }
+                );
+                toast.success("Requested successfully!");
+                open = false;
             }
         } catch (e) {
             logger.error("Request failed", e);

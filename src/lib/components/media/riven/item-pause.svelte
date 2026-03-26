@@ -1,5 +1,5 @@
 <script lang="ts">
-    import providers from "$lib/providers";
+    import { gqlClient } from "$lib/graphql-client";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -37,24 +37,22 @@
     }: Props = $props();
 
     async function togglePauseMediaItem(ids: (string | null | undefined)[]) {
-        const validIds = ids.filter((id): id is string => id !== null && id !== undefined);
+        const validIds = ids
+            .filter((id): id is string => id !== null && id !== undefined)
+            .map(Number)
+            .filter((n) => !isNaN(n));
 
-        const response = isPaused
-            ? await providers.riven.POST("/api/v1/items/pause", {
-                  body: {
-                      ids: validIds
-                  }
-              })
-            : await providers.riven.POST("/api/v1/items/unpause", {
-                  body: {
-                      ids: validIds
-                  }
-              });
+        const mutation = isPaused
+            ? `mutation UnpauseItems($ids: [Int!]!) { unpauseItems(ids: $ids) }`
+            : `mutation PauseItems($ids: [Int!]!) { pauseItems(ids: $ids) }`;
 
-        if (response.data) {
+        try {
+            await gqlClient<{ pauseItems?: number; unpauseItems?: number }>(mutation, {
+                ids: validIds
+            });
             toast.success(`Media item ${isPaused ? "unpaused" : "paused"} successfully!`);
-        } else {
-            logger.error("Error response:", response.error);
+        } catch (e) {
+            logger.error("Error toggling pause:", e);
             toast.error(`Failed to ${isPaused ? "unpause" : "pause"} media item.`);
         }
     }

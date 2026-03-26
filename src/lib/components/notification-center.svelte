@@ -18,10 +18,14 @@
 
     // Show toast when a new notification is added (callback pattern instead of $effect)
     function handleNewNotification(notification: Notification) {
-        toast.success(notification.title, {
-            description: notification.message,
-            duration: 5000
-        });
+        const opts = { description: notification.message, duration: 5000 };
+        if (notification.severity === "error") {
+            toast.error(notification.title, opts);
+        } else if (notification.severity === "warning") {
+            toast.warning(notification.title, opts);
+        } else {
+            toast.success(notification.title, opts);
+        }
     }
 
     onMount(() => {

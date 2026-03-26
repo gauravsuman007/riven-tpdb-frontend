@@ -1,54 +1,83 @@
 import type { PageServerLoad } from "./$types";
-import providers from "$lib/providers";
+import { gql } from "$lib/graphql-client";
 import { error } from "@sveltejs/kit";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("dashboard");
 
+const STATS_QUERY = `
+    query {
+        stats {
+            totalMovies
+            totalShows
+            totalSeasons
+            totalEpisodes
+            completed
+            scraped
+            indexed
+            failed
+            paused
+            ongoing
+            partiallyCompleted
+            unreleased
+        }
+        activity
+        yearReleases {
+            year
+            count
+        }
+    }
+`;
+
 export const load = (async ({ fetch, locals }) => {
-    const [statistics, svc, downloaderInfo] = await Promise.all([
-        providers.riven.GET("/api/v1/stats", {
-            baseUrl: locals.backendUrl,
-            headers: {
-                "x-api-key": locals.apiKey
-            },
-            fetch: fetch
-        }),
+    try {
+        const data = await gql<{
+            stats: {
+                totalMovies: number;
+                totalShows: number;
+                totalSeasons: number;
+                totalEpisodes: number;
+                completed: number;
+                scraped: number;
+                indexed: number;
+                failed: number;
+                paused: number;
+                ongoing: number;
+                partiallyCompleted: number;
+                unreleased: number;
+            };
+            activity: Record<string, number>;
+            yearReleases: { year: number; count: number }[];
+        }>(locals.backendUrl, locals.apiKey, STATS_QUERY, {}, fetch);
 
-        providers.riven.GET("/api/v1/services", {
-            baseUrl: locals.backendUrl,
-            headers: {
-                "x-api-key": locals.apiKey
-            },
-            fetch: fetch
-        }),
-        providers.riven.GET("/api/v1/downloader_user_info", {
-            baseUrl: locals.backendUrl,
-            headers: {
-                "x-api-key": locals.apiKey
-            },
-            fetch: fetch
-        })
-    ]);
+        const s = data.stats;
+        const total_items =
+            s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
 
-    if (statistics.error) {
-        logger.error("Statistics fetch error:", statistics.error);
+        return {
+            statistics: {
+                total_movies: s.totalMovies,
+                total_shows: s.totalShows,
+                total_seasons: s.totalSeasons,
+                total_episodes: s.totalEpisodes,
+                total_items,
+                incomplete_items: total_items - s.completed,
+                states: {
+                    Completed: s.completed,
+                    Scraped: s.scraped,
+                    Indexed: s.indexed,
+                    Failed: s.failed,
+                    Paused: s.paused,
+                    Ongoing: s.ongoing,
+                    PartiallyCompleted: s.partiallyCompleted,
+                    Unreleased: s.unreleased
+                },
+                activity: data.activity ?? {},
+                media_year_releases: data.yearReleases ?? []
+            }
+        };
+    } catch (err) {
+        logger.error("Failed to fetch stats:", err);
         error(500, "Unable to fetch stats data");
     }
-
-    if (svc.error) {
-        logger.error("Services fetch error:", svc.error);
-        error(500, "Unable to fetch services data");
-    }
-
-    if (downloaderInfo.error) {
-        logger.error("Downloader info fetch error:", downloaderInfo.error);
-        error(500, "Unable to fetch downloader info data");
-    }
-
-    return {
-        statistics: statistics.data,
-        services: svc.data || {},
-        downloaderInfo: downloaderInfo.data
-    };
 }) satisfies PageServerLoad;

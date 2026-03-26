@@ -1,78 +1,193 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail } from "@sveltejs/kit";
-import providers from "$lib/providers";
-import type { InitialFormData } from "@sjsf/sveltekit";
-import { createFormHandler } from "@sjsf/sveltekit/server";
-import * as defaults from "$lib/components/settings/form-defaults";
+import { gql } from "$lib/graphql-client";
 
-const getSchema = async (baseUrl: string, apiKey: string, fetch: typeof globalThis.fetch) => {
-    const settingsSchema = await providers.riven.GET("/api/v1/settings/schema", {
-        baseUrl,
-        headers: {
-            "x-api-key": apiKey
-        },
-        fetch
-    });
-    if (settingsSchema.error) {
-        throw new Error("Failed to load settings schema");
+const RANK_SETTINGS_QUERY = `query { rankSettings }`;
+const UPDATE_RANK_SETTINGS = `mutation UpdateRankSettings($settings: JSON!) { updateRankSettings(settings: $settings) }`;
+
+const GENERAL_SETTINGS_QUERY = `query { generalSettings }`;
+const GENERAL_SETTINGS_SCHEMA_QUERY = `query { generalSettingsSchema }`;
+const UPDATE_GENERAL_SETTINGS = `mutation UpdateGeneralSettings($settings: JSON!) { updateGeneralSettings(settings: $settings) }`;
+
+const PLUGIN_INFO_QUERY = `
+    query {
+        pluginInfo {
+            name
+            version
+            valid
+            schema
+        }
     }
+`;
 
-    return settingsSchema.data;
+const PLUGIN_SETTINGS_QUERY = `
+    query PluginSettings($plugin: String!) {
+        pluginSettings(plugin: $plugin)
+    }
+`;
+
+const UPDATE_PLUGIN_SETTINGS = `
+    mutation UpdatePluginSettings($plugin: String!, $settings: JSON!) {
+        updatePluginSettings(plugin: $plugin, settings: $settings)
+    }
+`;
+
+
+export type SettingFieldDef = {
+    key: string;
+    label: string;
+    type: string;
+    required: boolean;
+    default_value?: string;
+    placeholder?: string;
+    description?: string;
+};
+
+export type PluginInfo = {
+    name: string;
+    version: string;
+    valid: boolean;
+    schema: SettingFieldDef[];
 };
 
 export const load: PageServerLoad = async ({ fetch, locals }) => {
-    const allSettings = await providers.riven.GET("/api/v1/settings/get/all", {
-        baseUrl: locals.backendUrl,
-        headers: {
-            "x-api-key": locals.apiKey
-        },
-        fetch: fetch
-    });
+    try {
+        const [rankData, generalData, generalSchemaData, pluginData] = await Promise.all([
+            gql<{ rankSettings: Record<string, unknown> }>(
+                locals.backendUrl,
+                locals.apiKey,
+                RANK_SETTINGS_QUERY,
+                {},
+                fetch
+            ).catch(() => ({ rankSettings: {} })),
+            gql<{ generalSettings: Record<string, unknown> }>(
+                locals.backendUrl,
+                locals.apiKey,
+                GENERAL_SETTINGS_QUERY,
+                {},
+                fetch
+            ).catch(() => ({ generalSettings: {} })),
+            gql<{ generalSettingsSchema: SettingFieldDef[] }>(
+                locals.backendUrl,
+                locals.apiKey,
+                GENERAL_SETTINGS_SCHEMA_QUERY,
+                {},
+                fetch
+            ).catch(() => ({ generalSettingsSchema: [] })),
+            gql<{ pluginInfo: PluginInfo[] }>(
+                locals.backendUrl,
+                locals.apiKey,
+                PLUGIN_INFO_QUERY,
+                {},
+                fetch
+            ).catch(() => ({ pluginInfo: [] }))
+        ]);
 
-    if (allSettings.error) {
+        return {
+            rankSettings: rankData.rankSettings,
+            generalSettings: generalData.generalSettings,
+            generalSettingsSchema: generalSchemaData.generalSettingsSchema,
+            plugins: pluginData.pluginInfo
+        };
+    } catch {
         error(500, "Failed to load settings");
     }
-
-    return {
-        form: {
-            schema: await getSchema(locals.backendUrl, locals.apiKey, fetch),
-            initialValue: allSettings.data
-        } satisfies InitialFormData
-    };
 };
 
 export const actions = {
-    default: async ({ request, fetch, locals }) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleForm = createFormHandler<any, true>({
-            ...defaults,
-            // @ts-expect-error - it's valid
-            schema: await getSchema(locals.backendUrl, locals.apiKey, fetch),
-            sendData: true
-        });
-
-        const [form] = await handleForm(request.signal, await request.formData());
-        if (!form.isValid) {
-            return fail(400, { form });
+    updateRanking: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const rawSettings = formData.get("settings");
+        if (!rawSettings || typeof rawSettings !== "string") {
+            return fail(400, { error: "Settings data is required" });
         }
-
-        // const res = await setAllSettings({
-        //     fetch: fetch,
-        //     body: form.data
-        // });
-        const res = await providers.riven.POST("/api/v1/settings/set/all", {
-            body: form.data,
-            baseUrl: locals.backendUrl,
-            headers: {
-                "x-api-key": locals.apiKey
-            },
-            fetch: fetch
-        });
-
-        if (res.error) {
-            return fail(500, { form });
+        let settings: unknown;
+        try {
+            settings = JSON.parse(rawSettings);
+        } catch {
+            return fail(400, { error: "Invalid JSON settings" });
         }
+        try {
+            await gql(locals.backendUrl, locals.apiKey, UPDATE_RANK_SETTINGS, { settings }, fetch);
+            return { success: true };
+        } catch {
+            return fail(500, { error: "Failed to save ranking settings" });
+        }
+    },
 
-        return { form };
+    updateGeneral: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const rawSettings = formData.get("settings");
+        if (!rawSettings || typeof rawSettings !== "string") {
+            return fail(400, { error: "Settings data is required" });
+        }
+        let settings: unknown;
+        try {
+            settings = JSON.parse(rawSettings);
+        } catch {
+            return fail(400, { error: "Invalid JSON settings" });
+        }
+        try {
+            await gql(
+                locals.backendUrl,
+                locals.apiKey,
+                UPDATE_GENERAL_SETTINGS,
+                { settings },
+                fetch
+            );
+            return { success: true };
+        } catch {
+            return fail(500, { error: "Failed to save general settings" });
+        }
+    },
+
+    updatePlugin: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const plugin = formData.get("plugin");
+        const rawSettings = formData.get("settings");
+        if (!plugin || typeof plugin !== "string") {
+            return fail(400, { error: "Plugin name is required" });
+        }
+        if (!rawSettings || typeof rawSettings !== "string") {
+            return fail(400, { error: "Settings data is required" });
+        }
+        let settings: unknown;
+        try {
+            settings = JSON.parse(rawSettings);
+        } catch {
+            return fail(400, { error: "Invalid JSON settings" });
+        }
+        try {
+            const result = await gql<{ updatePluginSettings: { settings: unknown; valid: boolean } }>(
+                locals.backendUrl,
+                locals.apiKey,
+                UPDATE_PLUGIN_SETTINGS,
+                { plugin, settings },
+                fetch
+            );
+            return { success: true, valid: result.updatePluginSettings.valid };
+        } catch {
+            return fail(500, { error: "Failed to save plugin settings" });
+        }
+    },
+
+    loadPluginSettings: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const plugin = formData.get("plugin");
+        if (!plugin || typeof plugin !== "string") {
+            return fail(400, { error: "Plugin name is required" });
+        }
+        try {
+            const data = await gql<{ pluginSettings: Record<string, string> }>(
+                locals.backendUrl,
+                locals.apiKey,
+                PLUGIN_SETTINGS_QUERY,
+                { plugin },
+                fetch
+            );
+            return { pluginSettings: data.pluginSettings ?? {}, plugin };
+        } catch {
+            return fail(500, { error: "Failed to load plugin settings" });
+        }
     }
 } satisfies Actions;

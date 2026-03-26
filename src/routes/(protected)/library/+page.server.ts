@@ -2,8 +2,8 @@ import type { PageServerLoad } from "./$types";
 import { redirect, error } from "@sveltejs/kit";
 import { itemsSearchSchema } from "$lib/schemas/items";
 import { zod4 } from "sveltekit-superforms/adapters";
-import providers from "$lib/providers";
 import { superValidate } from "sveltekit-superforms";
+import { gql } from "$lib/graphql-client";
 import * as dateUtils from "$lib/utils/date";
 import { createScopedLogger } from "$lib/logger";
 
@@ -13,19 +13,52 @@ const VALID_ITEM_TYPES = ["movie", "show", "season", "episode"] as const;
 type ValidItemType = (typeof VALID_ITEM_TYPES)[number];
 type ItemType = ValidItemType | "unknown";
 
-interface RivenLibraryItem {
+interface GqlMediaItem {
     id: number;
-    type: string;
+    itemType: string;
     title: string;
-    tmdb_id?: string | null;
-    tvdb_id?: string | null;
-    parent_ids?: {
-        tmdb_id?: string | null;
-        tvdb_id?: string | null;
-    } | null;
-    poster_path?: string | null;
-    aired_at?: string | null;
+    tmdbId?: string | null;
+    tvdbId?: string | null;
+    parentId?: number | null;
+    posterPath?: string | null;
+    airedAt?: string | null;
 }
+
+interface GqlItemsPage {
+    items: GqlMediaItem[];
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+}
+
+const ITEMS_QUERY = `
+    query GetItems(
+        $page: Int
+        $limit: Int
+        $sort: String
+        $types: [MediaItemType!]
+        $search: String
+        $states: [MediaItemState!]
+    ) {
+        items(page: $page, limit: $limit, sort: $sort, types: $types, search: $search, states: $states) {
+            items {
+                id
+                itemType
+                title
+                tmdbId
+                tvdbId
+                parentId
+                posterPath
+                airedAt
+            }
+            page
+            limit
+            totalItems
+            totalPages
+        }
+    }
+`;
 
 function getItemType(type: string): ItemType {
     return VALID_ITEM_TYPES.includes(type as ValidItemType) ? (type as ValidItemType) : "unknown";
@@ -37,43 +70,44 @@ function extractYear(airedAt: string | null | undefined): number | string {
     return year ?? "N/A";
 }
 
-function transformItems(items: RivenLibraryItem[]) {
+function transformItems(items: GqlMediaItem[]) {
     return items
         .map((item) => {
-            // Determine ID and indexer for navigation
-            // Movies use TMDB, Shows use TVDB (skip resolution)
+            // GraphQL serialises MediaItemType as SCREAMING_SNAKE_CASE (MOVIE, SHOW…)
+            const rawType = item.itemType.toLowerCase();
             let id: string | number | null = null;
             let indexer: "tmdb" | "tvdb" = "tmdb";
 
-            if (item.type === "movie") {
-                id = item.tmdb_id ?? null;
+            if (rawType === "movie") {
+                id = item.tmdbId ?? null;
                 indexer = "tmdb";
-            } else if (item.type === "show") {
-                // Shows use TVDB directly - skip TMDB->TVDB resolution
-                id = item.tvdb_id ?? null;
+            } else if (rawType === "show") {
+                id = item.tvdbId ?? null;
                 indexer = "tvdb";
-            } else if (item.type === "season" || item.type === "episode") {
-                // Seasons/episodes use parent's TVDB ID
-                id = item.parent_ids?.tvdb_id ?? null;
+            } else if (rawType === "season" || rawType === "episode") {
+                // For sub-items we'd need the parent's tvdb_id — skip for now
+                id = item.tvdbId ?? null;
                 indexer = "tvdb";
             }
 
-            // Skip items without valid navigation IDs
             if (!id || id === "") {
                 logger.warn(
-                    `Skipping item "${item.title}" (riven_id: ${item.id}, type: ${item.type}): missing required ID field`
+                    `Skipping item "${item.title}" (id: ${item.id}, type: ${item.itemType}): missing ID`
                 );
                 return null;
             }
 
+            // Details page route uses "movie" or "tv" (not "show")
+            const mediaPageType = rawType === "show" ? "tv" : rawType;
+
             return {
                 id,
                 title: item.title,
-                poster_path: item.poster_path,
-                media_type: item.type,
-                year: extractYear(item.aired_at),
+                poster_path: item.posterPath,
+                media_type: mediaPageType,
+                year: extractYear(item.airedAt),
                 indexer,
-                type: getItemType(item.type),
+                type: getItemType(rawType),
                 riven_id: item.id
             };
         })
@@ -86,30 +120,45 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const itemsSearchForm = await superValidate(event.url.searchParams, zod4(itemsSearchSchema));
+    const { page, limit, sort, type: types, search, states } = itemsSearchForm.data;
 
-    const itemsResponse = await providers.riven.GET("/api/v1/items", {
-        params: {
-            query: itemsSearchForm.data
-        },
-        baseUrl: event.locals.backendUrl,
-        headers: {
-            "x-api-key": event.locals.apiKey
-        },
-        fetch: event.fetch
-    });
+    // Map form types to GraphQL enum values (uppercase)
+    const gqlTypes = types?.map((t: string) => t.toUpperCase()) ?? undefined;
+    // "All" means no filter — drop it before sending to GraphQL
+    const filteredStates = states?.filter((s) => s !== "All") ?? [];
+    const gqlStates = filteredStates.length > 0
+        ? filteredStates.map((s) =>
+            s.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+             .replace(/^[a-z]/, (c: string) => c.toUpperCase())
+          )
+        : undefined;
 
-    if (itemsResponse.error) {
+    try {
+        const data = await gql<{ items: GqlItemsPage }>(
+            event.locals.backendUrl,
+            event.locals.apiKey,
+            ITEMS_QUERY,
+            {
+                page: page ?? 1,
+                limit: limit ?? 20,
+                sort: (Array.isArray(sort) ? sort[0] : sort) ?? "date_desc",
+                types: gqlTypes,
+                search: search ?? undefined,
+                states: gqlStates
+            },
+            event.fetch
+        );
+
+        return {
+            items: transformItems(data.items.items),
+            page: data.items.page,
+            totalPages: data.items.totalPages,
+            limit: data.items.limit,
+            totalItems: data.items.totalItems,
+            itemsSearchForm
+        };
+    } catch (err) {
+        logger.error("Failed to fetch items:", err);
         error(500, "Failed to fetch items");
     }
-
-    return {
-        items: itemsResponse.data
-            ? transformItems(itemsResponse.data.items as unknown as RivenLibraryItem[])
-            : [],
-        page: itemsResponse.data ? itemsResponse.data.page : 1,
-        totalPages: itemsResponse.data ? itemsResponse.data.total_pages : 1,
-        limit: itemsResponse.data ? itemsResponse.data.limit : 20,
-        totalItems: itemsResponse.data ? itemsResponse.data.total_items : 0,
-        itemsSearchForm
-    };
 };

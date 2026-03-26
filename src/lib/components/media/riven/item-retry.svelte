@@ -1,5 +1,5 @@
 <script lang="ts">
-    import providers from "$lib/providers";
+    import { gqlClient } from "$lib/graphql-client";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -28,18 +28,19 @@
     let { title, ids, variant = "ghost", size = "sm", children, ...restProps }: Props = $props();
 
     async function retryMediaItem(ids: (string | null | undefined)[]) {
-        const validIds = ids.filter((id): id is string => id !== null && id !== undefined);
+        const validIds = ids
+            .filter((id): id is string => id !== null && id !== undefined)
+            .map(Number)
+            .filter((n) => !isNaN(n));
 
-        const response = await providers.riven.POST("/api/v1/items/retry", {
-            body: {
-                ids: validIds
-            }
-        });
-
-        if (response.data) {
-            toast.success("Media item retry successfully!");
-        } else {
-            logger.error("Error response:", response.error);
+        try {
+            await gqlClient<{ retryItems: number }>(
+                `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
+                { ids: validIds }
+            );
+            toast.success("Media item retry queued successfully!");
+        } catch (e) {
+            logger.error("Error retrying items:", e);
             toast.error("Failed to retry media item.");
         }
     }

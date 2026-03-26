@@ -1,5 +1,6 @@
 import providers from "$lib/providers";
 import { createScopedLogger } from "$lib/logger";
+import { gql } from "$lib/graphql-client";
 
 const logger = createScopedLogger("id-resolver");
 
@@ -242,13 +243,13 @@ async function anilistToExternal(
 }
 
 /**
- * Riven -> TVDB/TMDB
+ * Riven -> TVDB/TMDB via GraphQL
  */
 async function rivenToExternal(
     options: ResolveOptions,
     to: "tvdb" | "tmdb"
 ): Promise<ResolveResult> {
-    const { id, mediaType, customFetch, rivenBaseUrl, rivenApiKey } = options;
+    const { id, rivenBaseUrl, rivenApiKey, customFetch } = options;
 
     if (!rivenBaseUrl || !rivenApiKey) {
         logger.warn("Riven credentials not provided");
@@ -256,22 +257,17 @@ async function rivenToExternal(
     }
 
     try {
-        const { data, error } = await providers.riven.GET("/api/v1/items/{id}", {
-            params: {
-                path: { id: String(id) },
-                query: { media_type: mediaType }
-            },
-            baseUrl: rivenBaseUrl,
-            headers: { "x-api-key": rivenApiKey },
-            fetch: customFetch
-        });
+        const field = to === "tvdb" ? "tvdbId" : "tmdbId";
+        const query = `query($id: Int!) { mediaItem(id: $id) { ${field} } }`;
+        const data = await gql<{ mediaItem: Record<string, string | null> | null }>(
+            rivenBaseUrl,
+            rivenApiKey,
+            query,
+            { id: Number(id) },
+            customFetch
+        );
 
-        if (error) {
-            return { id, resolved: false };
-        }
-
-        const resolvedId = extractId(data, to === "tvdb" ? "tvdb_id" : "tmdb_id");
-
+        const resolvedId = data.mediaItem?.[field];
         if (resolvedId != null) {
             return { id: resolvedId, resolved: true };
         }

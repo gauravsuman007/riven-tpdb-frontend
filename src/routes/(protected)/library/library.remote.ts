@@ -1,36 +1,46 @@
 import { command } from "$app/server";
 import { z } from "zod";
-import providers from "$lib/providers";
+import { gql } from "$lib/graphql-client";
 import { getRequestEvent } from "$app/server";
 
 const itemIdsSchema = z.object({
     ids: z.array(z.string())
 });
 
+const RESET_MUTATION = `
+    mutation ResetItems($ids: [Int!]!) {
+        resetItems(ids: $ids)
+    }
+`;
+
+const RETRY_MUTATION = `
+    mutation RetryItems($ids: [Int!]!) {
+        retryItems(ids: $ids)
+    }
+`;
+
+const REMOVE_MUTATION = `
+    mutation RemoveItems($ids: [Int!]!) {
+        removeItems(ids: $ids)
+    }
+`;
+
 export const reset_items = command(itemIdsSchema, async ({ ids }) => {
     const event = getRequestEvent();
     if (!event) throw new Error("No event found");
 
-    // We need to access locals for auth
     const { backendUrl, apiKey } = event.locals;
+    if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    if (!backendUrl || !apiKey) {
-        throw new Error("Backend URL or API key missing");
-    }
+    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const data = await gql<{ resetItems: number }>(
+        backendUrl,
+        apiKey,
+        RESET_MUTATION,
+        { ids: numericIds }
+    );
 
-    const res = await providers.riven.POST("/api/v1/items/reset", {
-        body: { ids },
-        baseUrl: backendUrl,
-        headers: {
-            "x-api-key": apiKey
-        }
-    });
-
-    if (res.error) {
-        throw new Error(res.error as string);
-    }
-
-    return { success: true, count: ids.length };
+    return { success: true, count: data.resetItems };
 });
 
 export const retry_items = command(itemIdsSchema, async ({ ids }) => {
@@ -38,24 +48,17 @@ export const retry_items = command(itemIdsSchema, async ({ ids }) => {
     if (!event) throw new Error("No event found");
 
     const { backendUrl, apiKey } = event.locals;
+    if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    if (!backendUrl || !apiKey) {
-        throw new Error("Backend URL or API key missing");
-    }
+    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const data = await gql<{ retryItems: number }>(
+        backendUrl,
+        apiKey,
+        RETRY_MUTATION,
+        { ids: numericIds }
+    );
 
-    const res = await providers.riven.POST("/api/v1/items/retry", {
-        body: { ids },
-        baseUrl: backendUrl,
-        headers: {
-            "x-api-key": apiKey
-        }
-    });
-
-    if (res.error) {
-        throw new Error(res.error as string);
-    }
-
-    return { success: true, count: ids.length };
+    return { success: true, count: data.retryItems };
 });
 
 export const remove_items = command(itemIdsSchema, async ({ ids }) => {
@@ -63,22 +66,15 @@ export const remove_items = command(itemIdsSchema, async ({ ids }) => {
     if (!event) throw new Error("No event found");
 
     const { backendUrl, apiKey } = event.locals;
+    if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    if (!backendUrl || !apiKey) {
-        throw new Error("Backend URL or API key missing");
-    }
+    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const data = await gql<{ removeItems: number }>(
+        backendUrl,
+        apiKey,
+        REMOVE_MUTATION,
+        { ids: numericIds }
+    );
 
-    const res = await providers.riven.DELETE("/api/v1/items/remove", {
-        body: { ids },
-        baseUrl: backendUrl,
-        headers: {
-            "x-api-key": apiKey
-        }
-    });
-
-    if (res.error) {
-        throw new Error(res.error as string);
-    }
-
-    return { success: true, count: ids.length };
+    return { success: true, count: data.removeItems };
 });

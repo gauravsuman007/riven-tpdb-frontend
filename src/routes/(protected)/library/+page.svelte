@@ -26,6 +26,7 @@
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
+    import { notificationStore } from "$lib/stores/notifications.svelte";
 
     let { data }: PageProps = $props();
 
@@ -83,6 +84,17 @@
     onDestroy(() => {
         clearTimeout(debounceTimer);
         debounceTimer = undefined;
+    });
+
+    $effect(() => {
+        const unsubscribe = notificationStore.subscribe((event) => {
+            // Any media item or request event should trigger a refresh in the library
+            if (event.type.startsWith("riven.media-item.") || event.type === "riven.item-request.create.success") {
+                invalidateAll();
+            }
+        });
+
+        return unsubscribe;
     });
 </script>
 
