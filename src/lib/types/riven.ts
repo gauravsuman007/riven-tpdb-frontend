@@ -34,6 +34,7 @@ export interface MediaMetadata {
 }
 
 export interface FilesystemEntry {
+    id?: number;
     file_size?: number;
     original_filename?: string;
     download_url?: string;
@@ -42,6 +43,8 @@ export interface FilesystemEntry {
     provider_download_id?: string;
     path?: string;
     plugin?: string;
+    ranking_profile_name?: string;
+    media_metadata?: MediaMetadata;
 }
 
 export interface RivenEpisode {
@@ -49,6 +52,7 @@ export interface RivenEpisode {
     state: string;
     media_metadata?: MediaMetadata;
     filesystem_entry?: FilesystemEntry;
+    filesystem_entries?: FilesystemEntry[];
 }
 
 export interface RivenSeason {
@@ -66,5 +70,6 @@ export interface RivenMediaItem {
     tvdb_id?: string;
     media_metadata?: MediaMetadata;
     filesystem_entry?: FilesystemEntry;
+    filesystem_entries?: FilesystemEntry[];
     seasons?: RivenSeason[];
 }

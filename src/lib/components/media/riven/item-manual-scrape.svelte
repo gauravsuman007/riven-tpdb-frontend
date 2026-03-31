@@ -202,8 +202,16 @@
     let minFilesizeOverride = $state<number | null>(null);
     let maxFilesizeOverride = $state<number | null>(null);
 
-    // Season Selection State - managed by SeasonSelector component
-    let selectedSeasons = $state(new SvelteSet<number>());
+    // Season selection state — plain array for reliable Svelte 5 reactivity.
+    let selectedSeasonsList = $state<number[]>([]);
+
+    function toggleSeason(seasonNumber: number) {
+        if (selectedSeasonsList.includes(seasonNumber)) {
+            selectedSeasonsList = selectedSeasonsList.filter((n) => n !== seasonNumber);
+        } else {
+            selectedSeasonsList = [...selectedSeasonsList, seasonNumber].sort((a, b) => a - b);
+        }
+    }
     let isManualMagnet = $state(false);
     let batchSessions = $state<BatchSession[]>([]);
     let preparingBatch = $state(false);
@@ -604,15 +612,15 @@
             if (
                 mediaType === "tv" &&
                 seasons.length > 0 &&
-                selectedSeasons.size > 0 &&
-                selectedSeasons.size < seasons.length
+                selectedSeasonsList.length > 0 &&
+                selectedSeasonsList.length < seasons.length
             ) {
                 const { media_type: _, ...restBody } = body;
                 // Use AutoScrapeRequest
                 const seasonBody: AutoScrapeRequest = {
                     ...restBody,
                     media_type: "tv",
-                    season_numbers: Array.from(selectedSeasons)
+                    season_numbers: selectedSeasonsList
                 };
 
                 // Fire and forget - don't await this
@@ -1268,7 +1276,7 @@
                                                             >Select Seasons</span>
                                                         <span
                                                             class="text-muted-foreground flex items-center gap-1 text-xs">
-                                                            {selectedSeasons.size}
+                                                            {selectedSeasonsList.length}
                                                             <ChevronDown
                                                                 class="h-3.5 w-3.5 opacity-50" />
                                                         </span>
@@ -1285,25 +1293,25 @@
                                                             variant="ghost"
                                                             size="sm"
                                                             class="text-muted-foreground hover:text-foreground h-8 px-2 text-xs"
-                                                            onclick={() => selectedSeasons.clear()}>
+                                                            onclick={() => (selectedSeasonsList = [])}>
                                                             Deselect All
                                                         </Button>
                                                     </div>
                                                     <SeasonSelector
                                                         {seasons}
-                                                        {open}
-                                                        bind:selectedSeasons
+                                                        selectedSeasons={selectedSeasonsList}
+                                                        onToggle={toggleSeason}
                                                         class="max-h-[40vh]" />
                                                 </div>
                                             </Popover.Content>
                                         </Popover.Root>
 
-                                        {#if selectedSeasons.size > 0}
+                                        {#if selectedSeasonsList.length > 0}
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 class="text-muted-foreground hover:text-destructive h-8 px-2 text-xs"
-                                                onclick={() => selectedSeasons.clear()}>
+                                                onclick={() => (selectedSeasonsList = [])}>
                                                 Deselect All
                                             </Button>
                                         {/if}

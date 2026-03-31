@@ -26,6 +26,12 @@ const STATS_QUERY = `
             year
             count
         }
+        debridAccountInfo {
+            store
+            email
+            subscriptionStatus
+            premiumUntil
+        }
     }
 `;
 
@@ -48,11 +54,32 @@ export const load = (async ({ fetch, locals }) => {
             };
             activity: Record<string, number>;
             yearReleases: { year: number; count: number }[];
+            debridAccountInfo: { store: string; email: string | null; subscriptionStatus: string | null; premiumUntil: string | null }[];
         }>(locals.backendUrl, locals.apiKey, STATS_QUERY, {}, fetch);
 
         const s = data.stats;
         const total_items =
             s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
+
+        const debridServices = (data.debridAccountInfo ?? []).map((info) => {
+            const now = Date.now();
+            const expiresMs = info.premiumUntil ? new Date(info.premiumUntil).getTime() : null;
+            const daysLeft =
+                expiresMs !== null && !isNaN(expiresMs)
+                    ? Math.ceil((expiresMs - now) / (1000 * 60 * 60 * 24))
+                    : null;
+            return {
+                service: info.store,
+                email: info.email ?? null,
+                username: null,
+                premium_status: info.subscriptionStatus ?? "expired",
+                premium_expires_at: info.premiumUntil ?? null,
+                premium_days_left: daysLeft,
+                points: null,
+                total_downloaded_bytes: null,
+                cooldown_until: null
+            };
+        });
 
         return {
             statistics: {
@@ -74,6 +101,9 @@ export const load = (async ({ fetch, locals }) => {
                 },
                 activity: data.activity ?? {},
                 media_year_releases: data.yearReleases ?? []
+            },
+            downloaderInfo: {
+                services: debridServices
             }
         };
     } catch (err) {

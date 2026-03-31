@@ -3,7 +3,7 @@ FROM node:24-alpine AS frontend
 WORKDIR /app
 COPY . .
 RUN npm install -g pnpm && pnpm install
-RUN pnpm run build && pnpm prune --prod
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build && pnpm prune --prod
 
 # Final Image
 FROM node:24-alpine
@@ -19,6 +19,9 @@ COPY --from=frontend  /app/build /riven/build
 COPY --from=frontend  /app/node_modules /riven/node_modules
 COPY --from=frontend  /app/package.json /riven/package.json
 COPY drizzle /riven/drizzle
+
+# Ensure data directory exists for SQLite database
+RUN mkdir -p /riven/data
 
 # Add the entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/

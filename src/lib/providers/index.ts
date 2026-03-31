@@ -46,7 +46,8 @@ const traktClient = createClient<TraktPaths>({
         "trakt-api-version": "2",
         "trakt-api-key":
             env.PUBLIC_TRAKT_CLIENT_ID ||
-            "0183a05ad97098d87287fe46da4ae286f434f32e8e951caad4cc147c947d79a3"
+            "0183a05ad97098d87287fe46da4ae286f434f32e8e951caad4cc147c947d79a3",
+        "User-Agent": "Mozilla/5.0 (compatible; riven-frontend/1.0)"
     },
     fetch: customFetch
 });

@@ -314,11 +314,19 @@
                         <Badge
                             variant={downloader.premium_status === "premium"
                                 ? "default"
-                                : "secondary"}
+                                : downloader.premium_status === "trial"
+                                  ? "secondary"
+                                  : "destructive"}
                             class={downloader.premium_status === "premium"
                                 ? "rounded-xl bg-amber-600/30 text-amber-300 hover:bg-amber-600/40"
-                                : "rounded-xl"}>
-                            {downloader.premium_status === "premium" ? "Premium" : "Free"}
+                                : downloader.premium_status === "trial"
+                                  ? "rounded-xl bg-blue-600/20 text-blue-300"
+                                  : "rounded-xl"}>
+                            {downloader.premium_status === "premium"
+                                ? "Premium"
+                                : downloader.premium_status === "trial"
+                                  ? "Trial"
+                                  : "Expired"}
                         </Badge>
                     </div>
                 </Card.Header>

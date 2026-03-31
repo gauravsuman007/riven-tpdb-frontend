@@ -2,8 +2,12 @@ import type { Actions, PageServerLoad } from "./$types";
 import { error, fail } from "@sveltejs/kit";
 import { gql } from "$lib/graphql-client";
 
-const RANK_SETTINGS_QUERY = `query { rankSettings }`;
+const RANK_SETTINGS_QUERY = `query { rankSettings qualityProfiles customProfiles }`;
 const UPDATE_RANK_SETTINGS = `mutation UpdateRankSettings($settings: JSON!) { updateRankSettings(settings: $settings) }`;
+const SAVE_CUSTOM_PROFILE = `mutation SaveCustomProfile($id: Int, $name: String!, $settings: JSON!, $enabled: Boolean) { saveCustomProfile(id: $id, name: $name, settings: $settings, enabled: $enabled) }`;
+const DELETE_CUSTOM_PROFILE = `mutation DeleteCustomProfile($id: Int!) { deleteCustomProfile(id: $id) }`;
+const SET_PROFILE_ENABLED = `mutation SetProfileEnabled($name: String!, $enabled: Boolean!) { setProfileEnabled(name: $name, enabled: $enabled) }`;
+const UPDATE_PROFILE_SETTINGS = `mutation UpdateProfileSettings($name: String!, $settings: JSON!) { updateProfileSettings(name: $name, settings: $settings) }`;
 
 const GENERAL_SETTINGS_QUERY = `query { generalSettings }`;
 const GENERAL_SETTINGS_SCHEMA_QUERY = `query { generalSettingsSchema }`;
@@ -33,6 +37,23 @@ const UPDATE_PLUGIN_SETTINGS = `
 `;
 
 
+export type QualityProfile = {
+    id: string;
+    label: string;
+    description: string;
+    settings: Record<string, unknown>;
+};
+
+export type CustomProfile = {
+    id: number;
+    name: string;
+    settings: Record<string, unknown>;
+    is_builtin: boolean;
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
+};
+
 export type SettingFieldDef = {
     key: string;
     label: string;
@@ -53,13 +74,13 @@ export type PluginInfo = {
 export const load: PageServerLoad = async ({ fetch, locals }) => {
     try {
         const [rankData, generalData, generalSchemaData, pluginData] = await Promise.all([
-            gql<{ rankSettings: Record<string, unknown> }>(
+            gql<{ rankSettings: Record<string, unknown>; qualityProfiles: QualityProfile[]; customProfiles: CustomProfile[] }>(
                 locals.backendUrl,
                 locals.apiKey,
                 RANK_SETTINGS_QUERY,
                 {},
                 fetch
-            ).catch(() => ({ rankSettings: {} })),
+            ).catch(() => ({ rankSettings: {}, qualityProfiles: [], customProfiles: [] })),
             gql<{ generalSettings: Record<string, unknown> }>(
                 locals.backendUrl,
                 locals.apiKey,
@@ -85,6 +106,8 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 
         return {
             rankSettings: rankData.rankSettings,
+            qualityProfiles: rankData.qualityProfiles ?? [],
+            customProfiles: rankData.customProfiles ?? [],
             generalSettings: generalData.generalSettings,
             generalSettingsSchema: generalSchemaData.generalSettingsSchema,
             plugins: pluginData.pluginInfo
@@ -168,6 +191,94 @@ export const actions = {
             return { success: true, valid: result.updatePluginSettings.valid };
         } catch {
             return fail(500, { error: "Failed to save plugin settings" });
+        }
+    },
+
+    saveCustomProfile: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const rawId = formData.get("id");
+        const name = formData.get("name");
+        const rawSettings = formData.get("settings");
+        if (!name || typeof name !== "string" || !name.trim()) {
+            return fail(400, { error: "Profile name is required" });
+        }
+        if (!rawSettings || typeof rawSettings !== "string") {
+            return fail(400, { error: "Settings data is required" });
+        }
+        let settings: unknown;
+        try {
+            settings = JSON.parse(rawSettings);
+        } catch {
+            return fail(400, { error: "Invalid JSON settings" });
+        }
+        const id = rawId && typeof rawId === "string" && rawId !== "" ? Number(rawId) : null;
+        try {
+            const result = await gql<{ saveCustomProfile: CustomProfile }>(
+                locals.backendUrl,
+                locals.apiKey,
+                SAVE_CUSTOM_PROFILE,
+                { id, name: name.trim(), settings },
+                fetch
+            );
+            return { profile: result.saveCustomProfile };
+        } catch {
+            return fail(500, { error: "Failed to save profile" });
+        }
+    },
+
+    deleteCustomProfile: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const rawId = formData.get("id");
+        if (!rawId || typeof rawId !== "string") {
+            return fail(400, { error: "Profile ID is required" });
+        }
+        try {
+            await gql(locals.backendUrl, locals.apiKey, DELETE_CUSTOM_PROFILE, { id: Number(rawId) }, fetch);
+            return { success: true, deletedId: Number(rawId) };
+        } catch {
+            return fail(500, { error: "Failed to delete profile" });
+        }
+    },
+
+    setProfileEnabled: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const name = formData.get("name");
+        const enabled = formData.get("enabled");
+        if (!name || typeof name !== "string") {
+            return fail(400, { error: "Profile name is required" });
+        }
+        try {
+            await gql(locals.backendUrl, locals.apiKey, SET_PROFILE_ENABLED, {
+                name,
+                enabled: enabled === "true"
+            }, fetch);
+            return { success: true };
+        } catch {
+            return fail(500, { error: "Failed to update profile" });
+        }
+    },
+
+    updateProfileSettings: async ({ request, fetch, locals }) => {
+        const formData = await request.formData();
+        const name = formData.get("name");
+        const rawSettings = formData.get("settings");
+        if (!name || typeof name !== "string") {
+            return fail(400, { error: "Profile name is required" });
+        }
+        if (!rawSettings || typeof rawSettings !== "string") {
+            return fail(400, { error: "Settings data is required" });
+        }
+        let settings: unknown;
+        try {
+            settings = JSON.parse(rawSettings);
+        } catch {
+            return fail(400, { error: "Invalid JSON settings" });
+        }
+        try {
+            await gql(locals.backendUrl, locals.apiKey, UPDATE_PROFILE_SETTINGS, { name, settings }, fetch);
+            return { success: true };
+        } catch {
+            return fail(500, { error: "Failed to update profile settings" });
         }
     },
 

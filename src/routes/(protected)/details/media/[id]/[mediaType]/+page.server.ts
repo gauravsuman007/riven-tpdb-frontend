@@ -18,6 +18,7 @@ const logger = createScopedLogger("media-details");
 // ── GraphQL response → RivenMediaItem mapper ──
 
 interface GqlFilesystemEntry {
+    id?: number | null;
     fileSize?: number | null;
     originalFilename?: string | null;
     downloadUrl?: string | null;
@@ -26,6 +27,7 @@ interface GqlFilesystemEntry {
     providerDownloadId?: string | null;
     path?: string | null;
     plugin?: string | null;
+    rankingProfileName?: string | null;
     mediaMetadata?: unknown;
 }
 
@@ -33,6 +35,7 @@ interface GqlEpisodeFull {
     episodeNumber: number;
     state: string;
     filesystemEntry?: GqlFilesystemEntry | null;
+    filesystemEntries?: GqlFilesystemEntry[];
 }
 
 interface GqlSeasonFull {
@@ -49,7 +52,24 @@ interface GqlMediaItemFull {
     tmdbId?: string | null;
     tvdbId?: string | null;
     filesystemEntry?: GqlFilesystemEntry | null;
+    filesystemEntries?: GqlFilesystemEntry[];
     seasons?: GqlSeasonFull[];
+}
+
+function mapFsEntry(e: GqlFilesystemEntry): RivenMediaItem["filesystem_entry"] & { id?: number; ranking_profile_name?: string } {
+    return {
+        id: e.id ?? undefined,
+        file_size: e.fileSize ?? undefined,
+        original_filename: e.originalFilename ?? undefined,
+        download_url: e.downloadUrl ?? undefined,
+        stream_url: e.streamUrl ?? undefined,
+        provider: e.provider ?? undefined,
+        provider_download_id: e.providerDownloadId ?? undefined,
+        path: e.path ?? undefined,
+        plugin: e.plugin ?? undefined,
+        ranking_profile_name: e.rankingProfileName ?? undefined,
+        media_metadata: e.mediaMetadata as import("$lib/types/riven").MediaMetadata | undefined,
+    };
 }
 
 function mapMediaItemFull(raw: GqlMediaItemFull | null | undefined): RivenMediaItem | null {
@@ -61,18 +81,8 @@ function mapMediaItemFull(raw: GqlMediaItemFull | null | undefined): RivenMediaI
         tmdb_id: raw.tmdbId ?? undefined,
         tvdb_id: raw.tvdbId ?? undefined,
         media_metadata: raw.filesystemEntry?.mediaMetadata as RivenMediaItem["media_metadata"],
-        filesystem_entry: raw.filesystemEntry
-            ? {
-                  file_size: raw.filesystemEntry.fileSize ?? undefined,
-                  original_filename: raw.filesystemEntry.originalFilename ?? undefined,
-                  download_url: raw.filesystemEntry.downloadUrl ?? undefined,
-                  stream_url: raw.filesystemEntry.streamUrl ?? undefined,
-                  provider: raw.filesystemEntry.provider ?? undefined,
-                  provider_download_id: raw.filesystemEntry.providerDownloadId ?? undefined,
-                  path: raw.filesystemEntry.path ?? undefined,
-                  plugin: raw.filesystemEntry.plugin ?? undefined
-              }
-            : undefined,
+        filesystem_entry: raw.filesystemEntry ? mapFsEntry(raw.filesystemEntry) : undefined,
+        filesystem_entries: raw.filesystemEntries?.map(mapFsEntry) ?? [],
         seasons: raw.seasons?.map((s) => ({
             season_number: s.seasonNumber,
             state: s.state,
@@ -81,18 +91,8 @@ function mapMediaItemFull(raw: GqlMediaItemFull | null | undefined): RivenMediaI
                 episode_number: e.episodeNumber,
                 state: e.state,
                 media_metadata: e.filesystemEntry?.mediaMetadata as RivenMediaItem["media_metadata"],
-                filesystem_entry: e.filesystemEntry
-                    ? {
-                          file_size: e.filesystemEntry.fileSize ?? undefined,
-                          original_filename: e.filesystemEntry.originalFilename ?? undefined,
-                          download_url: e.filesystemEntry.downloadUrl ?? undefined,
-                          stream_url: e.filesystemEntry.streamUrl ?? undefined,
-                          provider: e.filesystemEntry.provider ?? undefined,
-                          provider_download_id: e.filesystemEntry.providerDownloadId ?? undefined,
-                          path: e.filesystemEntry.path ?? undefined,
-                          plugin: e.filesystemEntry.plugin ?? undefined
-                      }
-                    : undefined
+                filesystem_entry: e.filesystemEntry ? mapFsEntry(e.filesystemEntry) : undefined,
+                filesystem_entries: e.filesystemEntries?.map(mapFsEntry) ?? [],
             }))
         }))
     };
@@ -143,66 +143,29 @@ export type MediaDetails =
     | { type: "movie"; details: ParsedMovieDetails }
     | { type: "tv"; details: ParsedShowDetails };
 
-async function getTraktData(fetch: typeof globalThis.fetch, mediaId: string, isMovie: boolean) {
-    const idType = isMovie ? "tmdb" : "tvdb";
+async function getTraktData(mediaId: string, isMovie: boolean, idType?: "tmdb" | "tvdb") {
+    const id_type = idType ?? (isMovie ? "tmdb" : "tvdb");
     const mediaType = isMovie ? "movie" : "show";
     const endpointPrefix = isMovie ? "movies" : "shows";
 
     try {
-        // First get the Trakt slug
-        const { data: traktSlugResp, error: traktSlugError } = await providers.trakt.GET(
+        const { data: searchResp, error: searchErr } = await providers.trakt.GET(
             "/search/{id_type}/{id}",
-            {
-                params: {
-                    path: {
-                        id_type: idType,
-                        id: mediaId
-                    },
-                    query: {
-                        type: mediaType
-                    }
-                },
-                fetch: fetch
-            }
+            { params: { path: { id_type, id: mediaId }, query: { type: mediaType } } }
         );
 
-        if (traktSlugError || !traktSlugResp || traktSlugResp.length === 0) {
-            return { traktSlug: null, traktRecs: null };
-        }
+        if (searchErr || !searchResp?.length) return { traktSlug: null, traktRecs: null };
 
-        const traktSlug = (
-            traktSlugResp[0] as unknown as Record<
-                string,
-                { ids: { slug: string } | undefined } | undefined
-            >
-        )[mediaType]?.ids?.slug;
+        const traktSlug = (searchResp[0] as Record<string, { ids: { slug: string } } | undefined>)[mediaType]?.ids?.slug;
+        if (!traktSlug) return { traktSlug: null, traktRecs: null };
 
-        if (!traktSlug) {
-            return { traktSlug: null, traktRecs: null };
-        }
-
-        // Then get recommendations
-        const { data: traktRecsData, error: traktRecsError } = await providers.trakt.GET(
+        const { data: recs, error: recsErr } = await providers.trakt.GET(
             `/${endpointPrefix}/{id}/related`,
-            {
-                params: {
-                    path: {
-                        id: traktSlug
-                    },
-                    query: {
-                        extended: "images"
-                    }
-                },
-                fetch: fetch
-            }
+            { params: { path: { id: traktSlug }, query: { extended: "images" } } }
         );
 
-        return {
-            traktSlug,
-            traktRecs: !traktRecsError && traktRecsData ? traktRecsData : null
-        };
+        return { traktSlug, traktRecs: !recsErr && recs ? recs : null };
     } catch (err) {
-        // Return empty data if Trakt fails - don't block the page load
         logger.error(`Trakt fetch failed for ${mediaType} id=${mediaId}:`, err);
         return { traktSlug: null, traktRecs: null };
     }
@@ -230,8 +193,12 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                     mediaItemFullByTmdb(tmdbId: $tmdbId) {
                         id state imdbId tmdbId tvdbId
                         filesystemEntry {
-                            fileSize originalFilename downloadUrl streamUrl
-                            provider providerDownloadId path plugin mediaMetadata
+                            id fileSize originalFilename downloadUrl streamUrl
+                            provider providerDownloadId path plugin rankingProfileName mediaMetadata
+                        }
+                        filesystemEntries {
+                            id fileSize originalFilename downloadUrl streamUrl
+                            provider providerDownloadId path plugin rankingProfileName mediaMetadata
                         }
                     }
                 }`,
@@ -255,7 +222,7 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                         fetch: customFetch
                     })
                 ),
-                getTraktData(customFetch, id, true),
+                getTraktData(id, true),
                 rivenPromise
             ]);
 
@@ -323,8 +290,12 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                             episodes {
                                 episodeNumber state
                                 filesystemEntry {
-                                    fileSize originalFilename downloadUrl streamUrl
-                                    provider providerDownloadId path plugin mediaMetadata
+                                    id fileSize originalFilename downloadUrl streamUrl
+                                    provider providerDownloadId path plugin rankingProfileName mediaMetadata
+                                }
+                                filesystemEntries {
+                                    id fileSize originalFilename downloadUrl streamUrl
+                                    provider providerDownloadId path plugin rankingProfileName mediaMetadata
                                 }
                             }
                         }
@@ -357,7 +328,7 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                             fetch: customFetch
                         })
                     ),
-                    getTraktData(customFetch, String(tvdbId), false),
+                    getTraktData(isAlreadyTvdbId ? String(tvdbId) : id, false, isAlreadyTvdbId ? "tvdb" : "tmdb"),
                     rivenPromise
                 ]);
 

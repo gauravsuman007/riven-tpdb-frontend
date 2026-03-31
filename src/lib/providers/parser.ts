@@ -72,6 +72,7 @@ interface ParsedMediaDetailsBase {
     production_countries: { iso_3166_1: string; name: string }[];
     recommendations: TMDBTransformedListItem[];
     similar: TMDBTransformedListItem[];
+    trakt_recommendations: TMDBTransformedListItem[];
 }
 
 // Common utility functions
@@ -300,7 +301,6 @@ export interface ParsedMovieDetails extends ParsedMediaDetailsBase {
         poster_path: string | null;
         backdrop_path: string | null;
     } | null;
-    trakt_recommendations: TMDBTransformedListItem[];
 }
 
 export function transformTMDBList(
@@ -1117,7 +1117,7 @@ export function parseTVDBShowDetails(
         []
     );
 
-    const recommendations = transformTraktRecommendations(traktRecs, false);
+    const trakt_recommendations = transformTraktRecommendations(traktRecs, false);
 
     return {
         id: data.id ?? null,
@@ -1147,8 +1147,9 @@ export function parseTVDBShowDetails(
         spoken_languages,
         production_companies: productionCompanies,
         production_countries,
-        recommendations,
+        recommendations: [],
         similar: [],
+        trakt_recommendations,
         score: data.score ?? null,
         imdb_id,
         external_ids,
