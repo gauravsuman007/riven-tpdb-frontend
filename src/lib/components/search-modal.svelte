@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto, afterNavigate } from "$app/navigation";
+    import { onDestroy } from "svelte";
     import X from "@lucide/svelte/icons/x";
     import Search from "@lucide/svelte/icons/search";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
@@ -25,6 +26,12 @@
     let results = $state<TMDBTransformedListItem[]>([]);
     let loading = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let abortController: AbortController | null = null;
+
+    onDestroy(() => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        abortController?.abort();
+    });
     let abortController: AbortController | null = null;
 
     // Persist search state across navigation
@@ -184,7 +191,7 @@
         <div class="flex-1 overflow-y-auto">
             {#if loading}
                 <div class="grid grid-cols-2 gap-3 px-4 pt-4 pb-24">
-                    {#each Array(8) as _, i (i)}
+                    {#each Array.from({ length: 8 }, (_, i) => i) as i (i)}
                         <PortraitCardSkeleton />
                     {/each}
                 </div>

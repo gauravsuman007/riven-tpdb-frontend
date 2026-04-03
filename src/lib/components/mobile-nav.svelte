@@ -6,6 +6,7 @@
     import NotificationCenter from "$lib/components/notification-center.svelte";
     import SearchModal from "$lib/components/search-modal.svelte";
     import { getContext } from "svelte";
+    import { goto } from "$app/navigation";
     import Search from "@lucide/svelte/icons/search";
     import { page } from "$app/state";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
@@ -24,7 +25,13 @@
 {#if !isMainPage}
     <button
         transition:fly={{ y: -20, duration: 400, easing: cubicOut }}
-        onclick={() => history.back()}
+        onclick={() => {
+            if (history.length > 1) {
+                history.back();
+            } else {
+                goto('/');
+            }
+        }}
         aria-label="Go back"
         class="fixed top-4 left-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-white/5 bg-white/5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:bg-white/10 active:scale-95 md:hidden">
         <ChevronLeft class="size-5 text-white/70" />
