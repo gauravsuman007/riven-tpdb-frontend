@@ -31,10 +31,28 @@
     // Tracks which password fields are currently revealed (type=text).
     let revealedFields = $state(new Set<string>());
 
-    function updatePluginValid(name: string, valid: boolean) {
+    function updatePluginState(name: string, enabled: boolean, valid: boolean) {
         const entry = plugins.find((p) => p.name === name);
-        if (entry) entry.valid = valid;
-        if (selectedPlugin?.name === name) selectedPlugin.valid = valid;
+        if (entry) {
+            entry.enabled = enabled;
+            entry.valid = valid;
+        }
+        if (selectedPlugin?.name === name) {
+            selectedPlugin.enabled = enabled;
+            selectedPlugin.valid = valid;
+        }
+    }
+
+    function stringifyPluginFields(settings: Record<string, unknown>): Record<string, string> {
+        return Object.fromEntries(
+            Object.entries(settings).map(([key, value]) => [key, value == null ? "" : String(value)])
+        );
+    }
+
+    function pluginStatus(plugin: PluginInfo): { label: string; variant: "default" | "secondary" } {
+        if (!plugin.enabled) return { label: "Disabled", variant: "secondary" };
+        if (plugin.valid) return { label: "Active", variant: "default" };
+        return { label: "Invalid", variant: "secondary" };
     }
 
     async function loadPluginSettings(plugin: PluginInfo) {
@@ -48,7 +66,7 @@
             const res = await fetch("?/loadPluginSettings", { method: "POST", body: fd });
             const result = deserialize(await res.text());
             if (result.type === "success" && result.data?.pluginSettings) {
-                pluginFields = result.data.pluginSettings as Record<string, string>;
+                pluginFields = stringifyPluginFields(result.data.pluginSettings as Record<string, unknown>);
                 loadedPluginName = plugin.name;
                 revealedFields = new Set();
             }
@@ -318,7 +336,7 @@
                                     onclick={() => { selectedPlugin = plugin; }}
                                     class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors {selectedPlugin?.name === plugin.name ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}">
                                     <span
-                                        class="h-2 w-2 shrink-0 rounded-full {plugin.valid ? 'bg-green-500' : 'bg-zinc-500'}">
+                                        class="h-2 w-2 shrink-0 rounded-full {plugin.enabled ? (plugin.valid ? 'bg-green-500' : 'bg-amber-500') : 'bg-zinc-500'}">
                                     </span>
                                     {plugin.name}
                                 </button>
@@ -329,10 +347,11 @@
 
                         <div class="min-w-0 flex-1">
                             {#if selectedPlugin}
+                                {@const status = pluginStatus(selectedPlugin)}
                                 <div class="mb-4 flex items-center gap-3">
                                     <h2 class="text-lg font-medium">{selectedPlugin.name}</h2>
-                                    <Badge variant={selectedPlugin.valid ? "default" : "secondary"}>
-                                        {selectedPlugin.valid ? "Active" : "Inactive"}
+                                    <Badge variant={status.variant}>
+                                        {status.label}
                                     </Badge>
                                     <span class="text-muted-foreground text-xs">v{selectedPlugin.version}</span>
                                 </div>
@@ -349,8 +368,10 @@
                                             return async ({ result }) => {
                                                 pluginSaving = false;
                                                 if (result.type === "success") {
+                                                    const enabled = (result.data as { enabled?: boolean })?.enabled ?? false;
                                                     const valid = (result.data as { valid?: boolean })?.valid ?? false;
-                                                    updatePluginValid(name, valid);
+                                                    updatePluginState(name, enabled, valid);
+                                                    pluginFields.enabled = String(enabled);
                                                     toast.success("Plugin settings saved");
                                                 } else {
                                                     toast.error("Failed to save plugin settings");

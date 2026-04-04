@@ -53,7 +53,9 @@ function mapItemType(raw?: string): "movie" | "show" | "season" | "episode" {
     }
 }
 
-function rivenEventToNotification(event: RivenEventPayload): Omit<Notification, "id" | "read"> | null {
+function rivenEventToNotification(
+    event: RivenEventPayload
+): Omit<Notification, "id" | "read"> | null {
     const ts = new Date().toISOString();
 
     switch (event.type) {
@@ -65,7 +67,9 @@ function rivenEventToNotification(event: RivenEventPayload): Omit<Notification, 
                 timestamp: ts,
                 type: mapItemType(event.item_type),
                 year: event.year,
-                duration: event.duration_seconds ? Math.round(event.duration_seconds / 60) : undefined,
+                duration: event.duration_seconds
+                    ? Math.round(event.duration_seconds / 60)
+                    : undefined,
                 imdb_id: event.imdb_id
             };
 
@@ -221,9 +225,6 @@ export class NotificationStore {
 
         this.#unsubscribe = notificationValue.subscribe((value) => {
             if (value) {
-                // eslint-disable-next-line no-console
-                console.debug(`[NotificationStore] Received event: ${value.type}`, value);
-
                 // Notify listeners
                 this.#eventListeners.forEach((cb) => cb(value));
 

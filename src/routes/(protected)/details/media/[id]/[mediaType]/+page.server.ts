@@ -6,97 +6,19 @@ import type {
     ParsedShowDetails,
     TVDBBaseItem
 } from "$lib/providers/parser";
-import type { RivenMediaItem } from "$lib/types/riven";
 import { error } from "@sveltejs/kit";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
 import { resolveId } from "$lib/services/resolver";
 import { gql } from "$lib/graphql-client";
+import {
+    MEDIA_ITEM_STATE_BY_TMDB_QUERY,
+    MEDIA_ITEM_STATE_BY_TVDB_QUERY,
+    mapMediaItemStateTree,
+    type GqlMediaItemStateTree
+} from "$lib/services/riven-media";
 
 const logger = createScopedLogger("media-details");
-
-// ── GraphQL response → RivenMediaItem mapper ──
-
-interface GqlFilesystemEntry {
-    id?: number | null;
-    fileSize?: number | null;
-    originalFilename?: string | null;
-    downloadUrl?: string | null;
-    streamUrl?: string | null;
-    provider?: string | null;
-    providerDownloadId?: string | null;
-    path?: string | null;
-    plugin?: string | null;
-    rankingProfileName?: string | null;
-    mediaMetadata?: unknown;
-}
-
-interface GqlEpisodeFull {
-    episodeNumber: number;
-    state: string;
-    filesystemEntry?: GqlFilesystemEntry | null;
-    filesystemEntries?: GqlFilesystemEntry[];
-}
-
-interface GqlSeasonFull {
-    seasonNumber: number;
-    state: string;
-    isRequested: boolean;
-    episodes?: GqlEpisodeFull[];
-}
-
-interface GqlMediaItemFull {
-    id: number;
-    state: string;
-    imdbId?: string | null;
-    tmdbId?: string | null;
-    tvdbId?: string | null;
-    filesystemEntry?: GqlFilesystemEntry | null;
-    filesystemEntries?: GqlFilesystemEntry[];
-    seasons?: GqlSeasonFull[];
-}
-
-function mapFsEntry(e: GqlFilesystemEntry): RivenMediaItem["filesystem_entry"] & { id?: number; ranking_profile_name?: string } {
-    return {
-        id: e.id ?? undefined,
-        file_size: e.fileSize ?? undefined,
-        original_filename: e.originalFilename ?? undefined,
-        download_url: e.downloadUrl ?? undefined,
-        stream_url: e.streamUrl ?? undefined,
-        provider: e.provider ?? undefined,
-        provider_download_id: e.providerDownloadId ?? undefined,
-        path: e.path ?? undefined,
-        plugin: e.plugin ?? undefined,
-        ranking_profile_name: e.rankingProfileName ?? undefined,
-        media_metadata: e.mediaMetadata as import("$lib/types/riven").MediaMetadata | undefined,
-    };
-}
-
-function mapMediaItemFull(raw: GqlMediaItemFull | null | undefined): RivenMediaItem | null {
-    if (!raw) return null;
-    return {
-        id: raw.id,
-        state: raw.state,
-        imdb_id: raw.imdbId ?? undefined,
-        tmdb_id: raw.tmdbId ?? undefined,
-        tvdb_id: raw.tvdbId ?? undefined,
-        media_metadata: raw.filesystemEntry?.mediaMetadata as RivenMediaItem["media_metadata"],
-        filesystem_entry: raw.filesystemEntry ? mapFsEntry(raw.filesystemEntry) : undefined,
-        filesystem_entries: raw.filesystemEntries?.map(mapFsEntry) ?? [],
-        seasons: raw.seasons?.map((s) => ({
-            season_number: s.seasonNumber,
-            state: s.state,
-            is_requested: s.isRequested,
-            episodes: s.episodes?.map((e) => ({
-                episode_number: e.episodeNumber,
-                state: e.state,
-                media_metadata: e.filesystemEntry?.mediaMetadata as RivenMediaItem["media_metadata"],
-                filesystem_entry: e.filesystemEntry ? mapFsEntry(e.filesystemEntry) : undefined,
-                filesystem_entries: e.filesystemEntries?.map(mapFsEntry) ?? [],
-            }))
-        }))
-    };
-}
 
 async function normalizeFetch<T>(p: Promise<T>): Promise<
     | T
@@ -156,12 +78,14 @@ async function getTraktData(mediaId: string, isMovie: boolean, idType?: "tmdb" |
 
         if (searchErr || !searchResp?.length) return { traktSlug: null, traktRecs: null };
 
-        const traktSlug = (searchResp[0] as Record<string, { ids: { slug: string } } | undefined>)[mediaType]?.ids?.slug;
+        const traktSlug = (searchResp[0] as Record<string, { ids: { slug: string } } | undefined>)[
+            mediaType
+        ]?.ids?.slug;
         if (!traktSlug) return { traktSlug: null, traktRecs: null };
 
         const { data: recs, error: recsErr } = await providers.trakt.GET(
             `/${endpointPrefix}/{id}/related`,
-            { params: { path: { id: traktSlug }, query: { extended: "images" } } }
+            { params: { path: { id: traktSlug }, query: { extended: "images" } as never } }
         );
 
         return { traktSlug, traktRecs: !recsErr && recs ? recs : null };
@@ -185,29 +109,7 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
         }
 
         if (mediaType === "movie") {
-            // Fetch Riven data in parallel with other requests (non-blocking)
-            const rivenPromise = gql<{ mediaItemFullByTmdb: GqlMediaItemFull | null }>(
-                locals.backendUrl,
-                locals.apiKey,
-                `query($tmdbId: String!) {
-                    mediaItemFullByTmdb(tmdbId: $tmdbId) {
-                        id state imdbId tmdbId tvdbId
-                        filesystemEntry {
-                            id fileSize originalFilename downloadUrl streamUrl
-                            provider providerDownloadId path plugin rankingProfileName mediaMetadata
-                        }
-                        filesystemEntries {
-                            id fileSize originalFilename downloadUrl streamUrl
-                            provider providerDownloadId path plugin rankingProfileName mediaMetadata
-                        }
-                    }
-                }`,
-                { tmdbId: id },
-                fetch
-            ).then((d) => mapMediaItemFull(d.mediaItemFullByTmdb) ?? undefined).catch(() => undefined);
-
-            // Fetch TMDB details and Trakt data in parallel
-            const [tmdbResult, traktResult, rivenData] = await Promise.all([
+            const [tmdbResult, traktResult, rivenResult] = await Promise.all([
                 normalizeFetch(
                     providers.tmdb.GET(`/3/movie/{movie_id}`, {
                         params: {
@@ -223,7 +125,15 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                     })
                 ),
                 getTraktData(id, true),
-                rivenPromise
+                gql<{ mediaItemStateByTmdb: GqlMediaItemStateTree | null }>(
+                    locals.backendUrl,
+                    locals.apiKey,
+                    MEDIA_ITEM_STATE_BY_TMDB_QUERY,
+                    { tmdbId: id },
+                    fetch
+                )
+                    .then((data) => mapMediaItemStateTree(data.mediaItemStateByTmdb) ?? undefined)
+                    .catch(() => undefined)
             ]);
 
             const { data: details, error: detailsError } = tmdbResult;
@@ -239,7 +149,9 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
             );
 
             return {
-                riven: rivenData,
+                riven: rivenResult,
+                rivenPending: false,
+                resolvedTvdbId: null,
                 mediaDetails: {
                     type: "movie" as const,
                     details: parsedDetails as ParsedMovieDetails
@@ -270,7 +182,7 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                     })
                 );
 
-                if (!resolved || !resolved.resolved) {
+                if (!resolved || !("resolved" in resolved) || !resolved.resolved) {
                     logger.error(`Failed to resolve TMDB ID ${id} to TVDB ID`);
                     error(502, "Unable to resolve TV show ID. Please try again later.");
                 }
@@ -278,35 +190,7 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                 tvdbId = Number(resolved.id);
             }
 
-            // Fetch Riven data based on TVDB ID
-            const rivenPromise = gql<{ mediaItemFullByTvdb: GqlMediaItemFull | null }>(
-                locals.backendUrl,
-                locals.apiKey,
-                `query($tvdbId: String!) {
-                    mediaItemFullByTvdb(tvdbId: $tvdbId) {
-                        id state imdbId tmdbId tvdbId
-                        seasons {
-                            seasonNumber state isRequested
-                            episodes {
-                                episodeNumber state
-                                filesystemEntry {
-                                    id fileSize originalFilename downloadUrl streamUrl
-                                    provider providerDownloadId path plugin rankingProfileName mediaMetadata
-                                }
-                                filesystemEntries {
-                                    id fileSize originalFilename downloadUrl streamUrl
-                                    provider providerDownloadId path plugin rankingProfileName mediaMetadata
-                                }
-                            }
-                        }
-                    }
-                }`,
-                { tvdbId: String(tvdbId) },
-                fetch
-            ).then((d) => mapMediaItemFull(d.mediaItemFullByTvdb) ?? undefined).catch(() => undefined);
-
-            // Fetch TVDB details (episodes + translations separately), Trakt data, and Riven data in parallel
-            const [tvdbEpisodesResult, tvdbTranslationsResult, traktResult, rivenData] =
+            const [tvdbEpisodesResult, tvdbTranslationsResult, traktResult, rivenResult] =
                 await Promise.all([
                     normalizeFetch(
                         providers.tvdb.GET(`/series/{id}/extended`, {
@@ -328,8 +212,22 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                             fetch: customFetch
                         })
                     ),
-                    getTraktData(isAlreadyTvdbId ? String(tvdbId) : id, false, isAlreadyTvdbId ? "tvdb" : "tmdb"),
-                    rivenPromise
+                    getTraktData(
+                        isAlreadyTvdbId ? String(tvdbId) : id,
+                        false,
+                        isAlreadyTvdbId ? "tvdb" : "tmdb"
+                    ),
+                    gql<{ mediaItemStateByTvdb: GqlMediaItemStateTree | null }>(
+                        locals.backendUrl,
+                        locals.apiKey,
+                        MEDIA_ITEM_STATE_BY_TVDB_QUERY,
+                        { tvdbId: String(tvdbId) },
+                        fetch
+                    )
+                        .then(
+                            (data) => mapMediaItemStateTree(data.mediaItemStateByTvdb) ?? undefined
+                        )
+                        .catch(() => undefined)
                 ]);
 
             const { data: episodesData, error: episodesError } = tvdbEpisodesResult;
@@ -422,7 +320,9 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
             );
 
             return {
-                riven: rivenData,
+                riven: rivenResult,
+                rivenPending: false,
+                resolvedTvdbId: tvdbId,
                 mediaDetails: {
                     type: "tv" as const,
                     details: parsedDetails as ParsedShowDetails

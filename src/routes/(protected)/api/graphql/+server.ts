@@ -2,24 +2,45 @@
  * Server-side proxy for client-side GraphQL requests.
  * Adds the x-api-key auth header before forwarding to the Rust backend.
  */
-import { error, json } from "@sveltejs/kit";
+import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const POST: RequestHandler = async ({ locals, request }) => {
     const body = await request.text();
 
     try {
+        const headers = new Headers({
+            "Content-Type": request.headers.get("content-type") ?? "application/json",
+            "x-api-key": locals.apiKey
+        });
+        const accept = request.headers.get("accept");
+
+        if (accept) {
+            headers.set("accept", accept);
+        }
+
         const response = await fetch(`${locals.backendUrl}/graphql`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": locals.apiKey
-            },
+            headers,
             body
         });
 
-        const data = await response.json();
-        return json(data, { status: response.status });
+        const responseHeaders = new Headers();
+        const contentType = response.headers.get("content-type");
+        const cacheControl = response.headers.get("cache-control");
+
+        if (contentType) {
+            responseHeaders.set("content-type", contentType);
+        }
+
+        if (cacheControl) {
+            responseHeaders.set("cache-control", cacheControl);
+        }
+
+        return new Response(response.body, {
+            status: response.status,
+            headers: responseHeaders
+        });
     } catch {
         throw error(500, "Failed to reach GraphQL backend");
     }

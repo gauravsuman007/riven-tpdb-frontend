@@ -18,6 +18,7 @@ const PLUGIN_INFO_QUERY = `
         pluginInfo {
             name
             version
+            enabled
             valid
             schema
         }
@@ -67,6 +68,7 @@ export type SettingFieldDef = {
 export type PluginInfo = {
     name: string;
     version: string;
+    enabled: boolean;
     valid: boolean;
     schema: SettingFieldDef[];
 };
@@ -181,14 +183,18 @@ export const actions = {
             return fail(400, { error: "Invalid JSON settings" });
         }
         try {
-            const result = await gql<{ updatePluginSettings: { settings: unknown; valid: boolean } }>(
+            const result = await gql<{ updatePluginSettings: { settings: unknown; enabled: boolean; valid: boolean } }>(
                 locals.backendUrl,
                 locals.apiKey,
                 UPDATE_PLUGIN_SETTINGS,
                 { plugin, settings },
                 fetch
             );
-            return { success: true, valid: result.updatePluginSettings.valid };
+            return {
+                success: true,
+                enabled: result.updatePluginSettings.enabled,
+                valid: result.updatePluginSettings.valid
+            };
         } catch {
             return fail(500, { error: "Failed to save plugin settings" });
         }

@@ -21,6 +21,7 @@
         size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg";
         class?: string;
         children?: Snippet;
+        onSuccess?: (itemId?: number) => void | Promise<void>;
     }
 
     let {
@@ -34,6 +35,7 @@
         size = "sm",
         class: className = "",
         children,
+        onSuccess,
         ...restProps
     }: Props = $props();
 
@@ -72,6 +74,7 @@
 
     async function handleConfirm() {
         loading = true;
+        let requestedItemId: number | undefined;
         const validNumericIds = ids
             .filter((id): id is string => id !== null && id !== undefined)
             .map(Number)
@@ -79,7 +82,7 @@
 
         try {
             if (mediaType === "tv") {
-                await gqlClient<{ addItem: { id: number } }>(
+                const result = await gqlClient<{ addItem: { id: number } }>(
                     `mutation AddItem($itemType: MediaItemType!, $title: String!, $tvdbId: String, $seasons: [Int!]) {
                         addItem(itemType: $itemType, title: $title, tvdbId: $tvdbId, seasons: $seasons) { id }
                     }`,
@@ -90,21 +93,25 @@
                         seasons: selectedSeasonNums.length > 0 ? selectedSeasonNums : null
                     }
                 );
+                requestedItemId = result.addItem.id;
             } else if (validNumericIds.length > 0) {
                 await gqlClient<{ retryItems: number }>(
                     `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
                     { ids: validNumericIds }
                 );
+                requestedItemId = validNumericIds[0];
             } else {
-                await gqlClient<{ addItem: { id: number } }>(
+                const result = await gqlClient<{ addItem: { id: number } }>(
                     `mutation AddItem($itemType: MediaItemType!, $title: String!, $tmdbId: String) {
                         addItem(itemType: $itemType, title: $title, tmdbId: $tmdbId) { id }
                     }`,
                     { itemType: "MOVIE", title: title ?? "Unknown", tmdbId: externalId }
                 );
+                requestedItemId = result.addItem.id;
             }
             toast.success("Requested successfully!");
             open = false;
+            void onSuccess?.(requestedItemId);
         } catch (e) {
             logger.error("Request failed", e);
             toast.error("Failed to request media item.");
