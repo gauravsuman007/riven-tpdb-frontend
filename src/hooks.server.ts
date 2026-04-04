@@ -10,6 +10,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { db } from "$lib/server/db";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
+import { isInitialSetupPhase, isFirstLaunchSetupComplete } from "$lib/server/first-launch";
 
 const logger = createScopedLogger("hooks");
 
@@ -35,13 +36,26 @@ export const betterAuthHandler: Handle = async ({ event, resolve }) => {
         if (session) {
             event.locals.session = session?.session;
             event.locals.user = session?.user;
+
+            const setupComplete = isFirstLaunchSetupComplete(event.cookies);
+            const initialSetupPhase = await isInitialSetupPhase();
+            const isProtectedSetupRoute = event.route.id === "/(protected)/setup";
+
+            if (initialSetupPhase && !setupComplete && !isProtectedSetupRoute) {
+                redirect(302, "/setup");
+            }
+
+            if (!initialSetupPhase && isProtectedSetupRoute) {
+                redirect(302, "/");
+            }
+
             return svelteKitHandler({ event, resolve, auth, building });
         } else {
             redirect(302, "/auth/login");
         }
-    } else {
-        return svelteKitHandler({ event, resolve, auth, building });
     }
+
+    return svelteKitHandler({ event, resolve, auth, building });
 };
 
 const configureLocals: Handle = async ({ event, resolve }) => {

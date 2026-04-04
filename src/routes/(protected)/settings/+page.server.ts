@@ -1,6 +1,14 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail } from "@sveltejs/kit";
 import { gql } from "$lib/graphql-client";
+import type {
+    CustomProfile,
+    PluginInfo,
+    QualityProfile,
+    SettingFieldDef,
+    SetupPluginStatus,
+    SetupSummary
+} from "$lib/components/settings/types";
 
 const RANK_SETTINGS_QUERY = `query { rankSettings qualityProfiles customProfiles }`;
 const UPDATE_RANK_SETTINGS = `mutation UpdateRankSettings($settings: JSON!) { updateRankSettings(settings: $settings) }`;
@@ -37,52 +45,18 @@ const UPDATE_PLUGIN_SETTINGS = `
     }
 `;
 
-
-export type QualityProfile = {
-    id: string;
-    label: string;
-    description: string;
-    settings: Record<string, unknown>;
-};
-
-export type CustomProfile = {
-    id: number;
-    name: string;
-    settings: Record<string, unknown>;
-    is_builtin: boolean;
-    enabled: boolean;
-    created_at: string;
-    updated_at: string;
-};
-
-export type SettingFieldDef = {
-    key: string;
-    label: string;
-    type: string;
-    required: boolean;
-    default_value?: string;
-    placeholder?: string;
-    description?: string;
-};
-
-export type PluginInfo = {
-    name: string;
-    version: string;
-    enabled: boolean;
-    valid: boolean;
-    schema: SettingFieldDef[];
-};
-
 export const load: PageServerLoad = async ({ fetch, locals }) => {
     try {
         const [rankData, generalData, generalSchemaData, pluginData] = await Promise.all([
-            gql<{ rankSettings: Record<string, unknown>; qualityProfiles: QualityProfile[]; customProfiles: CustomProfile[] }>(
-                locals.backendUrl,
-                locals.apiKey,
-                RANK_SETTINGS_QUERY,
-                {},
-                fetch
-            ).catch(() => ({ rankSettings: {}, qualityProfiles: [], customProfiles: [] })),
+            gql<{
+                rankSettings: Record<string, unknown>;
+                qualityProfiles: QualityProfile[];
+                customProfiles: CustomProfile[];
+            }>(locals.backendUrl, locals.apiKey, RANK_SETTINGS_QUERY, {}, fetch).catch(() => ({
+                rankSettings: {},
+                qualityProfiles: [],
+                customProfiles: []
+            })),
             gql<{ generalSettings: Record<string, unknown> }>(
                 locals.backendUrl,
                 locals.apiKey,
@@ -106,13 +80,70 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
             ).catch(() => ({ pluginInfo: [] }))
         ]);
 
+        const pluginSettingsEntries = await Promise.all(
+            (pluginData.pluginInfo ?? []).map(async (plugin) => {
+                const result = await gql<{ pluginSettings: Record<string, unknown> }>(
+                    locals.backendUrl,
+                    locals.apiKey,
+                    PLUGIN_SETTINGS_QUERY,
+                    { plugin: plugin.name },
+                    fetch
+                ).catch(() => ({ pluginSettings: {} }));
+
+                return [plugin.name, result.pluginSettings ?? {}] as const;
+            })
+        );
+
+        const pluginSettingsMap: Record<string, Record<string, unknown>> = Object.fromEntries(
+            pluginSettingsEntries
+        );
+        const pluginStatuses = (pluginData.pluginInfo ?? []).map((plugin) => {
+            const settings: Record<string, unknown> = pluginSettingsMap[plugin.name] ?? {};
+            const requiredFields = (plugin.schema ?? [])
+                .filter((field) => field.required)
+                .map((field) => field.key);
+            const missingRequiredFields = requiredFields.filter((field) => {
+                const value = settings[field];
+                if (typeof value === "boolean") return value !== true;
+                if (typeof value === "number") return Number.isNaN(value);
+                return String(value ?? "").trim() === "";
+            });
+            const configuredFieldCount = Object.entries(settings).filter(([key, value]) => {
+                if (key === "enabled") return value === true;
+                if (typeof value === "boolean") return value;
+                return String(value ?? "").trim() !== "";
+            }).length;
+
+            return {
+                name: plugin.name,
+                version: plugin.version,
+                enabled: plugin.enabled,
+                valid: plugin.valid,
+                requiredFields,
+                missingRequiredFields,
+                configuredFieldCount
+            } satisfies SetupPluginStatus;
+        });
+
+        const setupSummary: SetupSummary = {
+            pluginStatuses,
+            totalPlugins: pluginStatuses.length,
+            enabledPlugins: pluginStatuses.filter((plugin) => plugin.enabled).length,
+            validPlugins: pluginStatuses.filter((plugin) => plugin.enabled && plugin.valid).length,
+            pluginsMissingRequiredConfig: pluginStatuses.filter(
+                (plugin) => plugin.enabled && plugin.missingRequiredFields.length > 0
+            ).length,
+            hasEnabledProfiles: (rankData.customProfiles ?? []).some((profile) => profile.enabled)
+        };
+
         return {
             rankSettings: rankData.rankSettings,
             qualityProfiles: rankData.qualityProfiles ?? [],
             customProfiles: rankData.customProfiles ?? [],
             generalSettings: generalData.generalSettings,
             generalSettingsSchema: generalSchemaData.generalSettingsSchema,
-            plugins: pluginData.pluginInfo
+            plugins: pluginData.pluginInfo,
+            setupSummary
         };
     } catch {
         error(500, "Failed to load settings");
@@ -183,7 +214,9 @@ export const actions = {
             return fail(400, { error: "Invalid JSON settings" });
         }
         try {
-            const result = await gql<{ updatePluginSettings: { settings: unknown; enabled: boolean; valid: boolean } }>(
+            const result = await gql<{
+                updatePluginSettings: { settings: unknown; enabled: boolean; valid: boolean };
+            }>(
                 locals.backendUrl,
                 locals.apiKey,
                 UPDATE_PLUGIN_SETTINGS,
@@ -239,7 +272,13 @@ export const actions = {
             return fail(400, { error: "Profile ID is required" });
         }
         try {
-            await gql(locals.backendUrl, locals.apiKey, DELETE_CUSTOM_PROFILE, { id: Number(rawId) }, fetch);
+            await gql(
+                locals.backendUrl,
+                locals.apiKey,
+                DELETE_CUSTOM_PROFILE,
+                { id: Number(rawId) },
+                fetch
+            );
             return { success: true, deletedId: Number(rawId) };
         } catch {
             return fail(500, { error: "Failed to delete profile" });
@@ -254,10 +293,16 @@ export const actions = {
             return fail(400, { error: "Profile name is required" });
         }
         try {
-            await gql(locals.backendUrl, locals.apiKey, SET_PROFILE_ENABLED, {
-                name,
-                enabled: enabled === "true"
-            }, fetch);
+            await gql(
+                locals.backendUrl,
+                locals.apiKey,
+                SET_PROFILE_ENABLED,
+                {
+                    name,
+                    enabled: enabled === "true"
+                },
+                fetch
+            );
             return { success: true };
         } catch {
             return fail(500, { error: "Failed to update profile" });
@@ -281,7 +326,13 @@ export const actions = {
             return fail(400, { error: "Invalid JSON settings" });
         }
         try {
-            await gql(locals.backendUrl, locals.apiKey, UPDATE_PROFILE_SETTINGS, { name, settings }, fetch);
+            await gql(
+                locals.backendUrl,
+                locals.apiKey,
+                UPDATE_PROFILE_SETTINGS,
+                { name, settings },
+                fetch
+            );
             return { success: true };
         } catch {
             return fail(500, { error: "Failed to update profile settings" });
