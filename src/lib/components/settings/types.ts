@@ -33,6 +33,16 @@ export type PluginInfo = {
     schema: SettingFieldDef[];
 };
 
+export type SetupData = {
+    generalSettings: Record<string, unknown>;
+    generalSettingsSchema: SettingFieldDef[];
+    plugins: PluginInfo[];
+    rankSettings: Record<string, unknown>;
+    qualityProfiles: QualityProfile[];
+    customProfiles: CustomProfile[];
+    setupSummary: SetupSummary;
+};
+
 export type SetupPluginStatus = {
     name: string;
     version: string;
@@ -50,4 +60,40 @@ export type SetupSummary = {
     validPlugins: number;
     pluginsMissingRequiredConfig: number;
     hasEnabledProfiles: boolean;
+};
+
+export type Step = {
+    id: "welcome" | "media" | "sources" | "services" | "quality" | "finish";
+    label: string;
+    description: string;
+};
+
+export type PluginGroup = {
+    id: "media" | "sources" | "services";
+    title: string;
+    description: string;
+    emptyMessage: string;
+};
+
+export type SetupPluginCardView = {
+    plugin: PluginInfo;
+    badge: { label: string; variant: "default" | "secondary" };
+    fields: Record<string, string>;
+    loading: boolean;
+    saving: boolean;
+    reveals: Set<string>;
+};
+
+export type SetupPluginSection = PluginGroup & {
+    plugins: SetupPluginCardView[];
+};
+
+export type SetupGeneralSection = {
+    title: string;
+    description: string;
+    fields: SettingFieldDef[];
+};
+
+export type SetupProfileView = QualityProfile & {
+    enabled: boolean;
 };

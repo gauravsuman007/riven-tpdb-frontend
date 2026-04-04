@@ -1,63 +1,47 @@
 <script lang="ts">
-    let {
-        validPlugins,
-        totalPlugins,
-        enabledProfileCount,
-        missingRequiredConfig
-    }: {
-        validPlugins: number;
-        totalPlugins: number;
-        enabledProfileCount: number;
-        missingRequiredConfig: number;
-    } = $props();
+    import * as Card from "$lib/components/ui/card/index.js";
 </script>
 
-<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+<div class="mx-auto grid w-full max-w-4xl gap-8">
     <div class="space-y-6">
         <div>
-            <h2 class="text-3xl font-semibold tracking-tight">Before you continue</h2>
-            <p class="text-muted-foreground mt-3 max-w-3xl text-sm">
-                Riven still needs a few frontend boot variables outside the app, but the operational
-                parts of setup happen here. Treat this like installation, not regular settings.
+            <h2 class="text-2xl font-semibold tracking-tight md:text-3xl">What Riven does</h2>
+            <p class="text-muted-foreground mt-2 text-sm md:text-base">
+                Riven ties your media server, scrapers, metadata providers, and request services
+                into one workflow so new media can be found, matched, and delivered with the
+                defaults you choose.
             </p>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2">
-            <div class="rounded-2xl border p-5">
-                <p class="font-medium">Still external</p>
-                <p class="text-muted-foreground mt-2 text-sm">
-                    `BACKEND_URL`, `BACKEND_API_KEY`, `DATABASE_URL`, `AUTH_SECRET`, and `ORIGIN`.
-                </p>
-            </div>
-            <div class="rounded-2xl border p-5">
-                <p class="font-medium">Configured here</p>
-                <p class="text-muted-foreground mt-2 text-sm">
-                    Media servers, content providers, metadata services, runtime defaults, and
-                    quality profiles.
-                </p>
-            </div>
-        </div>
-    </div>
+        <Card.Root class="rounded-3xl px-6 py-6">
+            <Card.Header class="px-0 py-0">
+                <Card.Title class="text-base">This setup will walk you through</Card.Title>
+            </Card.Header>
+            <Card.Content class="grid gap-4 px-0 pt-0 pb-0 md:grid-cols-3">
+                <div class="space-y-1">
+                    <p class="font-medium">Media server</p>
+                    <p class="text-muted-foreground text-sm">
+                        Choose where finished media should appear.
+                    </p>
+                </div>
+                <div class="space-y-1">
+                    <p class="font-medium">Sources and services</p>
+                    <p class="text-muted-foreground text-sm">
+                        Connect the scrapers, metadata, and request tools you actually use.
+                    </p>
+                </div>
+                <div class="space-y-1">
+                    <p class="font-medium">Defaults</p>
+                    <p class="text-muted-foreground text-sm">
+                        Pick profiles and instance preferences for how Riven should behave.
+                    </p>
+                </div>
+            </Card.Content>
+        </Card.Root>
 
-    <div class="grid gap-4">
-        <div class="rounded-2xl border p-5">
-            <p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Plugins</p>
-            <p class="mt-2 text-3xl font-semibold">{validPlugins}/{totalPlugins}</p>
-            <p class="text-muted-foreground text-sm">enabled plugins currently valid</p>
-        </div>
-        <div class="rounded-2xl border p-5">
-            <p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                Profiles
-            </p>
-            <p class="mt-2 text-3xl font-semibold">{enabledProfileCount}</p>
-            <p class="text-muted-foreground text-sm">quality profiles enabled</p>
-        </div>
-        <div class="rounded-2xl border p-5">
-            <p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                Attention Needed
-            </p>
-            <p class="mt-2 text-3xl font-semibold">{missingRequiredConfig}</p>
-            <p class="text-muted-foreground text-sm">enabled plugins missing required fields</p>
-        </div>
+        <p class="text-muted-foreground text-sm">
+            Core boot variables like backend, database, and auth are still configured outside the
+            app.
+        </p>
     </div>
 </div>
