@@ -37,7 +37,11 @@ export const betterAuthHandler: Handle = async ({ event, resolve }) => {
             event.locals.session = session?.session;
             event.locals.user = session?.user;
 
-            const setupComplete = isFirstLaunchSetupComplete(event.cookies);
+            const setupComplete = await isFirstLaunchSetupComplete(
+                event.locals.backendUrl,
+                event.locals.apiKey,
+                event.fetch
+            );
             const initialSetupPhase = await isInitialSetupPhase();
             const isProtectedSetupRoute = event.route.id === "/(protected)/setup";
 

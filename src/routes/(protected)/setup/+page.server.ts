@@ -1,8 +1,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { redirect } from "@sveltejs/kit";
-import { dev } from "$app/environment";
 import {
-    FIRST_LAUNCH_SETUP_COOKIE,
+    markFirstLaunchSetupComplete,
     isFirstLaunchSetupComplete,
     isInitialSetupPhase
 } from "$lib/server/first-launch";
@@ -14,7 +13,12 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const initialSetupPhase = await isInitialSetupPhase();
-    if (!initialSetupPhase || isFirstLaunchSetupComplete(event.cookies)) {
+    const setupComplete = await isFirstLaunchSetupComplete(
+        event.locals.backendUrl,
+        event.locals.apiKey,
+        event.fetch
+    );
+    if (!initialSetupPhase || setupComplete) {
         return redirect(302, "/");
     }
 
@@ -23,15 +27,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions = {
     ...(settingsActions as unknown as Record<string, never>),
-    completeSetup: async ({ cookies }) => {
-        cookies.set(FIRST_LAUNCH_SETUP_COOKIE, "true", {
-            path: "/",
-            httpOnly: true,
-            sameSite: "lax",
-            secure: !dev,
-            maxAge: 60 * 60 * 24 * 365
-        });
-
+    completeSetup: async ({ fetch, locals }) => {
+        await markFirstLaunchSetupComplete(locals.backendUrl, locals.apiKey, fetch);
         return redirect(303, "/");
     }
 } satisfies Actions;

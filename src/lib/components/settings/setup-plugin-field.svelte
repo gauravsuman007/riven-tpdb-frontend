@@ -31,6 +31,14 @@
                 ? "url"
                 : "text"
     );
+
+    const options = $derived.by(() => {
+        if (field.options?.length) return field.options;
+        if (pluginName === "logs" && field.key === "log_level") {
+            return ["error", "warn", "info", "debug", "trace"];
+        }
+        return [];
+    });
 </script>
 
 <div class="rounded-xl border p-4">
@@ -59,6 +67,21 @@
             oninput={(event) =>
                 setField(pluginName, field.key, (event.currentTarget as HTMLTextAreaElement).value)}
             >{value}</textarea>
+    {:else if field.options?.length || field.type === "select"}
+        <select
+            id={inputId}
+            class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+            value={value || field.default_value || options[0] || ""}
+            onchange={(event) =>
+                setField(
+                    pluginName,
+                    field.key,
+                    (event.currentTarget as HTMLSelectElement).value
+                )}>
+            {#each options as option}
+                <option value={option}>{option}</option>
+            {/each}
+        </select>
     {:else}
         <div class="flex items-center gap-2">
             <Input
