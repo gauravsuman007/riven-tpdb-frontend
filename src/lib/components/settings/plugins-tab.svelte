@@ -29,6 +29,14 @@
         selectPlugin: (plugin: PluginInfo) => void;
         onPluginSaved: (name: string, enabled: boolean, valid: boolean) => void;
     } = $props();
+
+    function fieldOptions(pluginName: string, field: SettingFieldDef): string[] {
+        if (field.options?.length) return field.options;
+        if (pluginName === "logs" && field.key === "log_level") {
+            return ["error", "warn", "info", "debug", "trace"];
+        }
+        return [];
+    }
 </script>
 
 {#if plugins.length === 0}
@@ -122,6 +130,20 @@
                                                     ).value)}
                                                 class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
                                                 >{pluginFields[f.key] ?? ""}</textarea>
+                                        {:else if f.options?.length || f.type === "select"}
+                                            {@const options = fieldOptions(selectedPlugin.name, f)}
+                                            <select
+                                                id="plg-{f.key}"
+                                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 max-w-sm rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                                                value={pluginFields[f.key] ?? f.default_value ?? options[0] ?? ""}
+                                                onchange={(e) =>
+                                                    (pluginFields[f.key] = (
+                                                        e.currentTarget as HTMLSelectElement
+                                                    ).value)}>
+                                                {#each options as option}
+                                                    <option value={option}>{option}</option>
+                                                {/each}
+                                            </select>
                                         {:else}
                                             <div class="flex items-center gap-2">
                                                 <Input

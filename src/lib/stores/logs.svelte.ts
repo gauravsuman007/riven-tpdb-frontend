@@ -37,6 +37,7 @@ export class LogStore {
 
     #reconnectAttempts = $state<number>(0);
     #maxReconnectAttempts = 5;
+    #hasConnected = $state<boolean>(false);
 
     get reconnectAttempts() {
         return this.#reconnectAttempts;
@@ -44,6 +45,9 @@ export class LogStore {
 
     get maxReconnectAttempts() {
         return this.#maxReconnectAttempts;
+    }
+    get hasConnected() {
+        return this.#hasConnected;
     }
 
     get logs() {
@@ -101,37 +105,46 @@ export class LogStore {
 
         this.#connectionStatus = "connecting";
         this.#error = null;
+        this.#hasConnected = false;
 
         this.#connection = source("/api/logs", {
-            open() {
-                // Connection opened
+            open: () => {
+                this.#connectionStatus = "connected";
+                this.#error = null;
+                this.#reconnectAttempts = 0;
+                this.#hasConnected = true;
             },
             close: ({ connect }) => {
                 if (this.#connectionStatus !== "disconnected") {
-                    this.#connectionStatus = "error";
-                    // Auto-reconnect
+                    this.#reconnectAttempts += 1;
+                    if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
+                        this.#connectionStatus = "error";
+                        this.#error = "Log stream disconnected";
+                        return;
+                    }
+                    this.#connectionStatus = "connecting";
                     setTimeout(() => {
-                        if (this.#connectionStatus !== "disconnected") {
-                            connect();
-                        }
+                        if (this.#connectionStatus !== "disconnected") connect();
                     }, 1000);
                 }
             },
-            error: (error) => {
-                logger.error("Log stream error:", error);
+            error: (streamError) => {
+                logger.error("Log stream error:", streamError);
                 this.#error = "Connection error";
-                this.#connectionStatus = "error";
             }
         });
 
-        const logValue = this.#connection.select("log").json<LogEntry>(({ error, previous }) => {
-            if (error) {
-                logger.warn("Failed to parse log entry:", error);
+        const logValue = this.#connection.select("log").transform((raw) => {
+            if (!raw?.trim()) {
+                return null;
             }
-            return previous;
+            try {
+                return JSON.parse(raw) as LogEntry;
+            } catch (parseError) {
+                logger.warn("Failed to parse log entry:", raw, parseError);
+                return null;
+            }
         });
-
-        this.#connectionStatus = "connected";
 
         this.#unsubscribe = logValue.subscribe((value) => {
             if (value) {
@@ -143,6 +156,7 @@ export class LogStore {
 
     disconnect() {
         this.#connectionStatus = "disconnected";
+        this.#hasConnected = false;
         if (this.#unsubscribe) {
             this.#unsubscribe();
             this.#unsubscribe = null;

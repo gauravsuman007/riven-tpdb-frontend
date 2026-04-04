@@ -4,6 +4,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
+    import * as Select from "$lib/components/ui/select/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
     import type { SettingFieldDef } from "./types";
 
@@ -39,6 +40,26 @@
                             {/if}
                         </div>
                         <Switch checked={!!val} onCheckedChange={(v) => (general[field.key] = v)} />
+                    </div>
+                {:else if field.options?.length}
+                    <div class="space-y-2">
+                        <Label for="gen-{field.key}">{field.label}</Label>
+                        {#if field.description}
+                            <p class="text-muted-foreground text-sm">{field.description}</p>
+                        {/if}
+                        <Select.Root
+                            type="single"
+                            value={val != null ? String(val) : field.default_value ?? ""}
+                            onValueChange={(value) => (general[field.key] = value)}>
+                            <Select.Trigger class="max-w-xs">
+                                {val != null ? String(val) : field.default_value ?? field.label}
+                            </Select.Trigger>
+                            <Select.Content>
+                                {#each field.options as option}
+                                    <Select.Item value={option} label={option} />
+                                {/each}
+                            </Select.Content>
+                        </Select.Root>
                     </div>
                 {:else}
                     <div class="space-y-2">

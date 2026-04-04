@@ -16,6 +16,7 @@
         error,
         historicalError,
         connectionStatus,
+        hasConnected,
         reconnectAttempts,
         maxReconnectAttempts
     } = $derived({
@@ -26,6 +27,7 @@
         error: logStore.error,
         historicalError: logStore.historicalError,
         connectionStatus: logStore.connectionStatus,
+        hasConnected: logStore.hasConnected,
         reconnectAttempts: logStore.reconnectAttempts,
         maxReconnectAttempts: logStore.maxReconnectAttempts
     });
@@ -163,7 +165,7 @@
                 Try Again
             </button>
         </div>
-    {:else if logs.length > 0 || historicalLogs.length > 0 || connectionStatus === "connecting" || isLoadingHistorical}
+    {:else if logs.length > 0 || historicalLogs.length > 0 || connectionStatus !== "disconnected" || isLoadingHistorical}
         <div class="flex h-full min-h-0 flex-col">
             <div class="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row">
                 <div>
@@ -219,6 +221,12 @@
                             {/each}
                         {:else if connectionStatus === "connecting"}
                             {@render loadingSpinner(getStatusText())}
+                        {:else if connectionStatus === "connected" || hasConnected}
+                            {@render emptyState("Connected. Waiting for live logs...")}
+                        {:else if error}
+                            <div class="p-8">
+                                {@render errorDisplay(error, () => logStore.reconnect(), "Reconnect")}
+                            </div>
                         {/if}
                     {:else if isLoadingHistorical}
                         {@render loadingSpinner("Loading historical logs...")}

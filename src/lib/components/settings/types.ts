@@ -23,6 +23,7 @@ export type SettingFieldDef = {
     default_value?: string;
     placeholder?: string;
     description?: string;
+    options?: string[];
 };
 
 export type PluginInfo = {

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
+    import * as Select from "$lib/components/ui/select/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
     import type { SettingFieldDef } from "./types";
 
@@ -25,6 +26,26 @@
                 {/if}
             </div>
             <Switch checked={!!value} onCheckedChange={(v) => (general[field.key] = v)} />
+        </div>
+    {:else if field.options?.length}
+        <div class="space-y-2">
+            <Label for="setup-general-{field.key}">{field.label}</Label>
+            {#if field.description}
+                <p class="text-muted-foreground text-sm">{field.description}</p>
+            {/if}
+            <Select.Root
+                type="single"
+                value={value != null ? String(value) : field.default_value ?? ""}
+                onValueChange={(next) => (general[field.key] = next)}>
+                <Select.Trigger class="max-w-sm">
+                    {value != null ? String(value) : field.default_value ?? field.label}
+                </Select.Trigger>
+                <Select.Content>
+                    {#each field.options as option}
+                        <Select.Item value={option} label={option} />
+                    {/each}
+                </Select.Content>
+            </Select.Root>
         </div>
     {:else}
         <div class="space-y-2">
