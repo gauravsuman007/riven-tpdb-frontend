@@ -32,6 +32,22 @@ const STATS_QUERY = `
             subscriptionStatus
             premiumUntil
         }
+        activePlaybackSessions {
+            server
+            userName
+            parentTitle
+            itemTitle
+            itemType
+            seasonNumber
+            episodeNumber
+            playbackState
+            playbackMethod
+            positionSeconds
+            durationSeconds
+            deviceName
+            clientName
+            imageUrl
+        }
     }
 `;
 
@@ -55,6 +71,22 @@ export const load = (async ({ fetch, locals }) => {
             activity: Record<string, number>;
             yearReleases: { year: number; count: number }[];
             debridAccountInfo: { store: string; email: string | null; subscriptionStatus: string | null; premiumUntil: string | null }[];
+            activePlaybackSessions: {
+                server: string;
+                userName: string | null;
+                parentTitle: string | null;
+                itemTitle: string;
+                itemType: string | null;
+                seasonNumber: number | null;
+                episodeNumber: number | null;
+                playbackState: string;
+                playbackMethod: string;
+                positionSeconds: number | null;
+                durationSeconds: number | null;
+                deviceName: string | null;
+                clientName: string | null;
+                imageUrl: string | null;
+            }[];
         }>(locals.backendUrl, locals.apiKey, STATS_QUERY, {}, fetch);
 
         const s = data.stats;
@@ -104,7 +136,8 @@ export const load = (async ({ fetch, locals }) => {
             },
             downloaderInfo: {
                 services: debridServices
-            }
+            },
+            activePlaybackSessions: data.activePlaybackSessions ?? []
         };
     } catch (err) {
         logger.error("Failed to fetch stats:", err);

@@ -1,6 +1,7 @@
 <script lang="ts">
     import PageShell from "$lib/components/page-shell.svelte";
     import type { PageData } from "./$types";
+    import { gqlClient } from "$lib/graphql-client";
     import { cn } from "$lib/utils";
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Chart from "$lib/components/ui/chart/index.js";
@@ -10,10 +11,51 @@
     import { formatBytes, formatDate, getServiceDisplayName } from "$lib/helpers";
     import Heatmap from "$lib/components/heatmap.svelte";
     import { curveCatmullRom } from "d3-shape";
-    import { fly } from "svelte/transition";
-    import { cubicOut } from "svelte/easing";
+    import { onMount } from "svelte";
 
     let { data }: { data: PageData } = $props();
+    type ActivePlaybackSession = {
+        server: string;
+        userName: string | null;
+        parentTitle: string | null;
+        itemTitle: string;
+        itemType: string | null;
+        seasonNumber: number | null;
+        episodeNumber: number | null;
+        playbackState: string;
+        playbackMethod: string;
+        positionSeconds: number | null;
+        durationSeconds: number | null;
+        deviceName: string | null;
+        clientName: string | null;
+        imageUrl: string | null;
+    };
+
+    let activePlaybackSessions = $state<ActivePlaybackSession[]>([]);
+    const serviceStatuses = $derived(
+        (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
+    );
+
+    const ACTIVE_PLAYBACK_QUERY = `
+        query {
+            activePlaybackSessions {
+                server
+                userName
+                parentTitle
+                itemTitle
+                itemType
+                seasonNumber
+                episodeNumber
+                playbackState
+                playbackMethod
+                positionSeconds
+                durationSeconds
+                deviceName
+                clientName
+                imageUrl
+            }
+        }
+    `;
 
     function transformStatesToArray(states: Record<string, number> | undefined) {
         if (!states) return [];
@@ -59,6 +101,120 @@
         { label: "High", color: "var(--chart-2)" },
         { label: "Very High", color: "var(--chart-1)" }
     ];
+
+    $effect(() => {
+        activePlaybackSessions = data.activePlaybackSessions ?? [];
+    });
+
+    function playbackTone(state: string) {
+        switch (state.toLowerCase()) {
+            case "playing":
+                return "default";
+            case "paused":
+                return "secondary";
+            case "buffering":
+                return "secondary";
+            default:
+                return "secondary";
+        }
+    }
+
+    function playbackLabel(state: string) {
+        return state.charAt(0).toUpperCase() + state.slice(1).toLowerCase();
+    }
+
+    function playbackMethodLabel(method: string) {
+        switch (method.toLowerCase()) {
+            case "directplay":
+            case "direct_play":
+                return "Direct Play";
+            case "directstream":
+            case "direct_stream":
+                return "Direct Stream";
+            case "transcode":
+                return "Transcode";
+            default:
+                return "Unknown";
+        }
+    }
+
+    function formatPlaybackTime(totalSeconds: number | null | undefined) {
+        if (totalSeconds === null || totalSeconds === undefined || totalSeconds < 0) return null;
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+        }
+        return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function formatEpisodeCode(session: ActivePlaybackSession) {
+        if (session.seasonNumber === null || session.episodeNumber === null) return null;
+        return `S${String(session.seasonNumber).padStart(2, "0")}E${String(session.episodeNumber).padStart(2, "0")}`;
+    }
+
+    function formatRemainingTime(session: ActivePlaybackSession) {
+        if (
+            session.positionSeconds === null ||
+            session.durationSeconds === null ||
+            session.durationSeconds <= session.positionSeconds
+        ) {
+            return null;
+        }
+
+        return formatPlaybackTime(session.durationSeconds - session.positionSeconds);
+    }
+
+    function formatOptionalNumber(value: number | null | undefined) {
+        return typeof value === "number" ? value.toLocaleString() : null;
+    }
+
+    function showSeparateClient(session: ActivePlaybackSession) {
+        if (!session.deviceName || !session.clientName) return false;
+        return session.deviceName.trim().toLowerCase() !== session.clientName.trim().toLowerCase();
+    }
+
+    function progressWidth(session: ActivePlaybackSession) {
+        if (
+            session.positionSeconds === null ||
+            session.positionSeconds === undefined ||
+            session.durationSeconds === null ||
+            session.durationSeconds === undefined ||
+            session.durationSeconds <= 0
+        ) {
+            return 0;
+        }
+
+        return Math.max(
+            0,
+            Math.min(100, (session.positionSeconds / session.durationSeconds) * 100)
+        );
+    }
+
+    onMount(() => {
+        let cancelled = false;
+
+        const refresh = async () => {
+            try {
+                const result =
+                    await gqlClient<{ activePlaybackSessions: ActivePlaybackSession[] }>(
+                        ACTIVE_PLAYBACK_QUERY
+                    );
+                if (!cancelled) {
+                    activePlaybackSessions = result.activePlaybackSessions ?? [];
+                }
+            } catch {
+                // Keep the last successful snapshot on transient dashboard polling failures.
+            }
+        };
+
+        const interval = window.setInterval(refresh, 15000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
+    });
 </script>
 
 <svelte:head>
@@ -273,8 +429,8 @@
             </Card.Header>
             <Card.Content>
                 <div class="flex flex-wrap gap-4">
-                    {#if data.services && Object.keys(data.services).length > 0}
-                        {#each Object.entries(data.services) as [serviceName, status] (serviceName)}
+                    {#if serviceStatuses && Object.keys(serviceStatuses).length > 0}
+                        {#each Object.entries(serviceStatuses) as [serviceName, status] (serviceName)}
                             {#if status === true}
                                 <Badge
                                     variant="default"
@@ -370,11 +526,11 @@
                     {/if}
 
                     <div class="grid grid-cols-2 gap-3">
-                        {#if downloader.points !== null && downloader.points !== undefined}
+                        {#if typeof downloader.points === "number"}
                             <div>
                                 <p class="text-xs font-medium text-neutral-400">Points</p>
                                 <p class="mt-0.5 text-sm font-medium text-neutral-100">
-                                    {downloader.points.toLocaleString()}
+                                    {formatOptionalNumber(downloader.points)}
                                 </p>
                             </div>
                         {/if}
@@ -398,5 +554,124 @@
                 </Card.Content>
             </Card.Root>
         {/each}
+    </section>
+
+    <section class="mb-8 grid grid-cols-1">
+        <Card.Root>
+            <Card.Header class="pb-2">
+                <div class="flex items-center justify-between gap-3">
+                    <Card.Title class="text-sm font-medium text-neutral-300">
+                        Watching Now
+                    </Card.Title>
+                    <span class="text-xs text-neutral-500">Refreshes every 15s</span>
+                </div>
+            </Card.Header>
+            <Card.Content>
+                {#if activePlaybackSessions.length === 0}
+                    <p class="text-sm text-neutral-400">No active playback sessions.</p>
+                {:else}
+                    <div class="grid gap-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                        {#each activePlaybackSessions as session (`${session.server}:${session.userName ?? "unknown"}:${session.itemTitle}`)}
+                            <div class="rounded-md border border-white/6 bg-white/[0.02] p-2.5">
+                                <div class="flex gap-2.5">
+                                    <div class="h-16 w-12 shrink-0 overflow-hidden rounded-md border border-white/8 bg-white/[0.04]">
+                                        {#if session.imageUrl}
+                                            <img
+                                                src={session.imageUrl}
+                                                alt={session.parentTitle ?? session.itemTitle}
+                                                class="h-full w-full object-cover"
+                                                loading="lazy" />
+                                        {:else}
+                                            <div class="flex h-full w-full items-center justify-center text-[10px] text-neutral-500">
+                                                {session.itemType ?? "Media"}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="min-w-0">
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <span class="truncate text-[13px] font-semibold leading-tight text-neutral-100">
+                                                        {session.parentTitle ?? session.itemTitle}
+                                                    </span>
+                                                    {#if formatEpisodeCode(session)}
+                                                        <Badge variant="outline" class="rounded-md px-1.5 py-0 text-[10px]">
+                                                            {formatEpisodeCode(session)}
+                                                        </Badge>
+                                                    {/if}
+                                                </div>
+                                                {#if session.parentTitle}
+                                                    <p class="mt-0.5 line-clamp-1 text-[11px] text-neutral-300">
+                                                        {session.itemTitle}
+                                                    </p>
+                                                {/if}
+                                            </div>
+                                            <Badge
+                                                variant={playbackTone(session.playbackState)}
+                                                class="rounded-md px-1.5 py-0 text-[10px]">
+                                                {playbackLabel(session.playbackState)}
+                                            </Badge>
+                                        </div>
+
+                                        <div class="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-neutral-500">
+                                            <span class="truncate">
+                                                {session.userName ?? "Unknown user"} on {session.server}
+                                            </span>
+                                            <span class="text-neutral-600">•</span>
+                                            <span>{playbackMethodLabel(session.playbackMethod)}</span>
+                                            {#if session.itemType}
+                                                <span class="text-neutral-600">•</span>
+                                                <span>{session.itemType}</span>
+                                            {/if}
+                                        </div>
+
+                                        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-500">
+                                            <span class="truncate">
+                                                <span class="text-neutral-400">
+                                                    {session.deviceName ? "Device" : "Client"}
+                                                </span>
+                                                <span class="ml-1 text-neutral-200">
+                                                    {session.deviceName ?? session.clientName ?? "Unknown"}
+                                                </span>
+                                            </span>
+                                            {#if showSeparateClient(session)}
+                                                <span class="truncate">
+                                                    <span class="text-neutral-400">Client</span>
+                                                    <span class="ml-1 text-neutral-200">
+                                                        {session.clientName}
+                                                    </span>
+                                                </span>
+                                            {/if}
+                                        </div>
+
+                                        {#if session.positionSeconds !== null && session.positionSeconds !== undefined && session.durationSeconds !== null && session.durationSeconds !== undefined}
+                                            <div class="mt-1.5">
+                                                <div class="mb-1 flex items-center justify-between text-[10px] text-neutral-500">
+                                                    <span>{formatPlaybackTime(session.positionSeconds) ?? "--:--"}</span>
+                                                    <span>{formatPlaybackTime(session.durationSeconds) ?? "--:--"}</span>
+                                                </div>
+                                                <div class="relative h-1 overflow-hidden rounded-full bg-white/8">
+                                                    <div
+                                                        class="relative h-full rounded-full bg-[var(--chart-1)]"
+                                                        style={`width: ${progressWidth(session)}%`}>
+                                                        <span
+                                                            class="absolute top-1/2 right-0 h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full border border-white/70 bg-[var(--chart-1)] shadow-[0_0_8px_color-mix(in_oklab,var(--chart-1)_45%,transparent)]"></span>
+                                                    </div>
+                                                </div>
+                                                {#if formatRemainingTime(session)}
+                                                    <p class="mt-1 text-right text-[10px] text-neutral-500">
+                                                        {formatRemainingTime(session)} left
+                                                    </p>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+            </Card.Content>
+        </Card.Root>
     </section>
 </PageShell>
