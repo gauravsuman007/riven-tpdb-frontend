@@ -57,6 +57,10 @@
         return Object.fromEntries(entries);
     }
 
+    function ensurePlainObject(input: unknown, fields: SettingFieldDef[] = []): Record<string, unknown> {
+        return isRecord(input) ? (input as Record<string, unknown>) : createDefaultObject(fields);
+    }
+
     function ensureObject(fields: SettingFieldDef[] = []): Record<string, unknown> {
         if (!isRecord(value)) {
             value = createDefaultObject(fields);
@@ -86,13 +90,7 @@
         entryKey: string,
         fields: SettingFieldDef[]
     ): Record<string, unknown> {
-        const entry = dictionary[entryKey];
-        if (!isRecord(entry)) {
-            dictionary[entryKey] = createDefaultObject(fields);
-            value = { ...dictionary };
-        }
-
-        return dictionary[entryKey] as Record<string, unknown>;
+        return ensurePlainObject(dictionary[entryKey], fields);
     }
 
     function addArrayValue() {
@@ -157,6 +155,30 @@
         );
         value = Object.fromEntries(entries);
     }
+
+    function updateObjectField(
+        fields: SettingFieldDef[],
+        key: string,
+        nextValue: unknown
+    ) {
+        const objectValue = ensurePlainObject(value, fields);
+        value = {
+            ...objectValue,
+            [key]: nextValue
+        };
+    }
+
+    function updateDictionaryField(entryKey: string, itemKey: string, nextValue: unknown) {
+        const dictionary = ensureDictionary();
+        const entry = ensureDictionaryEntry(dictionary, entryKey, field.item_fields ?? []);
+        value = {
+            ...dictionary,
+            [entryKey]: {
+                ...entry,
+                [itemKey]: nextValue
+            }
+        };
+    }
 </script>
 
 <div class:rounded-lg={!nested} class:border={!nested} class:p-4={!nested} class="space-y-3">
@@ -173,7 +195,10 @@
             {#each field.fields ?? [] as subfield (subfield.key)}
                 <SettingFieldEditor
                     field={subfield}
-                    bind:value={objectValue[subfield.key]}
+                    bind:value={
+                        () => objectValue[subfield.key],
+                        (nextValue) => updateObjectField(field.fields ?? [], subfield.key, nextValue)
+                    }
                     path={`${path}.${subfield.key}`}
                     nested={true} />
             {/each}
@@ -220,7 +245,11 @@
                         {#each field.item_fields ?? [] as itemField (itemField.key)}
                             <SettingFieldEditor
                                 field={itemField}
-                                bind:value={entryValue[itemField.key]}
+                                bind:value={
+                                    () => entryValue[itemField.key],
+                                    (nextValue) =>
+                                        updateDictionaryField(entryKey, itemField.key, nextValue)
+                                }
                                 path={`${path}.${entryKey}.${itemField.key}`}
                                 nested={true} />
                         {/each}

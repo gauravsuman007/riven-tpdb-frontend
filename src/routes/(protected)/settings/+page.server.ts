@@ -80,39 +80,10 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
             ).catch(() => ({ pluginInfo: [] }))
         ]);
 
-        const pluginSettingsEntries = await Promise.all(
-            (pluginData.pluginInfo ?? []).map(async (plugin) => {
-                const result = await gql<{ pluginSettings: Record<string, unknown> }>(
-                    locals.backendUrl,
-                    locals.apiKey,
-                    PLUGIN_SETTINGS_QUERY,
-                    { plugin: plugin.name },
-                    fetch
-                ).catch(() => ({ pluginSettings: {} }));
-
-                return [plugin.name, result.pluginSettings ?? {}] as const;
-            })
-        );
-
-        const pluginSettingsMap: Record<string, Record<string, unknown>> = Object.fromEntries(
-            pluginSettingsEntries
-        );
         const pluginStatuses = (pluginData.pluginInfo ?? []).map((plugin) => {
-            const settings: Record<string, unknown> = pluginSettingsMap[plugin.name] ?? {};
             const requiredFields = (plugin.schema ?? [])
                 .filter((field) => field.required)
                 .map((field) => field.key);
-            const missingRequiredFields = requiredFields.filter((field) => {
-                const value = settings[field];
-                if (typeof value === "boolean") return value !== true;
-                if (typeof value === "number") return Number.isNaN(value);
-                return String(value ?? "").trim() === "";
-            });
-            const configuredFieldCount = Object.entries(settings).filter(([key, value]) => {
-                if (key === "enabled") return value === true;
-                if (typeof value === "boolean") return value;
-                return String(value ?? "").trim() !== "";
-            }).length;
 
             return {
                 name: plugin.name,
@@ -120,8 +91,8 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
                 enabled: plugin.enabled,
                 valid: plugin.valid,
                 requiredFields,
-                missingRequiredFields,
-                configuredFieldCount
+                missingRequiredFields: [],
+                configuredFieldCount: 0
             } satisfies SetupPluginStatus;
         });
 
@@ -130,9 +101,7 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
             totalPlugins: pluginStatuses.length,
             enabledPlugins: pluginStatuses.filter((plugin) => plugin.enabled).length,
             validPlugins: pluginStatuses.filter((plugin) => plugin.enabled && plugin.valid).length,
-            pluginsMissingRequiredConfig: pluginStatuses.filter(
-                (plugin) => plugin.enabled && plugin.missingRequiredFields.length > 0
-            ).length,
+            pluginsMissingRequiredConfig: 0,
             hasEnabledProfiles: (rankData.customProfiles ?? []).some((profile) => profile.enabled)
         };
 

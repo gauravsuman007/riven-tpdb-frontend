@@ -15,9 +15,9 @@
     let activeTab = $state("general");
     const builtinProfileIds = new Set((data.qualityProfiles ?? []).map((profile) => profile.id));
 
-    let general = $state<Record<string, unknown>>({
-        ...(data.generalSettings as Record<string, unknown>)
-    });
+    let general = $state<Record<string, unknown>>(
+        JSON.parse(JSON.stringify(data.generalSettings ?? {}))
+    );
     let plugins = $state<PluginInfo[]>(data.plugins.map((p) => ({ ...p })));
     let selectedPlugin = $state<PluginInfo | null>(plugins.length > 0 ? plugins[0] : null);
     let pluginFields = $state<Record<string, string>>({});
