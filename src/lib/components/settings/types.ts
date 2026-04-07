@@ -24,6 +24,10 @@ export type SettingFieldDef = {
     placeholder?: string;
     description?: string;
     options?: string[];
+    fields?: SettingFieldDef[];
+    item_fields?: SettingFieldDef[];
+    key_placeholder?: string;
+    add_label?: string;
 };
 
 export type PluginInfo = {

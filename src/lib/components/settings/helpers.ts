@@ -240,6 +240,13 @@ function inferGeneralSection(field: SettingFieldDef) {
         };
     }
 
+    if (/\bfilesystem\b|\bmount\b|\blibrary profile\b|\blibrary profiles\b/.test(text)) {
+        return {
+            title: "Filesystem",
+            description: "Mount configuration and filtered virtual library views."
+        };
+    }
+
     return {
         title: "General Preferences",
         description: "Instance-wide defaults that shape Riven's runtime behaviour."

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto, afterNavigate } from "$app/navigation";
+    import { resolve } from "$app/paths";
     import { onDestroy } from "svelte";
     import X from "@lucide/svelte/icons/x";
     import Search from "@lucide/svelte/icons/search";
@@ -32,7 +33,6 @@
         if (debounceTimer) clearTimeout(debounceTimer);
         abortController?.abort();
     });
-    let abortController: AbortController | null = null;
 
     // Persist search state across navigation
     let savedQuery = "";
@@ -108,7 +108,7 @@
         navigatedFromModal = true;
         pendingNavigation = true;
         // Keep modal open — it will be hidden after the new page loads
-        goto(`/details/media/${item.id}/${item.media_type}`);
+        goto(resolve(`/details/media/${item.id}/${item.media_type}`));
     }
 
     afterNavigate((navigation) => {
@@ -117,14 +117,18 @@
             pendingNavigation = false;
             skipTransition = true;
             onclose();
-            requestAnimationFrame(() => { skipTransition = false; });
+            requestAnimationFrame(() => {
+                skipTransition = false;
+            });
             return;
         }
-        if (navigation.type === 'popstate' && navigatedFromModal && savedQuery) {
+        if (navigation.type === "popstate" && navigatedFromModal && savedQuery) {
             navigatedFromModal = false;
             skipTransition = true;
             reopenFromNav();
-            requestAnimationFrame(() => { skipTransition = false; });
+            requestAnimationFrame(() => {
+                skipTransition = false;
+            });
         }
     });
 
@@ -159,7 +163,11 @@
 
     <!-- Modal Content -->
     <div
-        transition:fly={{ y: skipTransition ? 0 : 20, duration: skipTransition ? 0 : 300, easing: cubicOut }}
+        transition:fly={{
+            y: skipTransition ? 0 : 20,
+            duration: skipTransition ? 0 : 300,
+            easing: cubicOut
+        }}
         class="fixed inset-0 z-[71] flex flex-col overflow-hidden"
         role="dialog"
         aria-modal="true"
@@ -200,7 +208,7 @@
                     {#each results as item (`${item.media_type}-${item.id}`)}
                         <button
                             onclick={() => handleResultClick(item)}
-                            class="block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.97] transition-transform duration-150">
+                            class="block w-full rounded-xl text-left transition-transform duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.97]">
                             <PortraitCard
                                 title={item.title}
                                 subtitle={getSubtitle(item)}
@@ -210,13 +218,13 @@
                 </div>
             {:else if query.trim() && !loading}
                 <div class="flex flex-col items-center justify-center gap-2 py-24 text-center">
-                    <p class="text-white/60 text-base font-medium">No results found</p>
-                    <p class="text-white/30 text-sm">Try a different search term</p>
+                    <p class="text-base font-medium text-white/60">No results found</p>
+                    <p class="text-sm text-white/30">Try a different search term</p>
                 </div>
             {:else}
                 <div class="flex flex-col items-center justify-center gap-2 py-24 text-center">
                     <Search class="size-8 text-white/20" />
-                    <p class="text-white/40 text-sm">Start typing to search</p>
+                    <p class="text-sm text-white/40">Start typing to search</p>
                 </div>
             {/if}
         </div>
