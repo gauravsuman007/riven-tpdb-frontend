@@ -153,19 +153,20 @@ export const actions = {
             return fail(400, { error: "Invalid JSON settings" });
         }
         try {
-            await gql(
-                locals.backendUrl,
-                locals.apiKey,
-                UPDATE_GENERAL_SETTINGS,
-                { settings },
-                fetch
-            );
-            return { success: true };
+            const result = await gql<{
+                updateGeneralSettings: {
+                    settings?: Record<string, unknown>;
+                    filesystem_profile_rematch_count?: number;
+                };
+            }>(locals.backendUrl, locals.apiKey, UPDATE_GENERAL_SETTINGS, { settings }, fetch);
+            return {
+                success: true,
+                updatedCount: result.updateGeneralSettings.filesystem_profile_rematch_count ?? 0
+            };
         } catch {
             return fail(500, { error: "Failed to save general settings" });
         }
     },
-
     updatePlugin: async ({ request, fetch, locals }) => {
         const formData = await request.formData();
         const plugin = formData.get("plugin");
