@@ -34,13 +34,39 @@
         episodes.filter((episode) => episode.seasonNumber?.toString() === selectedSeason)
     );
 
+    function humanizeProfileName(name: string | undefined) {
+        if (!name) return null;
+        return name
+            .split(/[_-]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+    }
+
+    function getMetadataResolutionLabel(metadata: MediaMetadata | undefined): string | null {
+        const height = metadata?.video?.resolution_height;
+        if (!height) return null;
+        if (height >= 2160) return "4K";
+        if (height >= 1440) return "1440p";
+        if (height >= 1080) return "1080p";
+        if (height >= 720) return "720p";
+        if (height >= 480) return "480p";
+        return `${height}p`;
+    }
+
     function getFsLabel(
         entry: FilesystemEntry | undefined,
         episodeNumber: number | null | undefined
     ) {
-        return (
-            entry?.ranking_profile_name ?? (episodeNumber ? `Episode ${episodeNumber}` : "Episode")
-        );
+        const resolutionLabel = getMetadataResolutionLabel(entry?.media_metadata);
+        const profileLabel = humanizeProfileName(entry?.ranking_profile_name);
+        const fallback = episodeNumber ? `Episode ${episodeNumber}` : "Episode";
+
+        if (resolutionLabel && profileLabel) {
+            return `${resolutionLabel} (${profileLabel})`;
+        }
+
+        return resolutionLabel ?? profileLabel ?? fallback;
     }
 </script>
 

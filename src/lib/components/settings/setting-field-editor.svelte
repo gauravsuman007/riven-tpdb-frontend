@@ -62,27 +62,17 @@
     }
 
     function ensureObject(fields: SettingFieldDef[] = []): Record<string, unknown> {
-        if (!isRecord(value)) {
-            value = createDefaultObject(fields);
-        }
-
-        return value as Record<string, unknown>;
+        return isRecord(value) ? (value as Record<string, unknown>) : createDefaultObject(fields);
     }
 
     function ensureDictionary(): Record<string, unknown> {
-        if (!isRecord(value)) {
-            value = {};
-        }
-
-        return value as Record<string, unknown>;
+        return isRecord(value) ? (value as Record<string, unknown>) : {};
     }
 
     function ensureStringArray(): string[] {
-        if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-            value = [];
-        }
-
-        return value as string[];
+        return Array.isArray(value) && value.every((entry) => typeof entry === "string")
+            ? (value as string[])
+            : [];
     }
 
     function ensureDictionaryEntry(

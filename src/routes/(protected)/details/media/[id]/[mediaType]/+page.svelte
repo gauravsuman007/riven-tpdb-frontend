@@ -98,6 +98,47 @@
               : [];
     }
 
+    function humanizeProfileName(name: string | undefined) {
+        if (!name) return null;
+        return name
+            .split(/[_-]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+    }
+
+    function getMetadataResolutionLabel(
+        metadata: RivenMediaItem["media_metadata"] | undefined
+    ): string | null {
+        const height = metadata?.video?.resolution_height;
+        if (!height) return null;
+        if (height >= 2160) return "4K";
+        if (height >= 1440) return "1440p";
+        if (height >= 1080) return "1080p";
+        if (height >= 720) return "720p";
+        if (height >= 480) return "480p";
+        return `${height}p`;
+    }
+
+    function getFilesystemEntryLabel(
+        entry:
+            | (NonNullable<RivenMediaItem["filesystem_entry"]> & {
+                  id?: number;
+                  ranking_profile_name?: string;
+              })
+            | undefined,
+        fallback: string
+    ) {
+        const resolutionLabel = getMetadataResolutionLabel(entry?.media_metadata);
+        const profileLabel = humanizeProfileName(entry?.ranking_profile_name);
+
+        if (resolutionLabel && profileLabel) {
+            return `${resolutionLabel} (${profileLabel})`;
+        }
+
+        return resolutionLabel ?? profileLabel ?? fallback;
+    }
+
     async function deleteFilesystemEntry(id: number, label: string) {
         if (
             !confirm(
@@ -1077,8 +1118,10 @@
                                                 <option
                                                     value={i}
                                                     selected={i === selectedMovieVersionIdx}
-                                                    >{entry.ranking_profile_name ??
-                                                        `Version ${i + 1}`}</option>
+                                                    >{getFilesystemEntryLabel(
+                                                        entry,
+                                                        `Version ${i + 1}`
+                                                    )}</option>
                                             {/each}
                                         </select>
                                     {/if}
@@ -1330,8 +1373,10 @@
                                                 onclick={() =>
                                                     deleteFilesystemEntry(
                                                         fs!.id!,
-                                                        fs?.ranking_profile_name ??
+                                                        getFilesystemEntryLabel(
+                                                            fs,
                                                             `Version ${selectedMovieVersionIdx + 1}`
+                                                        )
                                                     )}>
                                                 Remove this version
                                             </button>
