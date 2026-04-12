@@ -235,6 +235,31 @@ export function mapMediaItemStateTree(
     };
 }
 
+export interface GqlExpectedSeason {
+    seasonNumber: number;
+    expectedFileCount: number;
+}
+
+export interface GqlExpectedCounts {
+    expectedFileCount: number;
+    seasons?: GqlExpectedSeason[];
+}
+
+export const MEDIA_ITEM_EXPECTED_COUNTS_QUERY = `query($id: Int!) {
+    mediaItemById(id: $id) {
+        ... on Movie {
+            expectedFileCount
+        }
+        ... on Show {
+            expectedFileCount
+            seasons(includeSpecials: false) {
+                seasonNumber
+                expectedFileCount
+            }
+        }
+    }
+}`;
+
 export function mapMediaItemState(
     raw: GqlMediaItemState | null | undefined
 ): RivenMediaItem | null {

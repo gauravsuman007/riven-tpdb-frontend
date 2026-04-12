@@ -16,7 +16,6 @@
 
     interface Props {
         title: string | null | undefined;
-        itemId?: string | null;
         externalId: string;
         mediaType: "tv" | "movie";
         variant?: "ghost" | "default" | "link" | "destructive" | "outline" | "secondary";
@@ -30,6 +29,7 @@
         key: string;
         title: string;
         infoHash: string;
+        magnet: string;
         parsedData?: { resolution?: string; quality?: string; audio?: string[]; languages?: string[] } | null;
         rank?: number | null;
         fileSizeBytes?: number | null;
@@ -43,6 +43,7 @@
             key
             title
             infoHash
+            magnet
             parsedData
             rank
             fileSizeBytes
@@ -52,13 +53,12 @@
         }
     }`;
 
-    const DOWNLOAD_DISCOVERED_STREAM_MUTATION = `mutation($itemType: MediaItemType!, $title: String!, $imdbId: String, $tmdbId: String, $tvdbId: String, $seasonNumber: Int, $infoHash: String!, $parsedData: JSON, $rank: Int) {
-        downloadDiscoveredStream(itemType: $itemType, title: $title, imdbId: $imdbId, tmdbId: $tmdbId, tvdbId: $tvdbId, seasonNumber: $seasonNumber, infoHash: $infoHash, parsedData: $parsedData, rank: $rank)
+    const DOWNLOAD_DISCOVERED_STREAM_MUTATION = `mutation($itemType: MediaItemType!, $title: String!, $imdbId: String, $tmdbId: String, $tvdbId: String, $seasonNumber: Int, $infoHash: String!, $magnet: String!, $parsedData: JSON, $rank: Int) {
+        downloadDiscoveredStream(itemType: $itemType, title: $title, imdbId: $imdbId, tmdbId: $tmdbId, tvdbId: $tvdbId, seasonNumber: $seasonNumber, infoHash: $infoHash, magnet: $magnet, parsedData: $parsedData, rank: $rank)
     }`;
 
     let {
         title,
-        itemId: _itemId = null,
         externalId,
         mediaType,
         variant = "ghost",
@@ -82,6 +82,9 @@
 
     const hasSeasonSelector = $derived(mediaType === "tv" && seasons.length > 0);
     const visibleStreams = $derived(cachedOnly ? streams.filter((stream) => stream.isCached) : streams);
+    const resolvedTmdbId = $derived(mediaType === "movie" ? (clean(customTmdbId) ?? externalId) : null);
+    const resolvedTvdbId = $derived(mediaType === "tv" ? (clean(customTvdbId) ?? externalId) : null);
+    const cleanedHash = $derived(clean(explicitHash));
 
     function formatBytes(value?: number | null) {
         if (!value) return "Unknown size";
@@ -96,18 +99,13 @@
         const trimmed = value.trim();
         return trimmed.length ? trimmed : null;
     }
-    function resolvedTmdbId() {
-        return mediaType === "movie" ? (clean(customTmdbId) ?? externalId) : null;
-    }
-    function resolvedTvdbId() {
-        return mediaType === "tv" ? (clean(customTvdbId) ?? externalId) : null;
-    }
 
     function toggleSeason(seasonNumber: number) {
         selectedSeasons = selectedSeasons.includes(seasonNumber)
             ? selectedSeasons.filter((value) => value !== seasonNumber)
             : [...selectedSeasons, seasonNumber].sort((a, b) => a - b);
     }
+
     function reset() {
         loading = false;
         error = null;
@@ -120,6 +118,42 @@
         selectedSeasons = seasons.map((season) => season.season_number).sort((a, b) => a - b);
     }
 
+    async function submitDownload(key: string, vars: {
+        itemType: "MOVIE" | "SEASON";
+        seasonNumber: number | null;
+        infoHash: string;
+        magnet: string;
+        parsedData?: StreamCandidate["parsedData"];
+        rank?: number | null;
+    }) {
+        downloadingKey = key;
+        error = null;
+
+        try {
+            await gqlClient<{ downloadDiscoveredStream: string }>(DOWNLOAD_DISCOVERED_STREAM_MUTATION, {
+                itemType: vars.itemType,
+                title: title ?? "Unknown",
+                imdbId: null,
+                tmdbId: resolvedTmdbId,
+                tvdbId: resolvedTvdbId,
+                seasonNumber: vars.seasonNumber,
+                infoHash: vars.infoHash,
+                magnet: vars.magnet,
+                parsedData: vars.parsedData ?? null,
+                rank: vars.rank ?? null
+            });
+
+            toast.success("Stream queued for download");
+            open = false;
+            await invalidateAll();
+        } catch (e) {
+            error = e instanceof Error ? e.message : "Failed to start download";
+            toast.error(error);
+        } finally {
+            downloadingKey = null;
+        }
+    }
+
     async function discoverStreams() {
         loading = true;
         error = null;
@@ -129,8 +163,8 @@
                 itemType: mediaType === "movie" ? "MOVIE" : "SHOW",
                 title: title ?? "Unknown",
                 imdbId: null,
-                tmdbId: resolvedTmdbId(),
-                tvdbId: resolvedTvdbId(),
+                tmdbId: resolvedTmdbId,
+                tvdbId: resolvedTvdbId,
                 seasons: hasSeasonSelector ? selectedSeasons : null,
                 cachedOnly
             });
@@ -144,79 +178,38 @@
             loading = false;
         }
     }
-    async function downloadStream(stream: StreamCandidate) {
-        downloadingKey = stream.key;
-        error = null;
 
-        try {
-            await gqlClient<{ downloadDiscoveredStream: string }>(DOWNLOAD_DISCOVERED_STREAM_MUTATION, {
-                itemType: stream.itemType,
-                title: title ?? "Unknown",
-                imdbId: null,
-                tmdbId: resolvedTmdbId(),
-                tvdbId: resolvedTvdbId(),
-                seasonNumber: stream.seasonNumber ?? null,
-                infoHash: stream.infoHash,
-                parsedData: stream.parsedData ?? null,
-                rank: stream.rank ?? null
-            });
-
-            toast.success("Selected stream queued for download");
-            open = false;
-            await invalidateAll();
-        } catch (e) {
-            error = e instanceof Error ? e.message : "Failed to start download";
-            toast.error(error);
-        } finally {
-            downloadingKey = null;
-        }
+    function downloadStream(stream: StreamCandidate) {
+        return submitDownload(stream.key, {
+            itemType: stream.itemType,
+            seasonNumber: stream.seasonNumber ?? null,
+            infoHash: stream.infoHash,
+            magnet: stream.magnet,
+            parsedData: stream.parsedData,
+            rank: stream.rank
+        });
     }
-    async function downloadExplicitHash() {
-        const infoHash = clean(explicitHash);
-        if (!infoHash) {
+
+    function downloadExplicitHash() {
+        if (!cleanedHash) {
             error = "Enter a stream hash first";
             return;
         }
 
-        const seasonNumber =
-            mediaType === "tv"
-                ? selectedSeasons.length === 1
-                    ? selectedSeasons[0]
-                    : null
-                : null;
-
-        if (mediaType === "tv" && seasonNumber == null) {
+        if (mediaType === "tv" && selectedSeasons.length !== 1) {
             error = "Pick exactly one season before downloading an explicit hash";
             toast.error(error);
             return;
         }
 
-        downloadingKey = `manual:${infoHash}`;
-        error = null;
-
-        try {
-            await gqlClient<{ downloadDiscoveredStream: string }>(DOWNLOAD_DISCOVERED_STREAM_MUTATION, {
-                itemType: mediaType === "movie" ? "MOVIE" : "SEASON",
-                title: title ?? "Unknown",
-                imdbId: null,
-                tmdbId: resolvedTmdbId(),
-                tvdbId: resolvedTvdbId(),
-                seasonNumber,
-                infoHash,
-                parsedData: null,
-                rank: null
-            });
-
-            toast.success("Explicit stream hash queued for download");
-            open = false;
-            await invalidateAll();
-        } catch (e) {
-            error = e instanceof Error ? e.message : "Failed to start download";
-            toast.error(error);
-        } finally {
-            downloadingKey = null;
-        }
+        return submitDownload(`manual:${cleanedHash}`, {
+            itemType: mediaType === "movie" ? "MOVIE" : "SEASON",
+            seasonNumber: mediaType === "tv" ? selectedSeasons[0] : null,
+            infoHash: cleanedHash,
+            magnet: `magnet:?xt=urn:btih:${cleanedHash}`
+        });
     }
+
     $effect(() => {
         if (!open) {
             reset();
@@ -305,10 +298,10 @@
                             </div>
                         </div>
                     {/if}
-                    {#if clean(explicitHash)}
+                    {#if cleanedHash}
                         <div class="mt-4 flex justify-end">
                             <Button variant="outline" onclick={downloadExplicitHash} disabled={downloadingKey !== null}>
-                                {#if downloadingKey === `manual:${clean(explicitHash)}`}<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />{/if}
+                                {#if downloadingKey === `manual:${cleanedHash}`}<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />{/if}
                                 Download Explicit Hash
                             </Button>
                         </div>
@@ -332,7 +325,7 @@
                             {:else if streams.length && cachedOnly}
                                 No cached streams matched the current filter.
                             {:else}
-                                Click “Find Streams” to start discovery.
+                                Click "Find Streams" to start discovery.
                             {/if}
                         </div>
                     {:else}

@@ -41,10 +41,12 @@
         MEDIA_ITEM_STATE_BY_TVDB_QUERY,
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
         MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION,
+        MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
         mapMediaItemStateTree,
         mapMediaItemFull,
         type GqlMediaItemFull,
-        type GqlMediaItemStateTree
+        type GqlMediaItemStateTree,
+        type GqlExpectedCounts
     } from "$lib/services/riven-media";
 
     let { data }: PageProps = $props();
@@ -75,6 +77,43 @@
     let completedDetailsHydrating = false;
     let completedDetailsHydrated = false;
     const riven = $derived(liveRiven ?? hydratedRiven);
+
+    let expectedCounts = $state<GqlExpectedCounts | undefined>(undefined);
+    let expectedCountsItemId = $state<number | undefined>(undefined);
+
+    async function fetchExpectedCounts(id: number) {
+        if (expectedCountsItemId === id) return;
+        try {
+            const payload = await gqlClient<{ mediaItemById?: GqlExpectedCounts | null }>(
+                MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
+                { id }
+            );
+            expectedCounts = payload.mediaItemById ?? undefined;
+            expectedCountsItemId = id;
+        } catch {
+            // non-critical, ignore
+        }
+    }
+
+    const expectedBySeasonNumber = $derived.by(() => {
+        const seasons = expectedCounts?.seasons;
+        if (!seasons) return undefined;
+        return new Map(seasons.map((s) => [s.seasonNumber, s.expectedFileCount]));
+    });
+
+    const completedFileCount = $derived.by(() => {
+        if (!riven) return 0;
+        if (data.mediaDetails?.type === "movie") {
+            return riven.state === "Completed" ? 1 : 0;
+        }
+        return (
+            riven.seasons?.reduce(
+                (acc, season) =>
+                    acc + (season.episodes?.filter((e) => e.state === "Completed").length ?? 0),
+                0
+            ) ?? 0
+        );
+    });
 
     function getInitialSeason() {
         if (data.mediaDetails?.type !== "tv") return "1";
@@ -176,6 +215,13 @@
         rivenPending = Boolean(data.rivenPending);
         completedDetailsHydrated = false;
         completedDetailsHydrating = false;
+        expectedCounts = undefined;
+        expectedCountsItemId = undefined;
+    });
+
+    $effect(() => {
+        if (!browser || !liveRivenItemId) return;
+        void fetchExpectedCounts(liveRivenItemId);
     });
 
     let rivenId = $derived(riven?.id ?? data.mediaDetails?.details?.id);
@@ -240,14 +286,21 @@
 
         return details.seasons.map((s) => {
             const rivenSeason = seasonsByNumber.get(s.number ?? 0);
+            const episodeCount = episodeCountBySeason.get(s.number ?? 0) ?? 0;
+            const expectedCount = expectedBySeasonNumber?.get(s.number ?? 0);
+            const completedCount =
+                rivenSeason?.episodes?.filter((e) => e.state === "Completed").length ?? 0;
+            // Lock only when all expected files are present. A partially complete or
+            // in-progress season remains requestable so missing episodes can be added.
+            const isComplete =
+                expectedCount != null && expectedCount > 0 && completedCount >= expectedCount;
             return {
                 id: s.id,
                 season_number: s.number ?? 0,
-                episode_count: episodeCountBySeason.get(s.number ?? 0) ?? 0,
+                episode_count: episodeCount,
+                completed_count: rivenSeason ? completedCount : undefined,
                 name: `Season ${s.number}`,
-                // Lock the season if it has already been requested in Riven.
-                // PAUSED/FAILED seasons that are requested can still be re-requested via their own retry flow.
-                status: rivenSeason?.is_requested ? "Available" : undefined
+                status: isComplete ? "Available" : undefined
             };
         });
     });
@@ -654,6 +707,11 @@
                                     class="px-3 py-1.5 text-sm font-medium"
                                     state={riven.state} />
                             {/if}
+                            {#if expectedCounts?.expectedFileCount != null && expectedCounts.expectedFileCount > 0}
+                                <span class="text-muted-foreground border-border rounded-full border px-3 py-1.5 text-sm font-medium tabular-nums">
+                                    {completedFileCount}/{expectedCounts.expectedFileCount} files
+                                </span>
+                            {/if}
                         </div>
 
                         <!-- Actions - Right under title -->
@@ -926,6 +984,7 @@
                             seasons={data.mediaDetails.details.seasons}
                             {selectedSeason}
                             stateBySeasonNumber={rivenSeasonsByNumber}
+                            {expectedBySeasonNumber}
                             onSelectSeason={(season) => (selectedSeason = season)} />
                     </section>
                 {/if}

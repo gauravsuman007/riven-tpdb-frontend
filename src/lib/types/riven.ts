@@ -60,6 +60,7 @@ export interface RivenSeason {
     state: string;
     is_requested: boolean;
     episodes?: RivenEpisode[];
+    expected_file_count?: number;
 }
 
 export interface RivenMediaItem {
@@ -72,4 +73,5 @@ export interface RivenMediaItem {
     filesystem_entry?: FilesystemEntry;
     filesystem_entries?: FilesystemEntry[];
     seasons?: RivenSeason[];
+    expected_file_count?: number;
 }

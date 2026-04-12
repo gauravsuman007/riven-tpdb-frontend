@@ -3,6 +3,7 @@
         id: number;
         season_number: number;
         episode_count: number;
+        completed_count?: number;
         name: string;
         status?: string;
     }
@@ -42,7 +43,10 @@
             <span>Season {season.season_number}</span>
 
             {#if locked}
-                <span class="text-xs font-normal opacity-70">Installed</span>
+                <span class="text-xs font-normal opacity-70">Complete</span>
+            {:else if season.completed_count != null && season.episode_count > 0}
+                <span class="text-muted-foreground text-xs font-normal opacity-70"
+                    >{season.completed_count}/{season.episode_count} eps</span>
             {:else}
                 <span class="text-muted-foreground text-xs font-normal opacity-70"
                     >{season.episode_count} eps</span>
