@@ -7,6 +7,7 @@
     import SearchModal from "$lib/components/search-modal.svelte";
     import { getContext } from "svelte";
     import { goto } from "$app/navigation";
+    import { resolve } from "$app/paths";
     import Search from "@lucide/svelte/icons/search";
     import { page } from "$app/state";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
@@ -15,7 +16,7 @@
 
     const SidebarStore = getContext<createSidebarStore>("sidebarStore");
 
-    const MAIN_PAGES = ["/", "/explore", "/dashboard", "/library", "/settings", "/calendar", "/logs"];
+    const MAIN_PAGES = ["/", "/explore", "/dashboard", "/library", "/settings", "/calendar", "/logs", "/auth"];
 
     const isMainPage = $derived(MAIN_PAGES.includes(page.url.pathname));
 
@@ -29,7 +30,7 @@
             if (history.length > 1) {
                 history.back();
             } else {
-                goto('/');
+                goto(resolve('/'));
             }
         }}
         aria-label="Go back"
@@ -93,4 +94,6 @@
     </div>
 </div>
 
-<SearchModal open={searchModalOpen} onclose={() => (searchModalOpen = false)} onopen={() => (searchModalOpen = true)} />
+<div class="md:hidden">
+    <SearchModal open={searchModalOpen} onclose={() => (searchModalOpen = false)} onopen={() => (searchModalOpen = true)} />
+</div>

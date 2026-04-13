@@ -23,11 +23,16 @@
     }
 
     let inputRef = $state<HTMLInputElement | null>(null);
+    let scrollContainer = $state<HTMLElement | null>(null);
     let query = $state("");
     let results = $state<TMDBTransformedListItem[]>([]);
     let loading = $state(false);
+    let loadingMore = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     let abortController: AbortController | null = null;
+    let currentPage = 1;
+    let hasMorePages = true;
+    let currentQuery = "";
 
     onDestroy(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -38,6 +43,7 @@
     let savedQuery = "";
     let savedResults: TMDBTransformedListItem[] = [];
     let navigatedFromModal = false;
+    let savedOrigin = "";
     // When true, skip transitions (instant hide/show for navigation)
     let skipTransition = $state(false);
 
@@ -54,24 +60,48 @@
 
     function handleInput() {
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(search, 300);
+        abortController?.abort();
+        abortController = null;
+        currentPage = 1;
+        hasMorePages = true;
+        debounceTimer = setTimeout(() => search(true), 300);
     }
 
-    async function search() {
+    async function search(reset: boolean) {
         const q = query.trim();
         if (!q) {
+            abortController?.abort();
+            abortController = null;
             results = [];
+            currentPage = 1;
+            hasMorePages = true;
+            currentQuery = "";
             loading = false;
+            loadingMore = false;
             return;
         }
+
+        if (reset) {
+            currentPage = 1;
+            hasMorePages = true;
+            currentQuery = q;
+        }
+
+        if (!hasMorePages) return;
 
         if (abortController) abortController.abort();
         abortController = new AbortController();
         const signal = abortController.signal;
 
-        loading = true;
+        if (reset) {
+            loading = true;
+        } else {
+            loadingMore = true;
+        }
+
         try {
-            const params = new URLSearchParams({ query: q, searchMode: "search", page: "1" });
+            const page = String(currentPage);
+            const params = new URLSearchParams({ query: q, searchMode: "search", page });
             const [movieRes, tvRes] = await Promise.all([
                 fetch(`/api/tmdb/search/movie?${params}`, { signal }),
                 fetch(`/api/tmdb/search/tv?${params}`, { signal })
@@ -79,24 +109,53 @@
 
             if (signal.aborted) return;
 
+            if (!movieRes.ok) {
+                console.error(`TMDB movie search failed: ${movieRes.status} ${movieRes.statusText}`);
+            }
+            if (!tvRes.ok) {
+                console.error(`TMDB TV search failed: ${tvRes.status} ${tvRes.statusText}`);
+            }
+
             const [movies, tv] = await Promise.all([
-                movieRes.ok ? movieRes.json() : { results: [] },
-                tvRes.ok ? tvRes.json() : { results: [] }
+                movieRes.ok ? movieRes.json() : { results: [], total_pages: 0 },
+                tvRes.ok ? tvRes.json() : { results: [], total_pages: 0 }
             ]);
 
             if (signal.aborted) return;
+
+            const maxTotalPages = Math.max(movies.total_pages ?? 0, tv.total_pages ?? 0);
+            hasMorePages = currentPage < maxTotalPages;
 
             const merged: TMDBTransformedListItem[] = [
                 ...(movies.results ?? []),
                 ...(tv.results ?? [])
             ].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
 
-            results = merged;
+            if (reset) {
+                results = merged;
+            } else {
+                // Deduplicate by id+media_type
+                const seen = new Set(results.map(r => `${r.media_type}-${r.id}`));
+                results = [...results, ...merged.filter(r => !seen.has(`${r.media_type}-${r.id}`))];
+            }
+            currentPage++;
         } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return;
-            results = [];
+            if (reset) results = [];
         } finally {
-            if (!signal.aborted) loading = false;
+            if (!signal.aborted) {
+                loading = false;
+                loadingMore = false;
+            }
+        }
+    }
+
+    function handleScroll(e: Event) {
+        const el = e.target as HTMLElement;
+        if (loadingMore || loading || !hasMorePages || !currentQuery) return;
+        // Load more when within 300px of bottom
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) {
+            void search(false);
         }
     }
 
@@ -107,6 +166,7 @@
         savedResults = results;
         navigatedFromModal = true;
         pendingNavigation = true;
+        savedOrigin = window.location.pathname + window.location.search;
         // Keep modal open — it will be hidden after the new page loads
         goto(resolve(`/details/media/${item.id}/${item.media_type}`));
     }
@@ -137,10 +197,21 @@
     }
 
     function clearAndClose() {
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+        }
+        abortController?.abort();
+        abortController = null;
         savedQuery = "";
         savedResults = [];
         query = "";
         results = [];
+        loading = false;
+        loadingMore = false;
+        currentPage = 1;
+        hasMorePages = true;
+        currentQuery = "";
         onclose();
     }
 
@@ -188,6 +259,7 @@
                 enterkeyhint="search"
                 class="h-full flex-1 bg-transparent text-sm font-medium text-white outline-none placeholder:text-white/40" />
             <button
+                type="button"
                 onclick={clearAndClose}
                 aria-label="Close search"
                 class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/50 transition-all hover:bg-white/10 hover:text-white active:scale-95">
@@ -196,7 +268,10 @@
         </div>
 
         <!-- Results -->
-        <div class="flex-1 overflow-y-auto">
+        <div
+            bind:this={scrollContainer}
+            onscroll={handleScroll}
+            class="flex-1 overflow-y-auto">
             {#if loading}
                 <div class="grid grid-cols-2 gap-3 px-4 pt-4 pb-24">
                     {#each Array.from({ length: 8 }, (_, i) => i) as i (i)}
@@ -207,6 +282,7 @@
                 <div class="grid grid-cols-2 gap-3 px-4 pt-4 pb-24">
                     {#each results as item (`${item.media_type}-${item.id}`)}
                         <button
+                            type="button"
                             onclick={() => handleResultClick(item)}
                             class="block w-full rounded-xl text-left transition-transform duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.97]">
                             <PortraitCard
@@ -215,6 +291,11 @@
                                 image={item.poster_path} />
                         </button>
                     {/each}
+                    {#if loadingMore}
+                        {#each Array.from({ length: 4 }, (_, i) => i) as i (i)}
+                            <PortraitCardSkeleton />
+                        {/each}
+                    {/if}
                 </div>
             {:else if query.trim() && !loading}
                 <div class="flex flex-col items-center justify-center gap-2 py-24 text-center">
