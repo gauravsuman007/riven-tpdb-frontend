@@ -143,8 +143,7 @@ export class NotificationStore {
     #unsubscribe: (() => void) | null = null;
     #eventListeners = new Set<(event: RivenNotificationPayload) => void>();
     #reconnectAttempts = 0;
-    #maxReconnectAttempts = 10;
-    #onlineHandler: (() => void) | null = null;
+    #maxReconnectAttempts = 5;
 
     onNotificationAdded: ((notification: Notification) => void) | null = null;
 
@@ -196,15 +195,6 @@ export class NotificationStore {
 
         this.#connectionStatus = "connecting";
 
-        if (!this.#onlineHandler && typeof window !== "undefined") {
-            this.#onlineHandler = () => {
-                logger.info("Network came back online, reconnecting notifications...");
-                this.#reconnectAttempts = 0;
-                this.reconnect();
-            };
-            window.addEventListener("online", this.#onlineHandler);
-        }
-
         this.#unsubscribe = gqlSubscribeClient<{ notifications: RivenNotificationPayload }>(
             NOTIFICATIONS_SUBSCRIPTION,
             undefined,
@@ -230,8 +220,7 @@ export class NotificationStore {
 
                     this.#connectionStatus = "connecting";
                     this.disconnect();
-                    const delay = Math.min(1000 * this.#reconnectAttempts, 30000);
-                    setTimeout(() => this.connect(), delay);
+                    setTimeout(() => this.connect(), 1000);
                 }
             }
         );
@@ -250,14 +239,9 @@ export class NotificationStore {
             this.#unsubscribe();
             this.#unsubscribe = null;
         }
-        if (this.#onlineHandler && typeof window !== "undefined") {
-            window.removeEventListener("online", this.#onlineHandler);
-            this.#onlineHandler = null;
-        }
     }
 
     reconnect() {
-        this.#reconnectAttempts = 0;
         this.disconnect();
         this.connect();
     }

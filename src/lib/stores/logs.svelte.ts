@@ -39,9 +39,8 @@ export class LogStore {
     #unsubscribe: (() => void) | null = null;
 
     #reconnectAttempts = $state<number>(0);
-    #maxReconnectAttempts = 10;
+    #maxReconnectAttempts = 5;
     #hasConnected = $state<boolean>(false);
-    #onlineHandler: (() => void) | null = null;
 
     get reconnectAttempts() {
         return this.#reconnectAttempts;
@@ -112,15 +111,6 @@ export class LogStore {
         this.#error = null;
         this.#hasConnected = false;
         this.#reconnectAttempts = 0;
-
-        if (!this.#onlineHandler && typeof window !== "undefined") {
-            this.#onlineHandler = () => {
-                logger.info("Network came back online, reconnecting logs...");
-                this.#reconnectAttempts = 0;
-                this.reconnect();
-            };
-            window.addEventListener("online", this.#onlineHandler);
-        }
 
         this.#unsubscribe = gqlSubscribeClient<{ logLines: string }>(
             LOG_LINES_SUBSCRIPTION,
