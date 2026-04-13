@@ -1,4 +1,4 @@
-import { source } from "sveltekit-sse";
+import { gqlSubscribeClient } from "$lib/graphql-client";
 import { gqlClient } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
 
@@ -22,6 +22,10 @@ const HISTORICAL_LOGS_QUERY = `
     }
 `;
 
+const LOG_LINES_SUBSCRIPTION = `subscription {
+    logLines
+}`;
+
 export class LogStore {
     #logs = $state<LogEntry[]>([]);
     #historicalLogs = $state<LogEntry[]>([]);
@@ -32,12 +36,12 @@ export class LogStore {
     #connectionStatus = $state<"connecting" | "connected" | "disconnected" | "error">(
         "disconnected"
     );
-    #connection: ReturnType<typeof source> | null = null;
     #unsubscribe: (() => void) | null = null;
 
     #reconnectAttempts = $state<number>(0);
-    #maxReconnectAttempts = 5;
+    #maxReconnectAttempts = 10;
     #hasConnected = $state<boolean>(false);
+    #onlineHandler: (() => void) | null = null;
 
     get reconnectAttempts() {
         return this.#reconnectAttempts;
@@ -46,6 +50,7 @@ export class LogStore {
     get maxReconnectAttempts() {
         return this.#maxReconnectAttempts;
     }
+
     get hasConnected() {
         return this.#hasConnected;
     }
@@ -99,59 +104,60 @@ export class LogStore {
     }
 
     connect() {
-        if (this.#connection) {
+        if (this.#unsubscribe) {
             return;
         }
 
         this.#connectionStatus = "connecting";
         this.#error = null;
         this.#hasConnected = false;
+        this.#reconnectAttempts = 0;
 
-        this.#connection = source("/api/logs", {
-            open: () => {
-                this.#connectionStatus = "connected";
-                this.#error = null;
+        if (!this.#onlineHandler && typeof window !== "undefined") {
+            this.#onlineHandler = () => {
+                logger.info("Network came back online, reconnecting logs...");
                 this.#reconnectAttempts = 0;
-                this.#hasConnected = true;
-            },
-            close: ({ connect }) => {
-                if (this.#connectionStatus !== "disconnected") {
+                this.reconnect();
+            };
+            window.addEventListener("online", this.#onlineHandler);
+        }
+
+        this.#unsubscribe = gqlSubscribeClient<{ logLines: string }>(
+            LOG_LINES_SUBSCRIPTION,
+            undefined,
+            {
+                onData: (payload) => {
+                    this.#connectionStatus = "connected";
+                    this.#hasConnected = true;
+                    this.#reconnectAttempts = 0;
+                    this.#error = null;
+
+                    const raw = payload.logLines;
+                    if (!raw?.trim()) return;
+
+                    try {
+                        const entry = JSON.parse(raw) as LogEntry;
+                        this.#logs.push(entry);
+                    } catch {
+                        logger.warn("Failed to parse log entry:", raw);
+                    }
+                },
+                onError: (error) => {
+                    logger.error("Log subscription error:", error);
                     this.#reconnectAttempts += 1;
+
                     if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
                         this.#connectionStatus = "error";
                         this.#error = "Log stream disconnected";
                         return;
                     }
+
                     this.#connectionStatus = "connecting";
-                    setTimeout(() => {
-                        if (this.#connectionStatus !== "disconnected") connect();
-                    }, 1000);
+                    this.disconnect();
+                    setTimeout(() => this.connect(), 1000);
                 }
-            },
-            error: (streamError) => {
-                logger.error("Log stream error:", streamError);
-                this.#error = "Connection error";
             }
-        });
-
-        const logValue = this.#connection.select("log").transform((raw) => {
-            if (!raw?.trim()) {
-                return null;
-            }
-            try {
-                return JSON.parse(raw) as LogEntry;
-            } catch (parseError) {
-                logger.warn("Failed to parse log entry:", raw, parseError);
-                return null;
-            }
-        });
-
-        this.#unsubscribe = logValue.subscribe((value) => {
-            if (value) {
-                this.#logs.push(value);
-                this.#error = null;
-            }
-        });
+        );
     }
 
     disconnect() {
@@ -160,10 +166,6 @@ export class LogStore {
         if (this.#unsubscribe) {
             this.#unsubscribe();
             this.#unsubscribe = null;
-        }
-        if (this.#connection) {
-            this.#connection.close();
-            this.#connection = null;
         }
     }
 

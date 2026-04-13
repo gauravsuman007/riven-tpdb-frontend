@@ -1,4 +1,4 @@
-import { source } from "sveltekit-sse";
+import { gqlSubscribeClient } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("notifications");
@@ -16,29 +16,32 @@ export type Notification = {
     read: boolean;
 };
 
-// Shape of RivenEvent as serialised by the Rust backend.
-type RivenEventPayload = {
-    type: string;
-    // MediaItemDownloadSuccess fields
-    title?: string;
-    full_title?: string;
-    item_type?: string;
-    year?: number;
-    imdb_id?: string;
-    tmdb_id?: string;
-    tvdb_id?: string;
-    duration_seconds?: number;
-    // ScrapeSuccess / IndexSuccess fields
-    id?: number;
-    stream_count?: number;
-    // ItemRequestCreateSuccess
-    count?: number;
-    new_items?: number;
-    // Error fields
-    error?: string;
+// Shape of a RivenNotification as returned by the GraphQL `notifications` subscription.
+export type RivenNotificationPayload = {
+    eventType: string;
+    title?: string | null;
+    fullTitle?: string | null;
+    itemType?: string | null;
+    year?: number | null;
+    imdbId?: string | null;
+    tmdbId?: string | null;
+    tvdbId?: string | null;
+    durationSeconds?: number | null;
+    id?: number | null;
+    streamCount?: number | null;
+    count?: number | null;
+    newItems?: number | null;
+    error?: string | null;
 };
 
-function mapItemType(raw?: string): "movie" | "show" | "season" | "episode" {
+const NOTIFICATIONS_SUBSCRIPTION = `subscription {
+    notifications {
+        eventType title fullTitle itemType year imdbId tmdbId tvdbId
+        durationSeconds id streamCount count newItems error
+    }
+}`;
+
+function mapItemType(raw?: string | null): "movie" | "show" | "season" | "episode" {
     switch (raw?.toLowerCase()) {
         case "movie":
             return "movie";
@@ -53,33 +56,33 @@ function mapItemType(raw?: string): "movie" | "show" | "season" | "episode" {
     }
 }
 
-function rivenEventToNotification(
-    event: RivenEventPayload
+function rivenNotificationToNotification(
+    event: RivenNotificationPayload
 ): Omit<Notification, "id" | "read"> | null {
     const ts = new Date().toISOString();
 
-    switch (event.type) {
+    switch (event.eventType) {
         case "riven.media-item.download.success":
             return {
-                title: event.full_title ?? event.title ?? "Unknown",
+                title: event.fullTitle ?? event.title ?? "Unknown",
                 message: `Download complete${event.year ? ` (${event.year})` : ""}`,
                 severity: "success",
                 timestamp: ts,
-                type: mapItemType(event.item_type),
-                year: event.year,
-                duration: event.duration_seconds
-                    ? Math.round(event.duration_seconds / 60)
+                type: mapItemType(event.itemType),
+                year: event.year ?? undefined,
+                duration: event.durationSeconds
+                    ? Math.round(event.durationSeconds / 60)
                     : undefined,
-                imdb_id: event.imdb_id
+                imdb_id: event.imdbId ?? undefined
             };
 
         case "riven.media-item.scrape.success":
             return {
                 title: event.title ?? "Unknown",
-                message: `Found ${event.stream_count ?? 0} stream(s)`,
+                message: `Found ${event.streamCount ?? 0} stream(s)`,
                 severity: "success",
                 timestamp: ts,
-                type: mapItemType(event.item_type)
+                type: mapItemType(event.itemType)
             };
 
         case "riven.media-item.index.success":
@@ -88,13 +91,13 @@ function rivenEventToNotification(
                 message: "Indexed successfully",
                 severity: "success",
                 timestamp: ts,
-                type: mapItemType(event.item_type)
+                type: mapItemType(event.itemType)
             };
 
         case "riven.item-request.create.success":
             return {
                 title: "Content request processed",
-                message: `${event.new_items ?? 0} new item(s) added`,
+                message: `${event.newItems ?? 0} new item(s) added`,
                 severity: "success",
                 timestamp: ts,
                 type: "movie"
@@ -124,7 +127,7 @@ function rivenEventToNotification(
                 message: "No new streams found",
                 severity: "warning",
                 timestamp: ts,
-                type: mapItemType(event.item_type)
+                type: mapItemType(event.itemType)
             };
 
         default:
@@ -137,11 +140,12 @@ export class NotificationStore {
     #connectionStatus = $state<"connecting" | "connected" | "disconnected" | "error">(
         "disconnected"
     );
-    #connection: ReturnType<typeof source> | null = null;
     #unsubscribe: (() => void) | null = null;
-    #eventListeners = new Set<(event: RivenEventPayload) => void>();
+    #eventListeners = new Set<(event: RivenNotificationPayload) => void>();
+    #reconnectAttempts = 0;
+    #maxReconnectAttempts = 10;
+    #onlineHandler: (() => void) | null = null;
 
-    // Callback for when a new notification is added (for toast display)
     onNotificationAdded: ((notification: Notification) => void) | null = null;
 
     get notifications() {
@@ -186,57 +190,54 @@ export class NotificationStore {
     }
 
     connect() {
-        if (this.#connection) {
+        if (this.#unsubscribe) {
             return;
         }
 
         this.#connectionStatus = "connecting";
 
-        this.#connection = source("/api/notifications", {
-            open: () => {
-                this.#connectionStatus = "connected";
-                logger.info("Notification stream connected");
-            },
-            close: ({ connect }) => {
-                if (this.#connectionStatus !== "disconnected") {
-                    this.#connectionStatus = "error";
-                    logger.info("Notification stream closed, reconnecting...");
-                    setTimeout(() => {
-                        if (this.#connectionStatus !== "disconnected") {
-                            connect();
-                        }
-                    }, 1000);
-                }
-            },
-            error: (error) => {
-                logger.error("Notification stream error:", error);
-                this.#connectionStatus = "error";
-            }
-        });
+        if (!this.#onlineHandler && typeof window !== "undefined") {
+            this.#onlineHandler = () => {
+                logger.info("Network came back online, reconnecting notifications...");
+                this.#reconnectAttempts = 0;
+                this.reconnect();
+            };
+            window.addEventListener("online", this.#onlineHandler);
+        }
 
-        const notificationValue = this.#connection
-            .select("notification")
-            .json<RivenEventPayload>(({ error, previous }) => {
-                if (error) {
-                    logger.warn("Failed to parse notification:", error);
-                }
-                return previous;
-            });
+        this.#unsubscribe = gqlSubscribeClient<{ notifications: RivenNotificationPayload }>(
+            NOTIFICATIONS_SUBSCRIPTION,
+            undefined,
+            {
+                onData: (payload) => {
+                    this.#connectionStatus = "connected";
+                    this.#reconnectAttempts = 0;
+                    const event = payload.notifications;
+                    this.#eventListeners.forEach((cb) => cb(event));
+                    const mapped = rivenNotificationToNotification(event);
+                    if (mapped) {
+                        this.add(mapped);
+                    }
+                },
+                onError: (error) => {
+                    logger.error("Notification subscription error:", error);
+                    this.#reconnectAttempts += 1;
 
-        this.#unsubscribe = notificationValue.subscribe((value) => {
-            if (value) {
-                // Notify listeners
-                this.#eventListeners.forEach((cb) => cb(value));
+                    if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
+                        this.#connectionStatus = "error";
+                        return;
+                    }
 
-                const mapped = rivenEventToNotification(value);
-                if (mapped) {
-                    this.add(mapped);
+                    this.#connectionStatus = "connecting";
+                    this.disconnect();
+                    const delay = Math.min(1000 * this.#reconnectAttempts, 30000);
+                    setTimeout(() => this.connect(), delay);
                 }
             }
-        });
+        );
     }
 
-    subscribe(callback: (event: RivenEventPayload) => void) {
+    subscribe(callback: (event: RivenNotificationPayload) => void) {
         this.#eventListeners.add(callback);
         return () => {
             this.#eventListeners.delete(callback);
@@ -249,13 +250,14 @@ export class NotificationStore {
             this.#unsubscribe();
             this.#unsubscribe = null;
         }
-        if (this.#connection) {
-            this.#connection.close();
-            this.#connection = null;
+        if (this.#onlineHandler && typeof window !== "undefined") {
+            window.removeEventListener("online", this.#onlineHandler);
+            this.#onlineHandler = null;
         }
     }
 
     reconnect() {
+        this.#reconnectAttempts = 0;
         this.disconnect();
         this.connect();
     }

@@ -42,11 +42,13 @@
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
         MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION,
         MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
+        SHOW_INDEXED_SUBSCRIPTION,
         mapMediaItemStateTree,
         mapMediaItemFull,
         type GqlMediaItemFull,
         type GqlMediaItemStateTree,
-        type GqlExpectedCounts
+        type GqlExpectedCounts,
+        type GqlIndexedShow
     } from "$lib/services/riven-media";
 
     let { data }: PageProps = $props();
@@ -548,6 +550,30 @@
         }
 
         void hydrateCompletedDetails();
+    });
+
+    // When the current show gets indexed (via background queue or indexShow mutation),
+    // hydrate the Riven state so the page reflects the transition without a manual refresh.
+    $effect(() => {
+        if (!browser || data.mediaDetails?.type !== "tv" || !data.resolvedTvdbId) return;
+
+        const targetTvdbId = data.resolvedTvdbId.toString();
+
+        return gqlSubscribeClient<{ showIndexed: GqlIndexedShow }>(
+            SHOW_INDEXED_SUBSCRIPTION,
+            undefined,
+            {
+                onData: (payload) => {
+                    const indexed = payload.showIndexed;
+                    if (indexed?.tvdbId !== targetTvdbId) return;
+
+                    if (!liveRivenItemId) {
+                        liveRivenItemId = indexed.id;
+                    }
+                    void hydrateInitialState();
+                }
+            }
+        );
     });
 </script>
 

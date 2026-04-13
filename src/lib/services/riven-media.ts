@@ -150,6 +150,53 @@ export const MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION = `subscription($tvdb
     }
 }`;
 
+// ── New pub-sub subscriptions ──
+
+export interface GqlItemRequest {
+    id: number;
+    tmdbId?: string | null;
+    tvdbId?: string | null;
+    imdbId?: string | null;
+    requestType: string;
+    state: string;
+}
+
+export interface GqlIndexedShow {
+    id: number;
+    tvdbId?: string | null;
+    tmdbId?: string | null;
+    imdbId?: string | null;
+    state: string;
+}
+
+/** Fires whenever a movie item request is created. */
+export const MOVIE_REQUESTED_SUBSCRIPTION = `subscription {
+    movieRequested {
+        id tmdbId imdbId requestType state
+    }
+}`;
+
+/** Fires whenever a show item request is created. */
+export const SHOW_REQUESTED_SUBSCRIPTION = `subscription {
+    showRequested {
+        id tvdbId imdbId requestType state
+    }
+}`;
+
+/** Fires whenever an existing show item request is updated (e.g. new seasons added). */
+export const SHOW_REQUEST_UPDATED_SUBSCRIPTION = `subscription {
+    showRequestUpdated {
+        id tvdbId imdbId requestType state
+    }
+}`;
+
+/** Fires whenever a show has been indexed (metadata + episode structure persisted). */
+export const SHOW_INDEXED_SUBSCRIPTION = `subscription {
+    showIndexed {
+        id tvdbId tmdbId imdbId state
+    }
+}`;
+
 export const MEDIA_ITEM_STATE_BY_TMDB_QUERY = `query($tmdbId: String!) {
     mediaItemStateByTmdb(tmdbId: $tmdbId) {
         ${MEDIA_ITEM_STATE_FIELDS}

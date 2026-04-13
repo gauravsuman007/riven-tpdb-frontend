@@ -27,6 +27,13 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
     import { notificationStore } from "$lib/stores/notifications.svelte";
+    import { gqlSubscribeClient } from "$lib/graphql-client";
+    import {
+        MOVIE_REQUESTED_SUBSCRIPTION,
+        SHOW_REQUESTED_SUBSCRIPTION,
+        SHOW_REQUEST_UPDATED_SUBSCRIPTION,
+        SHOW_INDEXED_SUBSCRIPTION
+    } from "$lib/services/riven-media";
 
     let { data }: PageProps = $props();
 
@@ -86,15 +93,43 @@
         debounceTimer = undefined;
     });
 
+    // Refresh on scrape and download events (covered by GQL notifications subscription,
+    // not by the typed pub-sub subscriptions below).
     $effect(() => {
-        const unsubscribe = notificationStore.subscribe((event) => {
-            // Any media item or request event should trigger a refresh in the library
-            if (event.type.startsWith("riven.media-item.") || event.type === "riven.item-request.create.success") {
-                invalidateAll();
+        return notificationStore.subscribe((event) => {
+            if (
+                event.eventType.startsWith("riven.media-item.scrape.") ||
+                event.eventType.startsWith("riven.media-item.download.")
+            ) {
+                void invalidateAll();
             }
         });
+    });
 
-        return unsubscribe;
+    // GQL subscriptions: refresh on request creation and show indexing.
+    // These carry typed data and complement the SSE channel for these specific events.
+    $effect(() => {
+        const unsubMovieRequested = gqlSubscribeClient(MOVIE_REQUESTED_SUBSCRIPTION, undefined, {
+            onData: () => void invalidateAll()
+        });
+        const unsubShowRequested = gqlSubscribeClient(SHOW_REQUESTED_SUBSCRIPTION, undefined, {
+            onData: () => void invalidateAll()
+        });
+        const unsubShowRequestUpdated = gqlSubscribeClient(
+            SHOW_REQUEST_UPDATED_SUBSCRIPTION,
+            undefined,
+            { onData: () => void invalidateAll() }
+        );
+        const unsubShowIndexed = gqlSubscribeClient(SHOW_INDEXED_SUBSCRIPTION, undefined, {
+            onData: () => void invalidateAll()
+        });
+
+        return () => {
+            unsubMovieRequested();
+            unsubShowRequested();
+            unsubShowRequestUpdated();
+            unsubShowIndexed();
+        };
     });
 </script>
 
