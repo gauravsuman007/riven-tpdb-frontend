@@ -82,32 +82,51 @@
 
         try {
             if (mediaType === "tv") {
-                const result = await gqlClient<{ addItem: { id: number } }>(
-                    `mutation AddItem($itemType: MediaItemType!, $title: String!, $tvdbId: String, $seasons: [Int!]) {
-                        addItem(itemType: $itemType, title: $title, tvdbId: $tvdbId, seasons: $seasons) { id }
+                const result = await gqlClient<{
+                    requestShow: { success: boolean; statusText: string; message: string };
+                }>(
+                    `mutation RequestShow($input: ShowRequestInput!) {
+                        requestShow(input: $input) { success statusText message }
                     }`,
                     {
-                        itemType: "SHOW",
-                        title: title ?? "Unknown",
-                        tvdbId: externalId,
-                        seasons: selectedSeasonNums.length > 0 ? selectedSeasonNums : null
+                        input: {
+                            title: title ?? "Unknown",
+                            tvdbId: externalId,
+                            seasons: selectedSeasonNums.length > 0 ? selectedSeasonNums : null
+                        }
                     }
                 );
-                requestedItemId = result.addItem.id;
+                if (result.requestShow.statusText === "CONFLICT") {
+                    toast.info("This show has already been requested.");
+                    open = false;
+                    return;
+                }
             } else if (validNumericIds.length > 0) {
+                // Item already exists in Riven — clear failed attempts and retry.
                 await gqlClient<{ retryItems: number }>(
                     `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
                     { ids: validNumericIds }
                 );
                 requestedItemId = validNumericIds[0];
             } else {
-                const result = await gqlClient<{ addItem: { id: number } }>(
-                    `mutation AddItem($itemType: MediaItemType!, $title: String!, $tmdbId: String) {
-                        addItem(itemType: $itemType, title: $title, tmdbId: $tmdbId) { id }
+                const result = await gqlClient<{
+                    requestMovie: { success: boolean; statusText: string; message: string };
+                }>(
+                    `mutation RequestMovie($input: MovieRequestInput!) {
+                        requestMovie(input: $input) { success statusText message }
                     }`,
-                    { itemType: "MOVIE", title: title ?? "Unknown", tmdbId: externalId }
+                    {
+                        input: {
+                            title: title ?? "Unknown",
+                            tmdbId: externalId
+                        }
+                    }
                 );
-                requestedItemId = result.addItem.id;
+                if (result.requestMovie.statusText === "CONFLICT") {
+                    toast.info("This movie has already been requested.");
+                    open = false;
+                    return;
+                }
             }
             toast.success("Requested successfully!");
             open = false;

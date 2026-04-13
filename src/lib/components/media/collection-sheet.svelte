@@ -49,25 +49,41 @@
         requestLoading = true;
 
         try {
-            // Add each movie in the collection
-            const results = await Promise.allSettled(
-                collectionData.parts.map((p) =>
-                    gqlClient<{ addItem: { id: number } }>(
-                        `mutation AddItem($itemType: MediaItemType!, $title: String!, $tmdbId: String) {
-                            addItem(itemType: $itemType, title: $title, tmdbId: $tmdbId) { id }
-                        }`,
-                        { itemType: "MOVIE", title: p.title ?? "Unknown", tmdbId: String(p.id) }
-                    )
-                )
+            const result = await gqlClient<{
+                requestItems: {
+                    count: number;
+                    newItems: { id: number }[];
+                    updatedItems: { id: number }[];
+                };
+            }>(
+                `mutation RequestItems($movies: [MovieRequestInput!]!) {
+                    requestItems(movies: $movies, shows: []) {
+                        count
+                        newItems { id }
+                        updatedItems { id }
+                    }
+                }`,
+                {
+                    movies: collectionData.parts.map((p) => ({
+                        title: p.title ?? "Unknown",
+                        tmdbId: String(p.id)
+                    }))
+                }
             );
 
-            const succeeded = results.filter((r) => r.status === "fulfilled").length;
-            if (succeeded > 0) {
-                toast.success(`${succeeded} movie(s) in collection requested!`);
-                open = false;
-            } else {
-                toast.error("Failed to request collection.");
+            const { count, newItems, updatedItems } = result.requestItems;
+            const alreadyHad = count - newItems.length - updatedItems.length;
+
+            if (newItems.length > 0) {
+                toast.success(`${newItems.length} movie(s) requested!`);
             }
+            if (alreadyHad > 0) {
+                toast.info(`${alreadyHad} movie(s) already requested.`);
+            }
+            if (newItems.length === 0 && alreadyHad === 0) {
+                toast.info("All movies in this collection have already been requested.");
+            }
+            open = false;
         } catch (e) {
             logger.error("Request failed", e);
             toast.error("Failed to request collection.");

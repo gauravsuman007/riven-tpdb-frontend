@@ -58,6 +58,7 @@ export interface GqlSeasonState {
     seasonNumber?: number | null;
     state: string;
     isRequested: boolean;
+    expectedFileCount: number;
     episodes?: GqlEpisodeState[];
 }
 
@@ -67,6 +68,7 @@ export interface GqlMediaItemStateTree {
     imdbId?: string | null;
     tmdbId?: string | null;
     tvdbId?: string | null;
+    expectedFileCount: number;
     seasons?: GqlSeasonState[];
 }
 
@@ -97,9 +99,9 @@ const MEDIA_ITEM_FULL_FIELDS = `
 `;
 
 const MEDIA_ITEM_STATE_FIELDS = `
-    id state imdbId tmdbId tvdbId
+    id state imdbId tmdbId tvdbId expectedFileCount
     seasons {
-        id seasonNumber state isRequested
+        id seasonNumber state isRequested expectedFileCount
         episodes {
             id episodeNumber state
         }

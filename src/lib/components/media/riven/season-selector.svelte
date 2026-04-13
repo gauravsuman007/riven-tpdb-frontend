@@ -27,7 +27,7 @@
     }
 </script>
 
-<div class="{className} flex w-full flex-col gap-0.5">
+<div class="{className} flex w-full flex-col gap-0.5 max-h-60 overflow-y-auto">
     {#each seasons as season (season.id)}
         {@const locked = isSeasonLocked(season)}
         {@const selected = selectedSeasons.includes(season.season_number)}

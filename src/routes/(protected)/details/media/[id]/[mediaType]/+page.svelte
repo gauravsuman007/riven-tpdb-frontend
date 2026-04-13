@@ -76,6 +76,7 @@
     let rivenPending = $state(Boolean(data.rivenPending));
     let completedDetailsHydrating = false;
     let completedDetailsHydrated = false;
+
     const riven = $derived(liveRiven ?? hydratedRiven);
 
     let expectedCounts = $state<GqlExpectedCounts | undefined>(undefined);
@@ -513,15 +514,29 @@
             mediaItemStateUpdatesByTvdb?: GqlMediaItemStateTree | null;
         }>(subscription.query, subscription.variables, {
             onData: (payload) => {
-                const nextState =
-                    mapMediaItemStateTree(payload[subscription.resultKey]) ?? undefined;
+                const raw = payload[subscription.resultKey];
+                const nextState = mapMediaItemStateTree(raw) ?? undefined;
                 if (nextState) {
                     liveRiven = nextState;
                     liveRivenItemId = nextState.id;
                 }
+                if (raw) {
+                    expectedCounts = {
+                        expectedFileCount: raw.expectedFileCount,
+                        seasons: raw.seasons?.map((s) => ({
+                            seasonNumber: s.seasonNumber ?? 0,
+                            expectedFileCount: s.expectedFileCount
+                        }))
+                    };
+                    expectedCountsItemId = raw.id;
+                }
                 rivenPending = false;
             },
-            onError: () => {}
+            onError: () => {
+                // On a hard network error, do one immediate re-fetch so displayed
+                // state is current. Live updates stop until the user refreshes.
+                void hydrateInitialState();
+            }
         });
 
         return unsubscribe;
