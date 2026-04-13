@@ -29,8 +29,12 @@ const STATS_QUERY = `
         debridAccountInfo {
             store
             email
+            username
             subscriptionStatus
             premiumUntil
+            cooldownUntil
+            totalDownloadedBytes
+            points
         }
         activePlaybackSessions {
             server
@@ -70,7 +74,7 @@ export const load = (async ({ fetch, locals }) => {
             };
             activity: Record<string, number>;
             yearReleases: { year: number; count: number }[];
-            debridAccountInfo: { store: string; email: string | null; subscriptionStatus: string | null; premiumUntil: string | null }[];
+            debridAccountInfo: { store: string; email: string | null; username: string | null; subscriptionStatus: string | null; premiumUntil: string | null; cooldownUntil: string | null; totalDownloadedBytes: number | null; points: number | null }[];
             activePlaybackSessions: {
                 server: string;
                 userName: string | null;
@@ -103,13 +107,13 @@ export const load = (async ({ fetch, locals }) => {
             return {
                 service: info.store,
                 email: info.email ?? null,
-                username: null,
+                username: info.username ?? null,
                 premium_status: info.subscriptionStatus ?? "expired",
                 premium_expires_at: info.premiumUntil ?? null,
                 premium_days_left: daysLeft,
-                points: null,
-                total_downloaded_bytes: null,
-                cooldown_until: null
+                points: info.points ?? null,
+                total_downloaded_bytes: info.totalDownloadedBytes ?? null,
+                cooldown_until: info.cooldownUntil ?? null
             };
         });
 
