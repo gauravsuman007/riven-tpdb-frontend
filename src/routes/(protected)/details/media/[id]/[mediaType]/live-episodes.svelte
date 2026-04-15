@@ -11,6 +11,7 @@
     interface Props {
         episodes: ParsedShowDetails["episodes"];
         selectedSeason?: string;
+        selectedEpisode?: string;
         showTitle?: string | null;
         stateByEpisodeNumber: Map<number, Pick<RivenEpisode, "episode_number" | "state">>;
         detailsByEpisodeNumber: Map<number, RivenEpisode>;
@@ -21,6 +22,7 @@
     let {
         episodes,
         selectedSeason,
+        selectedEpisode,
         showTitle,
         stateByEpisodeNumber,
         detailsByEpisodeNumber,
@@ -29,10 +31,22 @@
     }: Props = $props();
 
     const isMobile = new IsMobile();
+    let openEpisodeNumber = $state<number | null>(
+        selectedEpisode ? Number(selectedEpisode) : null
+    );
 
     const selectedEpisodes = $derived.by(() =>
         episodes.filter((episode) => episode.seasonNumber?.toString() === selectedSeason)
     );
+
+    $effect(() => {
+        openEpisodeNumber = selectedEpisode ? Number(selectedEpisode) : null;
+    });
+
+    function setEpisodeOpen(episodeNumber: number | null | undefined, open: boolean) {
+        if (episodeNumber == null) return;
+        openEpisodeNumber = open ? episodeNumber : null;
+    }
 
     function humanizeProfileName(name: string | undefined) {
         if (!name) return null;
@@ -385,7 +399,10 @@
         {@const detailedEpisode = detailsByEpisodeNumber.get(episode.number ?? 0)}
 
         {#if isMobile.current}
-            <Drawer.Root direction="bottom">
+            <Drawer.Root
+                direction="bottom"
+                open={openEpisodeNumber === episode.number}
+                onOpenChange={(open) => setEpisodeOpen(episode.number, open)}>
                 <Drawer.Trigger class="group w-full text-left">
                     {@render episodeTrigger(episode, rivenEpisode)}
                 </Drawer.Trigger>
@@ -402,7 +419,9 @@
                 </Drawer.Content>
             </Drawer.Root>
         {:else}
-            <Sheet.Root>
+            <Sheet.Root
+                open={openEpisodeNumber === episode.number}
+                onOpenChange={(open) => setEpisodeOpen(episode.number, open)}>
                 <Sheet.Trigger class="group w-full text-left">
                     {@render episodeTrigger(episode, rivenEpisode)}
                 </Sheet.Trigger>

@@ -10,7 +10,7 @@
     import { Input } from "$lib/components/ui/input/index.js";
 
     import ListItem from "$lib/components/list-item.svelte";
-    import { itemsSearchSchema, typeOptions, stateOptions } from "$lib/schemas/items";
+    import { itemsSearchSchema } from "$lib/schemas/items";
     import Trash from "@lucide/svelte/icons/trash";
     import Search from "@lucide/svelte/icons/search";
     import X from "@lucide/svelte/icons/x";
@@ -22,18 +22,18 @@
     import * as Pagination from "$lib/components/ui/pagination/index.js";
     import Loading2Circle from "@lucide/svelte/icons/loader-2";
     import { toast } from "svelte-sonner";
-    import { goto, invalidateAll } from "$app/navigation";
+    import { goto, invalidate } from "$app/navigation";
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
-    import { notificationStore } from "$lib/stores/notifications.svelte";
     import { gqlSubscribeClient } from "$lib/graphql-client";
-    import {
-        MOVIE_REQUESTED_SUBSCRIPTION,
-        SHOW_REQUESTED_SUBSCRIPTION,
-        SHOW_REQUEST_UPDATED_SUBSCRIPTION,
-        SHOW_INDEXED_SUBSCRIPTION
-    } from "$lib/services/riven-media";
+
+    const LIBRARY_ITEMS_DEPENDENCY = "riven:library-items";
+    const LIBRARY_EVENTS_SUBSCRIPTION = `subscription LibraryEvents {
+        notifications {
+            eventType
+        }
+    }`;
 
     let { data }: PageProps = $props();
 
@@ -52,6 +52,7 @@
 
     // Live Search Logic
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let liveRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     function search() {
         const url = new URL(page.url);
@@ -78,8 +79,7 @@
 
         goto(url.toString(), {
             keepFocus: true,
-            noScroll: true,
-            invalidateAll: true
+            noScroll: true
         });
     }
 
@@ -90,46 +90,56 @@
 
     onDestroy(() => {
         clearTimeout(debounceTimer);
+        clearTimeout(liveRefreshTimer);
         debounceTimer = undefined;
+        liveRefreshTimer = undefined;
     });
 
-    // Refresh on scrape and download events (covered by GQL notifications subscription,
-    // not by the typed pub-sub subscriptions below).
-    $effect(() => {
-        return notificationStore.subscribe((event) => {
-            if (
-                event.eventType.startsWith("riven.media-item.scrape.") ||
-                event.eventType.startsWith("riven.media-item.download.")
-            ) {
-                void invalidateAll();
-            }
-        });
-    });
-
-    // GQL subscriptions: refresh on request creation and show indexing.
-    // These carry typed data and complement the SSE channel for these specific events.
-    $effect(() => {
-        const unsubMovieRequested = gqlSubscribeClient(MOVIE_REQUESTED_SUBSCRIPTION, undefined, {
-            onData: () => void invalidateAll()
-        });
-        const unsubShowRequested = gqlSubscribeClient(SHOW_REQUESTED_SUBSCRIPTION, undefined, {
-            onData: () => void invalidateAll()
-        });
-        const unsubShowRequestUpdated = gqlSubscribeClient(
-            SHOW_REQUEST_UPDATED_SUBSCRIPTION,
-            undefined,
-            { onData: () => void invalidateAll() }
+    function isLibraryEvent(eventType: string) {
+        return (
+            eventType.startsWith("riven.media-item.") ||
+            eventType.startsWith("riven.item-request.")
         );
-        const unsubShowIndexed = gqlSubscribeClient(SHOW_INDEXED_SUBSCRIPTION, undefined, {
-            onData: () => void invalidateAll()
-        });
+    }
 
-        return () => {
-            unsubMovieRequested();
-            unsubShowRequested();
-            unsubShowRequestUpdated();
-            unsubShowIndexed();
-        };
+    function refreshLibrarySoon() {
+        clearTimeout(liveRefreshTimer);
+        liveRefreshTimer = setTimeout(() => {
+            void invalidate(LIBRARY_ITEMS_DEPENDENCY);
+        }, 250);
+    }
+
+    function selectedOptionLabels(
+        values: string[] | undefined,
+        options: { value: string; label: string }[],
+        fallback: string
+    ) {
+        if (!values?.length) {
+            return fallback;
+        }
+
+        const labels = values
+            .map((value) => options.find((option) => option.value === value)?.label)
+            .filter((label): label is string => label !== undefined);
+
+        return labels.length > 0 ? labels.join(", ") : fallback;
+    }
+
+    $effect(() => {
+        return gqlSubscribeClient<{ notifications: { eventType: string } }>(
+            LIBRARY_EVENTS_SUBSCRIPTION,
+            undefined,
+            {
+                onData: ({ notifications }) => {
+                    if (isLibraryEvent(notifications.eventType)) {
+                        refreshLibrarySoon();
+                    }
+                },
+                onError: () => {
+                    toast.error("Live library updates disconnected");
+                }
+            }
+        );
     });
 </script>
 
@@ -201,11 +211,11 @@
                                 <Select.Trigger
                                     {...props}
                                     class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-[state=open]:bg-white/10 data-[value]:text-white">
-                                    {$formData.type?.length ? $formData.type.join(", ") : "Type"}
+                                    {selectedOptionLabels($formData.type, data.typeOptions, "Type")}
                                 </Select.Trigger>
                                 <Select.Content class="border-zinc-800 bg-zinc-900">
-                                    {#each Object.keys(typeOptions) as option}
-                                        <Select.Item value={option} label={option} />
+                                    {#each data.typeOptions as option (option.value)}
+                                        <Select.Item value={option.value} label={option.label} />
                                     {/each}
                                 </Select.Content>
                             </Select.Root>
@@ -227,13 +237,15 @@
                                 <Select.Trigger
                                     {...props}
                                     class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-[state=open]:bg-white/10 data-[value]:text-white">
-                                    {$formData.states?.length
-                                        ? $formData.states.join(", ")
-                                        : "State"}
+                                    {selectedOptionLabels(
+                                        $formData.states,
+                                        data.stateOptions,
+                                        "State"
+                                    )}
                                 </Select.Trigger>
                                 <Select.Content class="border-zinc-800 bg-zinc-900">
-                                    {#each Object.keys(stateOptions) as option}
-                                        <Select.Item value={option} label={option} />
+                                    {#each data.stateOptions as option (option.value)}
+                                        <Select.Item value={option.value} label={option.label} />
                                     {/each}
                                 </Select.Content>
                             </Select.Root>
@@ -327,7 +339,7 @@
                 </div>
                 <Button
                     variant="outline"
-                    onclick={() => goto(resolve("/library"), { invalidateAll: true })}
+                    onclick={() => goto(resolve("/library"))}
                     class="border-white/10 hover:bg-white/5">
                     Clear all filters
                 </Button>
@@ -383,7 +395,7 @@
                             await reset_items({ ids: itemsStore.items.map((id) => id.toString()) });
                             toast.success(`Reset ${itemsStore.count} items`);
                             itemsStore.clear();
-                            await invalidateAll();
+                            await invalidate(LIBRARY_ITEMS_DEPENDENCY);
                         } catch (e) {
                             if (e instanceof Error) toast.error(`Error: ${e.message}`);
                             else toast.error("An unknown error occurred");
@@ -398,7 +410,7 @@
                             await retry_items({ ids: itemsStore.items.map((id) => id.toString()) });
                             toast.success(`Retrying ${itemsStore.count} items`);
                             itemsStore.clear();
-                            await invalidateAll();
+                            await invalidate(LIBRARY_ITEMS_DEPENDENCY);
                         } catch (e) {
                             if (e instanceof Error) toast.error(`Error: ${e.message}`);
                             else toast.error("An unknown error occurred");
@@ -418,7 +430,7 @@
                                 });
                                 toast.success(`Removed ${itemsStore.count} items`);
                                 itemsStore.clear();
-                                await invalidateAll();
+                                await invalidate(LIBRARY_ITEMS_DEPENDENCY);
                             } catch (e) {
                                 if (e instanceof Error) toast.error(`Error: ${e.message}`);
                                 else toast.error("An unknown error occurred");

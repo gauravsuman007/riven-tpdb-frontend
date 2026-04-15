@@ -120,6 +120,10 @@
 
     function getInitialSeason() {
         if (data.mediaDetails?.type !== "tv") return "1";
+        const requestedSeason = page.url.searchParams.get("season");
+        if (requestedSeason && !Number.isNaN(Number(requestedSeason))) {
+            return requestedSeason;
+        }
         const details = data.mediaDetails?.details as ParsedShowDetails;
         if (!details?.seasons?.length) return "1";
 
@@ -127,7 +131,16 @@
         return hasSeason1 ? "1" : (details.seasons[0].number?.toString() ?? "1");
     }
 
+    function getInitialEpisode() {
+        if (data.mediaDetails?.type !== "tv") return undefined;
+        const requestedEpisode = page.url.searchParams.get("episode");
+        return requestedEpisode && !Number.isNaN(Number(requestedEpisode))
+            ? requestedEpisode
+            : undefined;
+    }
+
     let selectedSeason: string | undefined = $state(getInitialSeason());
+    let selectedEpisode: string | undefined = $state(getInitialEpisode());
     let selectedMovieVersionIdx = $state(0);
 
     function getMovieEntries() {
@@ -211,6 +224,7 @@
     $effect(() => {
         // Track ID changes to reset selected season
         selectedSeason = getInitialSeason();
+        selectedEpisode = getInitialEpisode();
         selectedMovieVersionIdx = 0;
         liveRiven = data.riven;
         hydratedRiven = undefined;
@@ -1038,6 +1052,7 @@
                         <LiveEpisodes
                             episodes={data.mediaDetails.details.episodes}
                             {selectedSeason}
+                            {selectedEpisode}
                             showTitle={data.mediaDetails.details.title}
                             stateByEpisodeNumber={selectedRivenEpisodesByNumber}
                             detailsByEpisodeNumber={selectedHydratedEpisodesByNumber}

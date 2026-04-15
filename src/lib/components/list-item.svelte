@@ -39,7 +39,13 @@
             (normalizedType === "movie" || normalizedType === "tv")
         ) {
             // Include indexer as query param when it's tvdb so details page knows to skip resolution
-            const queryParam = indexer === "tvdb" ? "?indexer=tvdb" : "";
+            const params = new URLSearchParams();
+            if (indexer === "tvdb") params.set("indexer", "tvdb");
+            if (data.details_query) {
+                const detailParams = new URLSearchParams(data.details_query);
+                detailParams.forEach((value, key) => params.set(key, value));
+            }
+            const queryParam = params.toString() ? `?${params.toString()}` : "";
             // If indexer is undefined, assume tmdb behavior for now as default
             return `/details/media/${data.id}/${normalizedType}${queryParam}`;
         }
