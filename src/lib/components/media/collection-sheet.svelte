@@ -17,9 +17,10 @@
         collectionId: number;
         collectionName?: string;
         trigger?: Snippet<[{ props: Record<string, unknown> }]>;
+        onRequested?: () => void | Promise<void>;
     }
 
-    let { collectionId, collectionName = "Collection", trigger }: Props = $props();
+    let { collectionId, collectionName = "Collection", trigger, onRequested }: Props = $props();
 
     let open = $state(false);
     let loading = $state(false);
@@ -83,6 +84,7 @@
             if (newItems.length === 0 && alreadyHad === 0) {
                 toast.info("All movies in this collection have already been requested.");
             }
+            void onRequested?.();
             open = false;
         } catch (e) {
             logger.error("Request failed", e);

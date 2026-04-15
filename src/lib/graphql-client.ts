@@ -20,7 +20,7 @@ interface GraphQLSubscribeHandlers<T> {
     onError?: (error: Error) => void;
 }
 
-const GRAPHQL_PROXY_URL = "/api/graphql";
+const GRAPHQL_PROXY_URL = "/graphql";
 const JSON_CONTENT_TYPE = "application/json";
 const SUBSCRIPTION_ACCEPT_HEADER =
     'multipart/mixed; boundary="graphql"; subscriptionSpec="1.0", application/graphql-response+json';
@@ -161,7 +161,7 @@ export async function gql<T>(
 }
 
 /**
- * Execute a GraphQL operation client-side via the /api/graphql SvelteKit proxy.
+ * Execute a GraphQL operation client-side via the /graphql SvelteKit proxy.
  * Auth is handled transparently by the proxy route.
  */
 export async function gqlClient<T>(query: string, variables?: Record<string, unknown>): Promise<T> {

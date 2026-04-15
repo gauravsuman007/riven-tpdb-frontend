@@ -42,15 +42,12 @@
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
         MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION,
         MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
-        MOVIE_REQUESTED_SUBSCRIPTION,
-        SHOW_REQUESTED_SUBSCRIPTION,
         SHOW_INDEXED_SUBSCRIPTION,
         mapMediaItemStateTree,
         mapMediaItemFull,
         type GqlMediaItemFull,
         type GqlMediaItemStateTree,
         type GqlExpectedCounts,
-        type GqlItemRequest,
         type GqlIndexedShow
     } from "$lib/services/riven-media";
 
@@ -486,6 +483,31 @@
         }
     }
 
+    function applyLiveState(raw: GqlMediaItemStateTree | null | undefined) {
+        const nextState = mapMediaItemStateTree(raw) ?? undefined;
+
+        if (nextState && raw) {
+            liveRiven = nextState;
+            liveRivenItemId = nextState.id;
+            expectedCounts = {
+                expectedFileCount: raw.expectedFileCount,
+                seasons: raw.seasons?.map((s) => ({
+                    seasonNumber: s.seasonNumber ?? 0,
+                    expectedFileCount: s.expectedFileCount
+                }))
+            };
+            expectedCountsItemId = raw.id;
+            return;
+        }
+
+        liveRiven = undefined;
+        hydratedRiven = undefined;
+        liveRivenItemId = undefined;
+        expectedCounts = undefined;
+        expectedCountsItemId = undefined;
+        completedDetailsHydrated = false;
+    }
+
     async function hydrateInitialState() {
         const request = getInitialStateRequest();
 
@@ -500,12 +522,7 @@
                 mediaItemStateByTmdb?: GqlMediaItemStateTree | null;
                 mediaItemStateByTvdb?: GqlMediaItemStateTree | null;
             }>(request.query, request.variables);
-            const nextState = mapMediaItemStateTree(payload[request.resultKey]) ?? undefined;
-
-            if (nextState) {
-                liveRiven = nextState;
-                liveRivenItemId = nextState.id;
-            }
+            applyLiveState(payload[request.resultKey]);
         } catch {
         } finally {
             rivenPending = false;
@@ -529,71 +546,15 @@
             mediaItemStateUpdatesByTvdb?: GqlMediaItemStateTree | null;
         }>(subscription.query, subscription.variables, {
             onData: (payload) => {
-                const raw = payload[subscription.resultKey];
-                const nextState = mapMediaItemStateTree(raw) ?? undefined;
-                if (nextState) {
-                    liveRiven = nextState;
-                    liveRivenItemId = nextState.id;
-                }
-                if (raw) {
-                    expectedCounts = {
-                        expectedFileCount: raw.expectedFileCount,
-                        seasons: raw.seasons?.map((s) => ({
-                            seasonNumber: s.seasonNumber ?? 0,
-                            expectedFileCount: s.expectedFileCount
-                        }))
-                    };
-                    expectedCountsItemId = raw.id;
-                }
+                applyLiveState(payload[subscription.resultKey]);
                 rivenPending = false;
             },
             onError: () => {
-                // On a hard network error, do one immediate re-fetch so displayed
-                // state is current. Live updates stop until the user refreshes.
                 void hydrateInitialState();
             }
         });
 
         return unsubscribe;
-    });
-
-    // Requests can be created from another surface, such as the collection sheet.
-    // Listen for the creation event so an unrequested current item hydrates itself
-    // without waiting for a manual refresh.
-    $effect(() => {
-        if (!browser) return;
-
-        if (data.mediaDetails?.type === "movie") {
-            const targetTmdbId = page.params.id;
-
-            return gqlSubscribeClient<{ movieRequested: GqlItemRequest }>(
-                MOVIE_REQUESTED_SUBSCRIPTION,
-                undefined,
-                {
-                    onData: (payload) => {
-                        if (payload.movieRequested?.tmdbId !== targetTmdbId) return;
-
-                        void hydrateInitialState();
-                    }
-                }
-            );
-        }
-
-        if (data.mediaDetails?.type === "tv" && data.resolvedTvdbId != null) {
-            const targetTvdbId = data.resolvedTvdbId.toString();
-
-            return gqlSubscribeClient<{ showRequested: GqlItemRequest }>(
-                SHOW_REQUESTED_SUBSCRIPTION,
-                undefined,
-                {
-                    onData: (payload) => {
-                        if (payload.showRequested?.tvdbId !== targetTvdbId) return;
-
-                        void hydrateInitialState();
-                    }
-                }
-            );
-        }
     });
 
     $effect(() => {
@@ -622,6 +583,9 @@
                     if (!liveRivenItemId) {
                         liveRivenItemId = indexed.id;
                     }
+                    void hydrateInitialState();
+                },
+                onError: () => {
                     void hydrateInitialState();
                 }
             }
@@ -1033,7 +997,8 @@
                             {@render sectionHeading("Collection")}
                             <CollectionSheet
                                 collectionId={movieDetails.collection.id}
-                                collectionName={movieDetails.collection.name}>
+                                collectionName={movieDetails.collection.name}
+                                onRequested={handleRequestSuccess}>
                                 {#snippet trigger({ props })}
                                     <button
                                         {...props}
