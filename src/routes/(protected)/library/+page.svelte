@@ -26,14 +26,9 @@
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
-    import { gqlSubscribeClient } from "$lib/graphql-client";
+    import { subscribeToLibraryUpdates } from "$lib/services/library-live-updates";
 
     const LIBRARY_ITEMS_DEPENDENCY = "riven:library-items";
-    const LIBRARY_EVENTS_SUBSCRIPTION = `subscription LibraryEvents {
-        notifications {
-            eventType
-        }
-    }`;
 
     let { data }: PageProps = $props();
 
@@ -52,7 +47,6 @@
 
     // Live Search Logic
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    let liveRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     function search() {
         const url = new URL(page.url);
@@ -90,24 +84,8 @@
 
     onDestroy(() => {
         clearTimeout(debounceTimer);
-        clearTimeout(liveRefreshTimer);
         debounceTimer = undefined;
-        liveRefreshTimer = undefined;
     });
-
-    function isLibraryEvent(eventType: string) {
-        return (
-            eventType.startsWith("riven.media-item.") ||
-            eventType.startsWith("riven.item-request.")
-        );
-    }
-
-    function refreshLibrarySoon() {
-        clearTimeout(liveRefreshTimer);
-        liveRefreshTimer = setTimeout(() => {
-            void invalidate(LIBRARY_ITEMS_DEPENDENCY);
-        }, 250);
-    }
 
     function selectedOptionLabels(
         values: string[] | undefined,
@@ -126,20 +104,7 @@
     }
 
     $effect(() => {
-        return gqlSubscribeClient<{ notifications: { eventType: string } }>(
-            LIBRARY_EVENTS_SUBSCRIPTION,
-            undefined,
-            {
-                onData: ({ notifications }) => {
-                    if (isLibraryEvent(notifications.eventType)) {
-                        refreshLibrarySoon();
-                    }
-                },
-                onError: () => {
-                    toast.error("Live library updates disconnected");
-                }
-            }
-        );
+        return subscribeToLibraryUpdates(() => invalidate(LIBRARY_ITEMS_DEPENDENCY));
     });
 </script>
 

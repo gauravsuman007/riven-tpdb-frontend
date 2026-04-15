@@ -8,12 +8,14 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
+    import { subscribeToLibraryUpdates } from "$lib/services/library-live-updates";
 
     let { data }: { data: PageData } = $props();
 
     const viewAllButtonClass =
         "text-muted-foreground border-white/10 bg-black/20 hover:bg-black/40 hover:text-foreground h-9 w-24 rounded-xl border text-xs font-bold backdrop-blur-md shadow-inner transition-all";
 
+    // svelte-ignore state_referenced_locally
     const recentlyAddedStore = new MediaListStore<BaseListItem>(
         "recentlyAdded",
         "/api/library/recent",
@@ -34,6 +36,10 @@
         "anilistTrending",
         "/api/anilist/trending"
     );
+
+    $effect(() => {
+        return subscribeToLibraryUpdates(() => recentlyAddedStore.refresh());
+    });
 </script>
 
 {#snippet listHeading(title: string)}
