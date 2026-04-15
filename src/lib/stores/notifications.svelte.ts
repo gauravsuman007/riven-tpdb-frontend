@@ -142,8 +142,9 @@ export class NotificationStore {
     );
     #unsubscribe: (() => void) | null = null;
     #eventListeners = new Set<(event: RivenNotificationPayload) => void>();
+    #connectionRefs = 0;
     #reconnectAttempts = 0;
-    #maxReconnectAttempts = 5;
+    #maxReconnectAttempts = 3;
 
     onNotificationAdded: ((notification: Notification) => void) | null = null;
 
@@ -188,7 +189,15 @@ export class NotificationStore {
         this.#notifications = this.#notifications.filter((n) => n.id !== id);
     }
 
-    connect() {
+    #disconnectTransport() {
+        this.#connectionStatus = "disconnected";
+        if (this.#unsubscribe) {
+            this.#unsubscribe();
+            this.#unsubscribe = null;
+        }
+    }
+
+    #connectTransport() {
         if (this.#unsubscribe) {
             return;
         }
@@ -210,20 +219,30 @@ export class NotificationStore {
                     }
                 },
                 onError: (error) => {
-                    logger.error("Notification subscription error:", error);
                     this.#reconnectAttempts += 1;
 
                     if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
+                        logger.error("Notification subscription error:", error);
                         this.#connectionStatus = "error";
                         return;
                     }
 
                     this.#connectionStatus = "connecting";
-                    this.disconnect();
-                    setTimeout(() => this.connect(), 1000);
+                    this.#disconnectTransport();
+                    const reconnectDelayMs = 5000 * this.#reconnectAttempts;
+                    setTimeout(() => {
+                        if (this.#connectionRefs > 0) {
+                            this.#connectTransport();
+                        }
+                    }, reconnectDelayMs);
                 }
             }
         );
+    }
+
+    connect() {
+        this.#connectionRefs += 1;
+        this.#connectTransport();
     }
 
     subscribe(callback: (event: RivenNotificationPayload) => void) {
@@ -234,16 +253,21 @@ export class NotificationStore {
     }
 
     disconnect() {
-        this.#connectionStatus = "disconnected";
-        if (this.#unsubscribe) {
-            this.#unsubscribe();
-            this.#unsubscribe = null;
+        this.#connectionRefs = Math.max(0, this.#connectionRefs - 1);
+
+        if (this.#connectionRefs > 0) {
+            return;
         }
+
+        this.#disconnectTransport();
     }
 
     reconnect() {
-        this.disconnect();
-        this.connect();
+        this.#disconnectTransport();
+        if (this.#connectionRefs === 0) {
+            this.#connectionRefs = 1;
+        }
+        this.#connectTransport();
     }
 }
 

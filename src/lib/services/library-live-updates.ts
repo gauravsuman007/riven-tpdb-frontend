@@ -1,10 +1,4 @@
-import { gqlSubscribeClient } from "$lib/graphql-client";
-
-const LIBRARY_EVENTS_SUBSCRIPTION = `subscription LibraryEvents {
-    notifications {
-        eventType
-    }
-}`;
+import { notificationStore } from "$lib/stores/notifications.svelte";
 
 function isMediaEvent(eventType: string) {
     return eventType.startsWith("riven.media-item.") || eventType.startsWith("riven.item-request.");
@@ -25,17 +19,11 @@ export function subscribeToMediaUpdates(
         }, debounceMs);
     }
 
-    const unsubscribe = gqlSubscribeClient<{ notifications: { eventType: string } }>(
-        LIBRARY_EVENTS_SUBSCRIPTION,
-        undefined,
-        {
-            onData: ({ notifications }) => {
-                if (isMediaEvent(notifications.eventType)) {
-                    refreshSoon();
-                }
-            }
+    const unsubscribe = notificationStore.subscribe((event) => {
+        if (isMediaEvent(event.eventType)) {
+            refreshSoon();
         }
-    );
+    });
 
     return () => {
         active = false;

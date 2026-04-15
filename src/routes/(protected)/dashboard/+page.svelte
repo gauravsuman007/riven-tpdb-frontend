@@ -10,7 +10,7 @@
     import ServiceStatusCard from "$lib/components/dashboard/service-status-card.svelte";
     import DownloaderServicesGrid from "$lib/components/dashboard/downloader-services-grid.svelte";
     import WatchingNowCard from "$lib/components/dashboard/watching-now-card.svelte";
-    import type { ActivePlaybackSession } from "$lib/components/dashboard/types";
+    import type { ActivePlaybackSession, DownloaderService } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
     import { invalidate } from "$app/navigation";
     import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
@@ -20,6 +20,7 @@
     let { data }: { data: PageData } = $props();
 
     let activePlaybackSessions = $state<ActivePlaybackSession[]>([]);
+    let downloaderServices = $state<DownloaderService[]>([]);
 
     const statistics = $derived(data.statistics);
     const serviceStatuses = $derived(
@@ -81,8 +82,56 @@
         }
     `;
 
+    const DEBRID_ACCOUNT_INFO_QUERY = `
+        query {
+            debridAccountInfo {
+                store
+                email
+                username
+                subscriptionStatus
+                premiumUntil
+                cooldownUntil
+                totalDownloadedBytes
+                points
+            }
+        }
+    `;
+
+    type GqlDebridAccountInfo = {
+        store: string;
+        email: string | null;
+        username: string | null;
+        subscriptionStatus: string | null;
+        premiumUntil: string | null;
+        cooldownUntil: string | null;
+        totalDownloadedBytes: number | null;
+        points: number | null;
+    };
+
+    function mapDebridService(info: GqlDebridAccountInfo): DownloaderService {
+        const now = Date.now();
+        const expiresMs = info.premiumUntil ? new Date(info.premiumUntil).getTime() : null;
+        const daysLeft =
+            expiresMs !== null && !isNaN(expiresMs)
+                ? Math.ceil((expiresMs - now) / (1000 * 60 * 60 * 24))
+                : null;
+
+        return {
+            service: info.store,
+            email: info.email ?? null,
+            username: info.username ?? null,
+            premium_status: info.subscriptionStatus ?? "expired",
+            premium_expires_at: info.premiumUntil ?? null,
+            premium_days_left: daysLeft,
+            points: info.points ?? null,
+            total_downloaded_bytes: info.totalDownloadedBytes ?? null,
+            cooldown_until: info.cooldownUntil ?? null
+        };
+    }
+
     $effect(() => {
         activePlaybackSessions = data.activePlaybackSessions ?? [];
+        downloaderServices = data.downloaderInfo?.services ?? [];
     });
 
     $effect(() => {
@@ -104,6 +153,23 @@
                 // Keep the last successful snapshot on transient dashboard polling failures.
             }
         };
+
+        const refreshDownloaderServices = async () => {
+            try {
+                const result = await gqlClient<{ debridAccountInfo: GqlDebridAccountInfo[] }>(
+                    DEBRID_ACCOUNT_INFO_QUERY
+                );
+
+                if (!cancelled) {
+                    downloaderServices = (result.debridAccountInfo ?? []).map(mapDebridService);
+                }
+            } catch {
+                // Service account lookups should never block the dashboard shell.
+            }
+        };
+
+        void refresh();
+        void refreshDownloaderServices();
 
         const interval = window.setInterval(refresh, 15000);
         return () => {
@@ -163,6 +229,6 @@
     <LibraryChartsCard {statistics} />
     <ReleaseYearCard data={statistics?.media_year_releases ?? []} />
     <ServiceStatusCard statuses={serviceStatuses} />
-    <DownloaderServicesGrid services={data.downloaderInfo?.services ?? []} />
+    <DownloaderServicesGrid services={downloaderServices} />
     <WatchingNowCard sessions={activePlaybackSessions} />
 </PageShell>
