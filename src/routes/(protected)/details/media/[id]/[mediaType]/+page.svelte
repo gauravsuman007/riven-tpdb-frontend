@@ -42,12 +42,15 @@
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
         MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION,
         MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
+        MOVIE_REQUESTED_SUBSCRIPTION,
+        SHOW_REQUESTED_SUBSCRIPTION,
         SHOW_INDEXED_SUBSCRIPTION,
         mapMediaItemStateTree,
         mapMediaItemFull,
         type GqlMediaItemFull,
         type GqlMediaItemStateTree,
         type GqlExpectedCounts,
+        type GqlItemRequest,
         type GqlIndexedShow
     } from "$lib/services/riven-media";
 
@@ -377,10 +380,6 @@
     );
 
     function getLiveRivenSubscription() {
-        if (!liveRivenItemId) {
-            return null;
-        }
-
         if (data.mediaDetails?.type === "movie") {
             return {
                 query: MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
@@ -556,6 +555,45 @@
         });
 
         return unsubscribe;
+    });
+
+    // Requests can be created from another surface, such as the collection sheet.
+    // Listen for the creation event so an unrequested current item hydrates itself
+    // without waiting for a manual refresh.
+    $effect(() => {
+        if (!browser) return;
+
+        if (data.mediaDetails?.type === "movie") {
+            const targetTmdbId = page.params.id;
+
+            return gqlSubscribeClient<{ movieRequested: GqlItemRequest }>(
+                MOVIE_REQUESTED_SUBSCRIPTION,
+                undefined,
+                {
+                    onData: (payload) => {
+                        if (payload.movieRequested?.tmdbId !== targetTmdbId) return;
+
+                        void hydrateInitialState();
+                    }
+                }
+            );
+        }
+
+        if (data.mediaDetails?.type === "tv" && data.resolvedTvdbId != null) {
+            const targetTvdbId = data.resolvedTvdbId.toString();
+
+            return gqlSubscribeClient<{ showRequested: GqlItemRequest }>(
+                SHOW_REQUESTED_SUBSCRIPTION,
+                undefined,
+                {
+                    onData: (payload) => {
+                        if (payload.showRequested?.tvdbId !== targetTvdbId) return;
+
+                        void hydrateInitialState();
+                    }
+                }
+            );
+        }
     });
 
     $effect(() => {
@@ -763,7 +801,8 @@
                                     state={riven.state} />
                             {/if}
                             {#if expectedCounts?.expectedFileCount != null && expectedCounts.expectedFileCount > 0}
-                                <span class="text-muted-foreground border-border rounded-full border px-3 py-1.5 text-sm font-medium tabular-nums">
+                                <span
+                                    class="text-muted-foreground border-border rounded-full border px-3 py-1.5 text-sm font-medium tabular-nums">
                                     {completedFileCount}/{expectedCounts.expectedFileCount} files
                                 </span>
                             {/if}

@@ -26,7 +26,7 @@
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
-    import { subscribeToLibraryUpdates } from "$lib/services/library-live-updates";
+    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
 
     const LIBRARY_ITEMS_DEPENDENCY = "riven:library-items";
 
@@ -104,7 +104,7 @@
     }
 
     $effect(() => {
-        return subscribeToLibraryUpdates(() => invalidate(LIBRARY_ITEMS_DEPENDENCY));
+        return subscribeToMediaUpdates(() => invalidate(LIBRARY_ITEMS_DEPENDENCY));
     });
 </script>
 

@@ -6,11 +6,11 @@ const LIBRARY_EVENTS_SUBSCRIPTION = `subscription LibraryEvents {
     }
 }`;
 
-function isLibraryEvent(eventType: string) {
+function isMediaEvent(eventType: string) {
     return eventType.startsWith("riven.media-item.") || eventType.startsWith("riven.item-request.");
 }
 
-export function subscribeToLibraryUpdates(
+export function subscribeToMediaUpdates(
     refresh: () => void | Promise<void>,
     debounceMs = 250
 ): () => void {
@@ -30,7 +30,7 @@ export function subscribeToLibraryUpdates(
         undefined,
         {
             onData: ({ notifications }) => {
-                if (isLibraryEvent(notifications.eventType)) {
+                if (isMediaEvent(notifications.eventType)) {
                     refreshSoon();
                 }
             }

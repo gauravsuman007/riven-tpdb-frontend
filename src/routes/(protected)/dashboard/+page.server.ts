@@ -4,6 +4,7 @@ import { error } from "@sveltejs/kit";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("dashboard");
+const DASHBOARD_STATS_DEPENDENCY = "riven:dashboard-stats";
 
 const STATS_QUERY = `
     query {
@@ -55,7 +56,9 @@ const STATS_QUERY = `
     }
 `;
 
-export const load = (async ({ fetch, locals }) => {
+export const load = (async ({ depends, fetch, locals }) => {
+    depends(DASHBOARD_STATS_DEPENDENCY);
+
     try {
         const data = await gql<{
             stats: {
@@ -74,7 +77,16 @@ export const load = (async ({ fetch, locals }) => {
             };
             activity: Record<string, number>;
             yearReleases: { year: number; count: number }[];
-            debridAccountInfo: { store: string; email: string | null; username: string | null; subscriptionStatus: string | null; premiumUntil: string | null; cooldownUntil: string | null; totalDownloadedBytes: number | null; points: number | null }[];
+            debridAccountInfo: {
+                store: string;
+                email: string | null;
+                username: string | null;
+                subscriptionStatus: string | null;
+                premiumUntil: string | null;
+                cooldownUntil: string | null;
+                totalDownloadedBytes: number | null;
+                points: number | null;
+            }[];
             activePlaybackSessions: {
                 server: string;
                 userName: string | null;
@@ -94,8 +106,7 @@ export const load = (async ({ fetch, locals }) => {
         }>(locals.backendUrl, locals.apiKey, STATS_QUERY, {}, fetch);
 
         const s = data.stats;
-        const total_items =
-            s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
+        const total_items = s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
 
         const debridServices = (data.debridAccountInfo ?? []).map((info) => {
             const now = Date.now();

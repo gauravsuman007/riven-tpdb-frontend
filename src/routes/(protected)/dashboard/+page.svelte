@@ -12,6 +12,10 @@
     import WatchingNowCard from "$lib/components/dashboard/watching-now-card.svelte";
     import type { ActivePlaybackSession } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
+    import { invalidate } from "$app/navigation";
+    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
+
+    const DASHBOARD_STATS_DEPENDENCY = "riven:dashboard-stats";
 
     let { data }: { data: PageData } = $props();
 
@@ -22,7 +26,11 @@
         (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
     );
     const completionRate = $derived.by(() => {
-        if (!statistics || statistics.total_items === 0 || statistics.states.Completed === undefined) {
+        if (
+            !statistics ||
+            statistics.total_items === 0 ||
+            statistics.states.Completed === undefined
+        ) {
             return "0%";
         }
 
@@ -77,15 +85,18 @@
         activePlaybackSessions = data.activePlaybackSessions ?? [];
     });
 
+    $effect(() => {
+        return subscribeToMediaUpdates(() => invalidate(DASHBOARD_STATS_DEPENDENCY));
+    });
+
     onMount(() => {
         let cancelled = false;
 
         const refresh = async () => {
             try {
-                const result =
-                    await gqlClient<{ activePlaybackSessions: ActivePlaybackSession[] }>(
-                        ACTIVE_PLAYBACK_QUERY
-                    );
+                const result = await gqlClient<{ activePlaybackSessions: ActivePlaybackSession[] }>(
+                    ACTIVE_PLAYBACK_QUERY
+                );
                 if (!cancelled) {
                     activePlaybackSessions = result.activePlaybackSessions ?? [];
                 }

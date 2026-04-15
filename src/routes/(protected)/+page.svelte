@@ -8,7 +8,7 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
-    import { subscribeToLibraryUpdates } from "$lib/services/library-live-updates";
+    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
 
     let { data }: { data: PageData } = $props();
 
@@ -38,7 +38,7 @@
     );
 
     $effect(() => {
-        return subscribeToLibraryUpdates(() => recentlyAddedStore.refresh());
+        return subscribeToMediaUpdates(() => recentlyAddedStore.refresh());
     });
 </script>
 
