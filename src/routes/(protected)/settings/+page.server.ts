@@ -1,6 +1,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail } from "@sveltejs/kit";
 import { gql } from "$lib/graphql-client";
+import { buildBackendRoleHeaders, requireSettingsAccess } from "$lib/server/rbac";
 import type {
     CustomProfile,
     PluginInfo,
@@ -46,13 +47,16 @@ const UPDATE_PLUGIN_SETTINGS = `
 `;
 
 export const load: PageServerLoad = async ({ fetch, locals }) => {
+    requireSettingsAccess(locals.user);
+    const authHeaders = buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret);
+
     try {
         const [rankData, generalData, generalSchemaData, pluginData] = await Promise.all([
             gql<{
                 rankSettings: Record<string, unknown>;
                 qualityProfiles: QualityProfile[];
                 customProfiles: CustomProfile[];
-            }>(locals.backendUrl, locals.apiKey, RANK_SETTINGS_QUERY, {}, fetch).catch(() => ({
+            }>(locals.backendUrl, locals.apiKey, RANK_SETTINGS_QUERY, {}, fetch, authHeaders).catch(() => ({
                 rankSettings: {},
                 qualityProfiles: [],
                 customProfiles: []
@@ -62,21 +66,24 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
                 locals.apiKey,
                 GENERAL_SETTINGS_QUERY,
                 {},
-                fetch
+                fetch,
+                authHeaders
             ).catch(() => ({ generalSettings: {} })),
             gql<{ generalSettingsSchema: SettingFieldDef[] }>(
                 locals.backendUrl,
                 locals.apiKey,
                 GENERAL_SETTINGS_SCHEMA_QUERY,
                 {},
-                fetch
+                fetch,
+                authHeaders
             ).catch(() => ({ generalSettingsSchema: [] })),
             gql<{ pluginInfo: PluginInfo[] }>(
                 locals.backendUrl,
                 locals.apiKey,
                 PLUGIN_INFO_QUERY,
                 {},
-                fetch
+                fetch,
+                authHeaders
             ).catch(() => ({ pluginInfo: [] }))
         ]);
 
@@ -121,6 +128,7 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 
 export const actions = {
     updateRanking: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const rawSettings = formData.get("settings");
         if (!rawSettings || typeof rawSettings !== "string") {
@@ -133,7 +141,14 @@ export const actions = {
             return fail(400, { error: "Invalid JSON settings" });
         }
         try {
-            await gql(locals.backendUrl, locals.apiKey, UPDATE_RANK_SETTINGS, { settings }, fetch);
+            await gql(
+                locals.backendUrl,
+                locals.apiKey,
+                UPDATE_RANK_SETTINGS,
+                { settings },
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
+            );
             return { success: true };
         } catch {
             return fail(500, { error: "Failed to save ranking settings" });
@@ -141,6 +156,7 @@ export const actions = {
     },
 
     updateGeneral: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const rawSettings = formData.get("settings");
         if (!rawSettings || typeof rawSettings !== "string") {
@@ -158,7 +174,14 @@ export const actions = {
                     settings?: Record<string, unknown>;
                     filesystem_profile_rematch_count?: number;
                 };
-            }>(locals.backendUrl, locals.apiKey, UPDATE_GENERAL_SETTINGS, { settings }, fetch);
+            }>(
+                locals.backendUrl,
+                locals.apiKey,
+                UPDATE_GENERAL_SETTINGS,
+                { settings },
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
+            );
             return {
                 success: true,
                 updatedCount: result.updateGeneralSettings.filesystem_profile_rematch_count ?? 0
@@ -168,6 +191,7 @@ export const actions = {
         }
     },
     updatePlugin: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const plugin = formData.get("plugin");
         const rawSettings = formData.get("settings");
@@ -191,7 +215,8 @@ export const actions = {
                 locals.apiKey,
                 UPDATE_PLUGIN_SETTINGS,
                 { plugin, settings },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
             return {
                 success: true,
@@ -204,6 +229,7 @@ export const actions = {
     },
 
     saveCustomProfile: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const rawId = formData.get("id");
         const name = formData.get("name");
@@ -227,7 +253,8 @@ export const actions = {
                 locals.apiKey,
                 SAVE_CUSTOM_PROFILE,
                 { id, name: name.trim(), settings },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
             return { profile: result.saveCustomProfile };
         } catch {
@@ -236,6 +263,7 @@ export const actions = {
     },
 
     deleteCustomProfile: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const rawId = formData.get("id");
         if (!rawId || typeof rawId !== "string") {
@@ -247,7 +275,8 @@ export const actions = {
                 locals.apiKey,
                 DELETE_CUSTOM_PROFILE,
                 { id: Number(rawId) },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
             return { success: true, deletedId: Number(rawId) };
         } catch {
@@ -256,6 +285,7 @@ export const actions = {
     },
 
     setProfileEnabled: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const name = formData.get("name");
         const enabled = formData.get("enabled");
@@ -271,15 +301,25 @@ export const actions = {
                     name,
                     enabled: enabled === "true"
                 },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
-            return { success: true };
+            const data = await gql<{ customProfiles: CustomProfile[] }>(
+                locals.backendUrl,
+                locals.apiKey,
+                `query { customProfiles }`,
+                {},
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
+            ).catch(() => ({ customProfiles: null }));
+            return { success: true, customProfiles: data.customProfiles };
         } catch {
             return fail(500, { error: "Failed to update profile" });
         }
     },
 
     updateProfileSettings: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const name = formData.get("name");
         const rawSettings = formData.get("settings");
@@ -301,7 +341,8 @@ export const actions = {
                 locals.apiKey,
                 UPDATE_PROFILE_SETTINGS,
                 { name, settings },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
             return { success: true };
         } catch {
@@ -310,6 +351,7 @@ export const actions = {
     },
 
     loadPluginSettings: async ({ request, fetch, locals }) => {
+        requireSettingsAccess(locals.user);
         const formData = await request.formData();
         const plugin = formData.get("plugin");
         if (!plugin || typeof plugin !== "string") {
@@ -321,7 +363,8 @@ export const actions = {
                 locals.apiKey,
                 PLUGIN_SETTINGS_QUERY,
                 { plugin },
-                fetch
+                fetch,
+                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
             );
             return { pluginSettings: data.pluginSettings ?? {}, plugin };
         } catch {

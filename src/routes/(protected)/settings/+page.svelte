@@ -1,6 +1,7 @@
 <script lang="ts">
     import { deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
+    import { gqlClient } from "$lib/graphql-client";
     import PageShell from "$lib/components/page-shell.svelte";
     import * as Tabs from "$lib/components/ui/tabs/index.js";
     import GeneralTab from "$lib/components/settings/general-tab.svelte";
@@ -9,6 +10,12 @@
     import { stringifyPluginFields } from "$lib/components/settings/helpers";
     import type { PageData } from "./$types";
     import type { CustomProfile, PluginInfo, QualityProfile } from "$lib/components/settings/types";
+
+    const SAVE_CUSTOM_PROFILE = `mutation SaveCustomProfile($id: Int, $name: String!, $settings: JSON!, $enabled: Boolean) { saveCustomProfile(id: $id, name: $name, settings: $settings, enabled: $enabled) }`;
+    const DELETE_CUSTOM_PROFILE = `mutation DeleteCustomProfile($id: Int!) { deleteCustomProfile(id: $id) }`;
+    const SET_PROFILE_ENABLED = `mutation SetProfileEnabled($name: String!, $enabled: Boolean!) { setProfileEnabled(name: $name, enabled: $enabled) }`;
+    const UPDATE_PROFILE_SETTINGS = `mutation UpdateProfileSettings($name: String!, $settings: JSON!) { updateProfileSettings(name: $name, settings: $settings) }`;
+    const CUSTOM_PROFILES_QUERY = `query { customProfiles }`;
 
     let { data }: { data: PageData } = $props();
 
@@ -92,15 +99,27 @@
     async function saveActiveProfileSettings() {
         if (!activeProfileName) return;
         try {
-            const fd = new FormData();
-            fd.set("name", activeProfileName);
-            fd.set("settings", JSON.stringify(rank));
-            const res = await fetch("?/updateProfileSettings", { method: "POST", body: fd });
-            const result = deserialize(await res.text());
-            if (result.type !== "success")
-                toast.error(`Failed to update profile "${activeProfileName}"`);
+            await gqlClient<{ updateProfileSettings: unknown }>(UPDATE_PROFILE_SETTINGS, {
+                name: activeProfileName,
+                settings: rank
+            });
+
+            const settings = JSON.parse(JSON.stringify(rank)) as Record<string, unknown>;
+            const customProfile = customProfiles.find(
+                (profile) => profile.name === activeProfileName
+            );
+            if (customProfile) {
+                customProfile.settings = settings;
+            }
+
+            const qualityProfile = qualityProfiles.find(
+                (profile) => profile.id === activeProfileName
+            );
+            if (qualityProfile) {
+                qualityProfile.settings = settings;
+            }
         } catch {
-            toast.error(`Failed to update profile "${activeProfileName}"`);
+            throw new Error("Failed to update active ranking profile");
         }
     }
 
@@ -109,21 +128,20 @@
         if (!name) return;
         savingProfile = true;
         try {
-            const fd = new FormData();
-            fd.set("name", name);
-            fd.set("settings", JSON.stringify(rank));
-            const res = await fetch("?/saveCustomProfile", { method: "POST", body: fd });
-            const result = deserialize(await res.text());
-            if (result.type === "success" && result.data?.profile) {
-                const profile = result.data.profile as CustomProfile;
-                const idx = customProfiles.findIndex((p) => p.id === profile.id);
-                if (idx >= 0) customProfiles[idx] = profile;
-                else customProfiles.push(profile);
-                newProfileName = "";
-                toast.success(`Profile "${profile.name}" saved`);
-            } else {
-                toast.error("Failed to save profile");
-            }
+            const result = await gqlClient<{ saveCustomProfile: CustomProfile }>(
+                SAVE_CUSTOM_PROFILE,
+                {
+                    id: null,
+                    name,
+                    settings: rank
+                }
+            );
+            const profile = result.saveCustomProfile;
+            const idx = customProfiles.findIndex((p) => p.id === profile.id);
+            if (idx >= 0) customProfiles[idx] = profile;
+            else customProfiles.push(profile);
+            newProfileName = "";
+            toast.success(`Profile "${profile.name}" saved`);
         } catch {
             toast.error("Failed to save profile");
         } finally {
@@ -132,29 +150,24 @@
     }
 
     async function toggleProfileEnabled(name: string, enabled: boolean) {
-        const fd = new FormData();
-        fd.set("name", name);
-        fd.set("enabled", String(enabled));
-        const res = await fetch("?/setProfileEnabled", { method: "POST", body: fd });
-        const result = deserialize(await res.text());
-        if (result.type === "success") {
-            const cp = customProfiles.find((p) => p.name === name);
-            if (cp) cp.enabled = enabled;
+        try {
+            await gqlClient<{ setProfileEnabled: unknown }>(SET_PROFILE_ENABLED, { name, enabled });
+            const data = await gqlClient<{ customProfiles: CustomProfile[] }>(
+                CUSTOM_PROFILES_QUERY
+            );
+            customProfiles = data.customProfiles ?? customProfiles;
             toast.success(`Profile "${name}" ${enabled ? "enabled" : "disabled"}`);
-        } else {
+        } catch {
             toast.error("Failed to update profile");
         }
     }
 
     async function deleteCustomProfile(id: number, name: string) {
-        const fd = new FormData();
-        fd.set("id", String(id));
-        const res = await fetch("?/deleteCustomProfile", { method: "POST", body: fd });
-        const result = deserialize(await res.text());
-        if (result.type === "success") {
+        try {
+            await gqlClient<{ deleteCustomProfile: unknown }>(DELETE_CUSTOM_PROFILE, { id });
             customProfiles = customProfiles.filter((p) => p.id !== id);
             toast.success(`Profile "${name}" deleted`);
-        } else {
+        } catch {
             toast.error("Failed to delete profile");
         }
     }
@@ -214,6 +227,7 @@
                     bind:rank
                     {qualityProfiles}
                     bind:customProfiles
+                    bind:activeProfileName
                     bind:newProfileName
                     bind:savingProfile
                     {saveAsProfile}
