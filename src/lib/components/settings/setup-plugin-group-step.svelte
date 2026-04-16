@@ -58,7 +58,7 @@
                     <Card.Content class="px-5 pt-0 pb-0">
                         <p class="text-muted-foreground text-sm">
                             v{pluginView.plugin.version}
-                            {#if pluginView.badge.label !== "Disabled"}
+                            {#if pluginView.badge.label !== "Inactive"}
                                 · {pluginView.badge.label.toLowerCase()}{/if}
                         </p>
                     </Card.Content>

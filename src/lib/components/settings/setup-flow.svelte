@@ -18,7 +18,9 @@
     import SetupWelcomeStep from "./setup-welcome-step.svelte";
     import type { CustomProfile, PluginInfo, SetupData } from "./types";
 
-    type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+    type ActionResult<T> =
+        | { ok: true; data: T; redirect?: string }
+        | { ok: false; error: string };
 
     let { data }: { data: SetupData } = $props();
     const initialState = untrack(() =>
@@ -113,6 +115,10 @@
 
             if (result.type === "success") {
                 return { ok: true, data: (result.data ?? {}) as T };
+            }
+
+            if (result.type === "redirect") {
+                return { ok: true, data: {} as T, redirect: result.location };
             }
 
             const error =
@@ -236,7 +242,7 @@
             return;
         }
 
-        await goto(resolve("/"));
+        await goto(result.redirect ?? resolve("/"));
     }
 </script>
 

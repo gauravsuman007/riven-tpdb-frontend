@@ -31,7 +31,7 @@ export function pluginStatus(plugin: PluginInfo): {
     label: string;
     variant: "default" | "secondary";
 } {
-    if (!plugin.enabled) return { label: "Disabled", variant: "secondary" };
+    if (!plugin.enabled) return { label: "Inactive", variant: "secondary" };
     if (plugin.valid) return { label: "Active", variant: "default" };
     return { label: "Invalid", variant: "secondary" };
 }
