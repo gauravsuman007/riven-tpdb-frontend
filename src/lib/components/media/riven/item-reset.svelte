@@ -23,25 +23,47 @@
             | undefined;
         size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg" | undefined;
         class?: string;
+        onSuccess?: () => void | Promise<void>;
         children?: Snippet;
     }
-    let { title, ids, variant = "ghost", size = "sm", children, ...restProps }: Props = $props();
+    let {
+        title,
+        ids,
+        variant = "ghost",
+        size = "sm",
+        onSuccess,
+        children,
+        ...restProps
+    }: Props = $props();
 
-    async function resetMediaItem(ids: (string | null | undefined)[]) {
+    async function resetMediaItem(ids: (string | null | undefined)[]): Promise<boolean> {
         const validIds = ids
             .filter((id): id is string => id !== null && id !== undefined)
             .map(Number)
             .filter((n) => !isNaN(n));
 
+        if (validIds.length === 0) {
+            toast.error("No media item ID found to reset.");
+            return false;
+        }
+
         try {
-            await gqlClient<{ resetItems: number }>(
+            const result = await gqlClient<{ resetItems: number }>(
                 `mutation ResetItems($ids: [Int!]!) { resetItems(ids: $ids) }`,
                 { ids: validIds }
             );
-            toast.success("Media item reset successfully!");
+            if (result.resetItems > 0) {
+                toast.success("Media item reset successfully.");
+                await onSuccess?.();
+                return true;
+            }
+
+            toast.info("No matching media items were reset.");
+            return false;
         } catch (e) {
             logger.error("Error resetting items:", e);
             toast.error("Failed to reset media item.");
+            return false;
         }
     }
 
@@ -73,19 +95,21 @@
         </AlertDialog.Header>
         <AlertDialog.Footer>
             <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action
+            <Button
                 disabled={loading}
                 onclick={async () => {
                     loading = true;
-                    await resetMediaItem(ids);
+                    const success = await resetMediaItem(ids);
                     loading = false;
-                    open = false;
+                    if (success) {
+                        open = false;
+                    }
                 }}>
                 {#if loading}
                     <Loader2 class="mr-1 inline-block animate-spin" />
                 {/if}
                 Reset
-            </AlertDialog.Action>
+            </Button>
         </AlertDialog.Footer>
     </AlertDialog.Content>
 </AlertDialog.Root>

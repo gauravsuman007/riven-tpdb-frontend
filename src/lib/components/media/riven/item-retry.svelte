@@ -23,25 +23,47 @@
             | undefined;
         size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg" | undefined;
         class?: string;
+        onSuccess?: () => void | Promise<void>;
         children?: Snippet;
     }
-    let { title, ids, variant = "ghost", size = "sm", children, ...restProps }: Props = $props();
+    let {
+        title,
+        ids,
+        variant = "ghost",
+        size = "sm",
+        onSuccess,
+        children,
+        ...restProps
+    }: Props = $props();
 
-    async function retryMediaItem(ids: (string | null | undefined)[]) {
+    async function retryMediaItem(ids: (string | null | undefined)[]): Promise<boolean> {
         const validIds = ids
             .filter((id): id is string => id !== null && id !== undefined)
             .map(Number)
             .filter((n) => !isNaN(n));
 
+        if (validIds.length === 0) {
+            toast.error("No media item ID found to retry.");
+            return false;
+        }
+
         try {
-            await gqlClient<{ retryItems: number }>(
+            const result = await gqlClient<{ retryItems: number }>(
                 `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
                 { ids: validIds }
             );
-            toast.success("Media item retry queued successfully!");
+            if (result.retryItems > 0) {
+                toast.success("Media item marked for retry.");
+                await onSuccess?.();
+                return true;
+            }
+
+            toast.info("No matching media items were marked for retry.");
+            return false;
         } catch (e) {
             logger.error("Error retrying items:", e);
             toast.error("Failed to retry media item.");
+            return false;
         }
     }
 
@@ -73,19 +95,21 @@
         </AlertDialog.Header>
         <AlertDialog.Footer>
             <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action
+            <Button
                 disabled={loading}
                 onclick={async () => {
                     loading = true;
-                    await retryMediaItem(ids);
+                    const success = await retryMediaItem(ids);
                     loading = false;
-                    open = false;
+                    if (success) {
+                        open = false;
+                    }
                 }}>
                 {#if loading}
                     <Loader2 class="mr-1 inline-block animate-spin" />
                 {/if}
                 Retry
-            </AlertDialog.Action>
+            </Button>
         </AlertDialog.Footer>
     </AlertDialog.Content>
 </AlertDialog.Root>

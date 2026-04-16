@@ -37,6 +37,8 @@
     import {
         MEDIA_ITEM_FULL_BY_TMDB_QUERY,
         MEDIA_ITEM_FULL_BY_TVDB_QUERY,
+        RAW_RIVEN_DATA_BY_TMDB_QUERY,
+        RAW_RIVEN_DATA_BY_TVDB_QUERY,
         MEDIA_ITEM_STATE_BY_TMDB_QUERY,
         MEDIA_ITEM_STATE_BY_TVDB_QUERY,
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
@@ -78,8 +80,16 @@
     let rivenPending = $state(Boolean(data.rivenPending));
     let completedDetailsHydrating = false;
     let completedDetailsHydrated = false;
+    let rawDataOpen = $state(false);
+    let rawRivenLoading = $state(false);
+    let rawRivenError = $state<string | undefined>(undefined);
+    let rawRivenData = $state<unknown>(undefined);
 
     const riven = $derived(liveRiven ?? hydratedRiven);
+    const rawRivenDisplayData = $derived(
+        rawRivenData ?? (rawRivenLoading ? undefined : (hydratedRiven ?? riven))
+    );
+    const rawRivenJson = $derived(JSON.stringify(rawRivenDisplayData, null, 2));
 
     let expectedCounts = $state<GqlExpectedCounts | undefined>(undefined);
     let expectedCountsItemId = $state<number | undefined>(undefined);
@@ -116,6 +126,20 @@
                 0
             ) ?? 0
         );
+    });
+
+    const totalFileCount = $derived.by(() => {
+        if (!riven) return 0;
+        if (data.mediaDetails?.type === "movie") {
+            return expectedCounts?.expectedFileCount ?? 1;
+        }
+
+        const seasonTotal =
+            expectedCounts?.seasons?.reduce((total, season) => {
+                return total + season.expectedFileCount;
+            }, 0) ?? 0;
+
+        return Math.max(seasonTotal, expectedCounts?.expectedFileCount ?? 0, completedFileCount);
     });
 
     function getInitialSeason() {
@@ -234,6 +258,10 @@
         completedDetailsHydrating = false;
         expectedCounts = undefined;
         expectedCountsItemId = undefined;
+        rawDataOpen = false;
+        rawRivenLoading = false;
+        rawRivenError = undefined;
+        rawRivenData = undefined;
     });
 
     $effect(() => {
@@ -436,6 +464,26 @@
         return null;
     }
 
+    function getRawDataRequest() {
+        if (data.mediaDetails?.type === "movie") {
+            return {
+                query: RAW_RIVEN_DATA_BY_TMDB_QUERY,
+                variables: { tmdbId: page.params.id },
+                resultKey: "mediaItemFullByTmdb" as const
+            };
+        }
+
+        if (data.mediaDetails?.type === "tv" && data.resolvedTvdbId != null) {
+            return {
+                query: RAW_RIVEN_DATA_BY_TVDB_QUERY,
+                variables: { tvdbId: data.resolvedTvdbId.toString() },
+                resultKey: "mediaItemFullByTvdb" as const
+            };
+        }
+
+        return null;
+    }
+
     function needsCompletedDetailsHydration(item: RivenMediaItem | undefined) {
         if (!item || item.state !== "Completed" || hydratedRiven) {
             return false;
@@ -480,6 +528,40 @@
         } catch {
         } finally {
             completedDetailsHydrating = false;
+        }
+    }
+
+    async function fetchRawRivenData() {
+        if (rawRivenLoading || rawRivenData) {
+            return;
+        }
+
+        const request = getRawDataRequest();
+
+        if (!request) {
+            return;
+        }
+
+        rawRivenLoading = true;
+        rawRivenError = undefined;
+
+        try {
+            const payload = await gqlClient<{
+                mediaItemFullByTmdb?: unknown;
+                mediaItemFullByTvdb?: unknown;
+            }>(request.query, request.variables);
+            const raw = payload[request.resultKey];
+
+            if (raw) {
+                rawRivenData = raw;
+            } else {
+                rawRivenError = "No full Riven data was returned for this item.";
+            }
+        } catch (error) {
+            rawRivenError =
+                error instanceof Error ? error.message : "Failed to load full Riven data.";
+        } finally {
+            rawRivenLoading = false;
         }
     }
 
@@ -563,6 +645,14 @@
         }
 
         void hydrateCompletedDetails();
+    });
+
+    $effect(() => {
+        if (!browser || !rawDataOpen) {
+            return;
+        }
+
+        void fetchRawRivenData();
     });
 
     // When the current show gets indexed (via background queue or indexShow mutation),
@@ -764,10 +854,10 @@
                                     class="px-3 py-1.5 text-sm font-medium"
                                     state={riven.state} />
                             {/if}
-                            {#if expectedCounts?.expectedFileCount != null && expectedCounts.expectedFileCount > 0}
+                            {#if totalFileCount > 0}
                                 <span
                                     class="text-muted-foreground border-border rounded-full border px-3 py-1.5 text-sm font-medium tabular-nums">
-                                    {completedFileCount}/{expectedCounts.expectedFileCount} files
+                                    {completedFileCount}/{totalFileCount} files
                                 </span>
                             {/if}
                         </div>
@@ -809,7 +899,8 @@
                                     variant="secondary"
                                     class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
                                     title={data.mediaDetails?.details.title}
-                                    ids={rivenId ? [rivenId.toString()] : []}>
+                                    ids={rivenId ? [rivenId.toString()] : []}
+                                    onSuccess={hydrateInitialState}>
                                     <RotateCcw class="mr-1.5 h-4 w-4" />
                                     Reset
                                 </ItemReset>
@@ -818,7 +909,8 @@
                                     variant="secondary"
                                     class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
                                     title={data.mediaDetails?.details.title}
-                                    ids={rivenId ? [rivenId.toString()] : []}>
+                                    ids={rivenId ? [rivenId.toString()] : []}
+                                    onSuccess={hydrateInitialState}>
                                     <RefreshCw class="mr-1.5 h-4 w-4" />
                                     Retry
                                 </ItemRetry>
@@ -879,7 +971,7 @@
                                     Delete
                                 </ItemDelete>
 
-                                <Dialog.Root>
+                                <Dialog.Root bind:open={rawDataOpen}>
                                     <Dialog.Trigger>
                                         {#snippet child({ props })}
                                             <Button
@@ -899,19 +991,25 @@
                                         </Dialog.Header>
                                         <div
                                             class="bg-muted/50 max-h-100 overflow-auto rounded-lg p-4">
-                                            <pre
-                                                class="font-mono text-xs break-all whitespace-pre-wrap text-green-400">{JSON.stringify(
-                                                    riven,
-                                                    null,
-                                                    2
-                                                )}</pre>
+                                            {#if rawRivenLoading && !rawRivenData}
+                                                <p class="text-muted-foreground text-sm">
+                                                    Loading full Riven data...
+                                                </p>
+                                            {:else if rawRivenError}
+                                                <p class="text-destructive text-sm">
+                                                    {rawRivenError}
+                                                </p>
+                                            {/if}
+                                            {#if rawRivenJson}
+                                                <pre
+                                                    class="font-mono text-xs break-all whitespace-pre-wrap text-green-400">{rawRivenJson}</pre>
+                                            {/if}
                                         </div>
                                         <Button
                                             variant="outline"
+                                            disabled={!rawRivenJson}
                                             onclick={() => {
-                                                navigator.clipboard.writeText(
-                                                    JSON.stringify(riven, null, 2)
-                                                );
+                                                navigator.clipboard.writeText(rawRivenJson);
                                                 toast.success("Copied!");
                                             }}>Copy JSON</Button>
                                     </Dialog.Content>

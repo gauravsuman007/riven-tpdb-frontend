@@ -98,6 +98,41 @@ const MEDIA_ITEM_FULL_FIELDS = `
     }
 `;
 
+const RAW_FILESYSTEM_ENTRY_FIELDS = `
+    id fileSize createdAt updatedAt mediaItemId entryType path
+    originalFilename downloadUrl streamUrl plugin provider providerDownloadId
+    libraryProfiles mediaMetadata language parentOriginalFilename subtitleContent
+    fileHash videoFileSize opensubtitlesId streamId resolution rankingProfileName
+`;
+
+const RAW_MEDIA_ITEM_FULL_FIELDS = `
+    id title fullTitle state imdbId tmdbId tvdbId posterPath
+    createdAt updatedAt indexedAt scrapedAt scrapedTimes
+    aliases network country language isAnime airedAt year genres rating contentRating
+    failedAttempts itemType isRequested showStatus seasonNumber isSpecial parentId
+    episodeNumber absoluteNumber runtime itemRequestId activeStreamId
+    filesystemEntry {
+        ${RAW_FILESYSTEM_ENTRY_FIELDS}
+    }
+    filesystemEntries {
+        ${RAW_FILESYSTEM_ENTRY_FIELDS}
+    }
+    seasons {
+        id title seasonNumber isSpecial parentId createdAt updatedAt indexedAt scrapedAt
+        scrapedTimes failedAttempts itemType state isRequested
+        episodes {
+            id title episodeNumber absoluteNumber runtime airedAt parentId createdAt updatedAt
+            indexedAt scrapedAt scrapedTimes failedAttempts itemType state isRequested
+            filesystemEntry {
+                ${RAW_FILESYSTEM_ENTRY_FIELDS}
+            }
+            filesystemEntries {
+                ${RAW_FILESYSTEM_ENTRY_FIELDS}
+            }
+        }
+    }
+`;
+
 const MEDIA_ITEM_STATE_FIELDS = `
     id state imdbId tmdbId tvdbId expectedFileCount
     seasons {
@@ -117,6 +152,18 @@ export const MEDIA_ITEM_FULL_BY_TMDB_QUERY = `query($tmdbId: String!) {
 export const MEDIA_ITEM_FULL_BY_TVDB_QUERY = `query($tvdbId: String!) {
     mediaItemFullByTvdb(tvdbId: $tvdbId) {
         ${MEDIA_ITEM_FULL_FIELDS}
+    }
+}`;
+
+export const RAW_RIVEN_DATA_BY_TMDB_QUERY = `query($tmdbId: String!) {
+    mediaItemFullByTmdb(tmdbId: $tmdbId) {
+        ${RAW_MEDIA_ITEM_FULL_FIELDS}
+    }
+}`;
+
+export const RAW_RIVEN_DATA_BY_TVDB_QUERY = `query($tvdbId: String!) {
+    mediaItemFullByTvdb(tvdbId: $tvdbId) {
+        ${RAW_MEDIA_ITEM_FULL_FIELDS}
     }
 }`;
 

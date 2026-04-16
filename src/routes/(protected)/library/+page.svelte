@@ -357,8 +357,14 @@
                     {@render actionButton("Reset", { component: ListChecks }, async () => {
                         actionInProgress = true;
                         try {
-                            await reset_items({ ids: itemsStore.items.map((id) => id.toString()) });
-                            toast.success(`Reset ${itemsStore.count} items`);
+                            const result = await reset_items({
+                                ids: itemsStore.items.map((id) => id.toString())
+                            });
+                            if (result.count > 0) {
+                                toast.success(`Reset ${result.count} items`);
+                            } else {
+                                toast.info("No matching items were reset");
+                            }
                             itemsStore.clear();
                             await invalidate(LIBRARY_ITEMS_DEPENDENCY);
                         } catch (e) {
@@ -372,8 +378,14 @@
                     {@render actionButton("Retry", { component: Loading2Circle }, async () => {
                         actionInProgress = true;
                         try {
-                            await retry_items({ ids: itemsStore.items.map((id) => id.toString()) });
-                            toast.success(`Retrying ${itemsStore.count} items`);
+                            const result = await retry_items({
+                                ids: itemsStore.items.map((id) => id.toString())
+                            });
+                            if (result.count > 0) {
+                                toast.success(`Marked ${result.count} items for retry`);
+                            } else {
+                                toast.info("No matching items were marked for retry");
+                            }
                             itemsStore.clear();
                             await invalidate(LIBRARY_ITEMS_DEPENDENCY);
                         } catch (e) {

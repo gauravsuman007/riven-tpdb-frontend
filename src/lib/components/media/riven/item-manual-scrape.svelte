@@ -16,6 +16,7 @@
 
     interface Props {
         title: string | null | undefined;
+        itemId: string | null;
         externalId: string;
         mediaType: "tv" | "movie";
         variant?: "ghost" | "default" | "link" | "destructive" | "outline" | "secondary";
@@ -30,7 +31,12 @@
         title: string;
         infoHash: string;
         magnet: string;
-        parsedData?: { resolution?: string; quality?: string; audio?: string[]; languages?: string[] } | null;
+        parsedData?: {
+            resolution?: string;
+            quality?: string;
+            audio?: string[];
+            languages?: string[];
+        } | null;
         rank?: number | null;
         fileSizeBytes?: number | null;
         isCached: boolean;
@@ -59,6 +65,7 @@
 
     let {
         title,
+        itemId,
         externalId,
         mediaType,
         variant = "ghost",
@@ -81,14 +88,23 @@
     let downloadingKey = $state<string | null>(null);
 
     const hasSeasonSelector = $derived(mediaType === "tv" && seasons.length > 0);
-    const visibleStreams = $derived(cachedOnly ? streams.filter((stream) => stream.isCached) : streams);
-    const resolvedTmdbId = $derived(mediaType === "movie" ? (clean(customTmdbId) ?? externalId) : null);
-    const resolvedTvdbId = $derived(mediaType === "tv" ? (clean(customTvdbId) ?? externalId) : null);
+    const visibleStreams = $derived(
+        cachedOnly ? streams.filter((stream) => stream.isCached) : streams
+    );
+    const resolvedTmdbId = $derived(
+        mediaType === "movie" ? (clean(customTmdbId) ?? externalId) : null
+    );
+    const resolvedTvdbId = $derived(
+        mediaType === "tv" ? (clean(customTvdbId) ?? externalId) : null
+    );
     const cleanedHash = $derived(clean(explicitHash));
+    const hadExistingItem = $derived(Boolean(itemId));
 
     function formatBytes(value?: number | null) {
         if (!value) return "Unknown size";
-        return value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(0)} MB`;
+        return value >= 1024 ** 3
+            ? `${(value / 1024 ** 3).toFixed(2)} GB`
+            : `${(value / 1024 ** 2).toFixed(0)} MB`;
     }
 
     function shortHash(value: string) {
@@ -118,32 +134,42 @@
         selectedSeasons = seasons.map((season) => season.season_number).sort((a, b) => a - b);
     }
 
-    async function submitDownload(key: string, vars: {
-        itemType: "MOVIE" | "SEASON";
-        seasonNumber: number | null;
-        infoHash: string;
-        magnet: string;
-        parsedData?: StreamCandidate["parsedData"];
-        rank?: number | null;
-    }) {
+    async function submitDownload(
+        key: string,
+        vars: {
+            itemType: "MOVIE" | "SEASON";
+            seasonNumber: number | null;
+            infoHash: string;
+            magnet: string;
+            parsedData?: StreamCandidate["parsedData"];
+            rank?: number | null;
+        }
+    ) {
         downloadingKey = key;
         error = null;
 
         try {
-            await gqlClient<{ downloadDiscoveredStream: string }>(DOWNLOAD_DISCOVERED_STREAM_MUTATION, {
-                itemType: vars.itemType,
-                title: title ?? "Unknown",
-                imdbId: null,
-                tmdbId: resolvedTmdbId,
-                tvdbId: resolvedTvdbId,
-                seasonNumber: vars.seasonNumber,
-                infoHash: vars.infoHash,
-                magnet: vars.magnet,
-                parsedData: vars.parsedData ?? null,
-                rank: vars.rank ?? null
-            });
+            await gqlClient<{ downloadDiscoveredStream: string }>(
+                DOWNLOAD_DISCOVERED_STREAM_MUTATION,
+                {
+                    itemType: vars.itemType,
+                    title: title ?? "Unknown",
+                    imdbId: null,
+                    tmdbId: resolvedTmdbId,
+                    tvdbId: resolvedTvdbId,
+                    seasonNumber: vars.seasonNumber,
+                    infoHash: vars.infoHash,
+                    magnet: vars.magnet,
+                    parsedData: vars.parsedData ?? null,
+                    rank: vars.rank ?? null
+                }
+            );
 
-            toast.success("Stream queued for download");
+            toast.success(
+                hadExistingItem
+                    ? "Stream queued for download"
+                    : "Item created and stream queued for download"
+            );
             open = false;
             await invalidateAll();
         } catch (e) {
@@ -159,15 +185,18 @@
         error = null;
 
         try {
-            const data = await gqlClient<{ discoverStreams: StreamCandidate[] }>(DISCOVER_STREAMS_MUTATION, {
-                itemType: mediaType === "movie" ? "MOVIE" : "SHOW",
-                title: title ?? "Unknown",
-                imdbId: null,
-                tmdbId: resolvedTmdbId,
-                tvdbId: resolvedTvdbId,
-                seasons: hasSeasonSelector ? selectedSeasons : null,
-                cachedOnly
-            });
+            const data = await gqlClient<{ discoverStreams: StreamCandidate[] }>(
+                DISCOVER_STREAMS_MUTATION,
+                {
+                    itemType: mediaType === "movie" ? "MOVIE" : "SHOW",
+                    title: title ?? "Unknown",
+                    imdbId: null,
+                    tmdbId: resolvedTmdbId,
+                    tvdbId: resolvedTvdbId,
+                    seasons: hasSeasonSelector ? selectedSeasons : null,
+                    cachedOnly
+                }
+            );
 
             streams = data.discoverStreams ?? [];
             toast.success(streams.length ? "Streams found" : "No streams found");
@@ -206,7 +235,8 @@
             itemType: mediaType === "movie" ? "MOVIE" : "SEASON",
             seasonNumber: mediaType === "tv" ? selectedSeasons[0] : null,
             infoHash: cleanedHash,
-            magnet: `magnet:?xt=urn:btih:${cleanedHash}`
+            magnet: `magnet:?xt=urn:btih:${cleanedHash}`,
+            parsedData: null
         });
     }
 
@@ -223,7 +253,8 @@
             <Button {variant} {size} {...restProps} {...props}>{@render children?.()}</Button>
         {/snippet}
     </Dialog.Trigger>
-    <Dialog.Content class="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden border-white/10 bg-zinc-950/95 backdrop-blur-xl sm:max-h-[80vh]">
+    <Dialog.Content
+        class="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden border-white/10 bg-zinc-950/95 backdrop-blur-xl sm:max-h-[80vh]">
         <Dialog.Header>
             <Dialog.Title>Manual Scrape</Dialog.Title>
             <Dialog.Description>
@@ -232,7 +263,10 @@
         </Dialog.Header>
 
         {#if error}
-            <p class="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>
+            <p
+                class="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {error}
+            </p>
         {/if}
 
         <div class="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -240,9 +274,13 @@
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div class="space-y-2">
-                            <p class="text-base font-semibold text-white">{title ?? "Unknown item"}</p>
+                            <p class="text-base font-semibold text-white">
+                                {title ?? "Unknown item"}
+                            </p>
                             <p class="text-xs text-zinc-400">
-                                {mediaType === "movie" ? "Movie discovery" : "Season pack discovery"}
+                                {mediaType === "movie"
+                                    ? "Movie discovery"
+                                    : "Season pack discovery"}
                             </p>
                             <button
                                 type="button"
@@ -253,8 +291,7 @@
                                 }`}
                                 onclick={() => {
                                     cachedOnly = !cachedOnly;
-                                }}
-                            >
+                                }}>
                                 Cached only {cachedOnly ? "On" : "Off"}
                             </button>
                             <button
@@ -262,12 +299,14 @@
                                 class="inline-flex w-fit items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
                                 onclick={() => {
                                     advancedOpen = !advancedOpen;
-                                }}
-                            >
+                                }}>
                                 Advanced {advancedOpen ? "Hide" : "Show"}
                             </button>
                         </div>
-                        <Button onclick={discoverStreams} disabled={loading || (hasSeasonSelector && selectedSeasons.length === 0)}>
+                        <Button
+                            onclick={discoverStreams}
+                            disabled={loading ||
+                                (hasSeasonSelector && selectedSeasons.length === 0)}>
                             {#if loading}
                                 <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
                             {:else}
@@ -280,8 +319,12 @@
                     {#if hasSeasonSelector}
                         <div class="mt-4 space-y-2">
                             <Label>Seasons</Label>
-                            <div class="max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-2">
-                                <SeasonSelector {seasons} selectedSeasons={selectedSeasons} onToggle={toggleSeason} />
+                            <div
+                                class="max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-2">
+                                <SeasonSelector
+                                    {seasons}
+                                    {selectedSeasons}
+                                    onToggle={toggleSeason} />
                             </div>
                         </div>
                     {/if}
@@ -289,8 +332,15 @@
                     {#if advancedOpen}
                         <div class="mt-4 grid gap-3 md:grid-cols-2">
                             <div class="space-y-2">
-                                <Label>{mediaType === "movie" ? "Custom TMDB ID" : "Custom TVDB ID"}</Label>
-                                {#if mediaType === "movie"}<Input bind:value={customTmdbId} placeholder={externalId} />{:else}<Input bind:value={customTvdbId} placeholder={externalId} />{/if}
+                                <Label
+                                    >{mediaType === "movie"
+                                        ? "Custom TMDB ID"
+                                        : "Custom TVDB ID"}</Label>
+                                {#if mediaType === "movie"}<Input
+                                        bind:value={customTmdbId}
+                                        placeholder={externalId} />{:else}<Input
+                                        bind:value={customTvdbId}
+                                        placeholder={externalId} />{/if}
                             </div>
                             <div class="space-y-2">
                                 <Label>Explicit Stream Hash</Label>
@@ -300,8 +350,12 @@
                     {/if}
                     {#if cleanedHash}
                         <div class="mt-4 flex justify-end">
-                            <Button variant="outline" onclick={downloadExplicitHash} disabled={downloadingKey !== null}>
-                                {#if downloadingKey === `manual:${cleanedHash}`}<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />{/if}
+                            <Button
+                                variant="outline"
+                                onclick={downloadExplicitHash}
+                                disabled={downloadingKey !== null}>
+                                {#if downloadingKey === `manual:${cleanedHash}`}<LoaderCircle
+                                        class="mr-2 h-4 w-4 animate-spin" />{/if}
                                 Download Explicit Hash
                             </Button>
                         </div>
@@ -312,13 +366,16 @@
                     <div class="mb-4 flex items-center justify-between gap-3">
                         <div>
                             <p class="text-sm font-semibold text-white">Stream Candidates</p>
-                            <p class="text-xs text-zinc-400">Fresh discovery results from the scraper plugins.</p>
+                            <p class="text-xs text-zinc-400">
+                                Fresh discovery results from the scraper plugins.
+                            </p>
                         </div>
                         <Badge variant="outline">{visibleStreams.length} found</Badge>
                     </div>
 
                     {#if !visibleStreams.length}
-                        <div class="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-400">
+                        <div
+                            class="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-400">
                             {#if loading}
                                 <LoaderCircle class="mx-auto mb-3 h-5 w-5 animate-spin" />
                                 Waiting for backend results...
@@ -333,43 +390,65 @@
                             <div class="space-y-3">
                                 {#each visibleStreams as stream (stream.key)}
                                     <div class="rounded-xl border border-white/10 bg-black/20 p-4">
-                                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                        <div
+                                            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                             <div class="min-w-0 space-y-2">
                                                 <div class="flex flex-wrap gap-2">
                                                     {#if stream.seasonNumber != null}
-                                                        <Badge variant="outline">Season {stream.seasonNumber}</Badge>
+                                                        <Badge variant="outline"
+                                                            >Season {stream.seasonNumber}</Badge>
                                                     {/if}
-                                                    <Badge variant={stream.isCached ? "default" : "outline"}>
+                                                    <Badge
+                                                        variant={stream.isCached
+                                                            ? "default"
+                                                            : "outline"}>
                                                         {stream.isCached ? "Cached" : "Uncached"}
                                                     </Badge>
-                                                    <Badge>{stream.parsedData?.resolution ?? "Unknown"}</Badge>
+                                                    <Badge
+                                                        >{stream.parsedData?.resolution ??
+                                                            "Unknown"}</Badge>
                                                     {#if stream.parsedData?.quality}
-                                                        <Badge variant="outline">{stream.parsedData.quality}</Badge>
+                                                        <Badge variant="outline"
+                                                            >{stream.parsedData.quality}</Badge>
                                                     {/if}
                                                     {#if stream.rank != null}
-                                                        <Badge variant="outline">Rank {stream.rank}</Badge>
+                                                        <Badge variant="outline"
+                                                            >Rank {stream.rank}</Badge>
                                                     {/if}
                                                 </div>
-                                                <p class="truncate text-sm text-zinc-200">{stream.title}</p>
-                                                <p class="truncate text-xs text-zinc-400">{shortHash(stream.infoHash)}</p>
+                                                <p class="truncate text-sm text-zinc-200">
+                                                    {stream.title}
+                                                </p>
+                                                <p class="truncate text-xs text-zinc-400">
+                                                    {shortHash(stream.infoHash)}
+                                                </p>
                                             </div>
-                                            <div class="flex flex-wrap gap-2 text-xs text-zinc-400 md:justify-end">
+                                            <div
+                                                class="flex flex-wrap gap-2 text-xs text-zinc-400 md:justify-end">
                                                 <span class="inline-flex items-center gap-1">
                                                     <HardDrive class="h-3.5 w-3.5" />
                                                     {formatBytes(stream.fileSizeBytes)}
                                                 </span>
                                                 {#if stream.parsedData?.audio?.length}
-                                                    <span>{stream.parsedData.audio.join(", ")}</span>
+                                                    <span
+                                                        >{stream.parsedData.audio.join(", ")}</span>
                                                 {/if}
                                                 {#if stream.parsedData?.languages?.length}
-                                                    <span>{stream.parsedData.languages.join(", ").toUpperCase()}</span>
+                                                    <span
+                                                        >{stream.parsedData.languages
+                                                            .join(", ")
+                                                            .toUpperCase()}</span>
                                                 {/if}
                                             </div>
                                         </div>
                                         <div class="mt-3 flex justify-end">
-                                            <Button size="sm" onclick={() => downloadStream(stream)} disabled={downloadingKey !== null}>
+                                            <Button
+                                                size="sm"
+                                                onclick={() => downloadStream(stream)}
+                                                disabled={downloadingKey !== null}>
                                                 {#if downloadingKey === stream.key}
-                                                    <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
+                                                    <LoaderCircle
+                                                        class="mr-2 h-4 w-4 animate-spin" />
                                                 {/if}
                                                 Download This
                                             </Button>
@@ -383,7 +462,8 @@
             </div>
         </div>
 
-        <div class="mt-5 flex shrink-0 items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <div
+            class="mt-5 flex shrink-0 items-center justify-between gap-3 border-t border-white/10 pt-4">
             <Button variant="outline" onclick={() => (open = false)}>
                 <ChevronLeft class="mr-2 h-4 w-4" />
                 Close
