@@ -2,6 +2,7 @@ import { command } from "$app/server";
 import { z } from "zod";
 import { gql } from "$lib/graphql-client";
 import { getRequestEvent } from "$app/server";
+import { buildBackendRoleHeaders, requireLibraryAccess } from "$lib/server/rbac";
 
 const itemIdsSchema = z.object({
     ids: z.array(z.string())
@@ -28,6 +29,7 @@ const REMOVE_MUTATION = `
 export const reset_items = command(itemIdsSchema, async ({ ids }) => {
     const event = getRequestEvent();
     if (!event) throw new Error("No event found");
+    requireLibraryAccess(event.locals.user);
 
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
@@ -37,7 +39,9 @@ export const reset_items = command(itemIdsSchema, async ({ ids }) => {
         backendUrl,
         apiKey,
         RESET_MUTATION,
-        { ids: numericIds }
+        { ids: numericIds },
+        undefined,
+        buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)
     );
 
     return { success: true, count: data.resetItems };
@@ -46,6 +50,7 @@ export const reset_items = command(itemIdsSchema, async ({ ids }) => {
 export const retry_items = command(itemIdsSchema, async ({ ids }) => {
     const event = getRequestEvent();
     if (!event) throw new Error("No event found");
+    requireLibraryAccess(event.locals.user);
 
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
@@ -55,7 +60,9 @@ export const retry_items = command(itemIdsSchema, async ({ ids }) => {
         backendUrl,
         apiKey,
         RETRY_MUTATION,
-        { ids: numericIds }
+        { ids: numericIds },
+        undefined,
+        buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)
     );
 
     return { success: true, count: data.retryItems };
@@ -64,6 +71,7 @@ export const retry_items = command(itemIdsSchema, async ({ ids }) => {
 export const remove_items = command(itemIdsSchema, async ({ ids }) => {
     const event = getRequestEvent();
     if (!event) throw new Error("No event found");
+    requireLibraryAccess(event.locals.user);
 
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
@@ -73,7 +81,9 @@ export const remove_items = command(itemIdsSchema, async ({ ids }) => {
         backendUrl,
         apiKey,
         REMOVE_MUTATION,
-        { ids: numericIds }
+        { ids: numericIds },
+        undefined,
+        buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)
     );
 
     return { success: true, count: data.removeItems };

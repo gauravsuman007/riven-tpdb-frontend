@@ -10,6 +10,7 @@
     import type { CollectionDetails } from "$lib/providers/parser";
     import { type Snippet } from "svelte";
     import { resolve } from "$app/paths";
+    import { page } from "$app/state";
 
     const logger = createScopedLogger("collection-sheet");
 
@@ -197,7 +198,7 @@
             <Sheet.Footer class="border-t border-white/5 bg-black/20 p-6 backdrop-blur-md">
                 <Button
                     onclick={requestAll}
-                    disabled={requestLoading}
+                    disabled={requestLoading || !page.data.permissions?.canRequestItems}
                     variant="secondary"
                     class="border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 w-full border shadow-lg backdrop-blur-md transition-all hover:scale-[1.02]">
                     {#if requestLoading}

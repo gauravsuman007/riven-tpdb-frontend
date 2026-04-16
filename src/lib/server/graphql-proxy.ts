@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "@sveltejs/kit";
+import { buildBackendRoleHeaders } from "./rbac";
 
 export const proxyGraphql: RequestHandler = async ({ locals, request }) => {
     const body = await request.text();
@@ -9,6 +10,11 @@ export const proxyGraphql: RequestHandler = async ({ locals, request }) => {
             "Content-Type": request.headers.get("content-type") ?? "application/json",
             "x-api-key": locals.apiKey
         });
+        for (const [key, value] of Object.entries(
+            buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
+        )) {
+            headers.set(key, value);
+        }
         const accept = request.headers.get("accept");
 
         if (accept) {

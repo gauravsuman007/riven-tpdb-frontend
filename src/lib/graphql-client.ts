@@ -140,13 +140,15 @@ export async function gql<T>(
     apiKey: string,
     query: string,
     variables?: Record<string, unknown>,
-    fetchFn: typeof fetch = fetch
+    fetchFn: typeof fetch = fetch,
+    extraHeaders?: HeadersInit
 ): Promise<T> {
     const response = await fetchFn(`${backendUrl}/graphql`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKey
+            "x-api-key": apiKey,
+            ...(extraHeaders ?? {})
         },
         body: JSON.stringify({ query, variables: variables ?? {} })
     });

@@ -5,6 +5,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import Loader2 from "@lucide/svelte/icons/loader-2";
     import { createScopedLogger } from "$lib/logger";
+    import { page } from "$app/state";
 
     const logger = createScopedLogger("item-pause");
 
@@ -61,6 +62,7 @@
     let loading = $state(false);
 </script>
 
+{#if page.data.permissions?.canManageLibrary}
 <AlertDialog.Root bind:open>
     <AlertDialog.Trigger>
         {#snippet child({ props })}
@@ -101,3 +103,4 @@
         </AlertDialog.Footer>
     </AlertDialog.Content>
 </AlertDialog.Root>
+{/if}

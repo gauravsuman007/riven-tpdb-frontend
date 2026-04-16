@@ -6,11 +6,13 @@ import {
     isInitialSetupPhase
 } from "$lib/server/first-launch";
 import { actions as settingsActions, load as settingsLoad } from "../settings/+page.server";
+import { requireSettingsAccess } from "$lib/server/rbac";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
         return redirect(302, "/auth/login");
     }
+    requireSettingsAccess(event.locals.user);
 
     const initialSetupPhase = await isInitialSetupPhase();
     const setupComplete = await isFirstLaunchSetupComplete(
@@ -28,7 +30,14 @@ export const load: PageServerLoad = async (event) => {
 export const actions = {
     ...(settingsActions as unknown as Record<string, never>),
     completeSetup: async ({ fetch, locals }) => {
-        await markFirstLaunchSetupComplete(locals.backendUrl, locals.apiKey, fetch);
+        requireSettingsAccess(locals.user);
+        await markFirstLaunchSetupComplete(
+            locals.backendUrl,
+            locals.apiKey,
+            fetch,
+            locals.user,
+            locals.backendAuthSigningSecret
+        );
         return redirect(303, "/");
     }
 } satisfies Actions;

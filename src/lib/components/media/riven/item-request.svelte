@@ -7,6 +7,7 @@
     import SeasonSelector, { type SeasonInfo } from "./season-selector.svelte";
     import { createScopedLogger } from "$lib/logger";
     import { type Snippet } from "svelte";
+    import { page } from "$app/state";
 
     const logger = createScopedLogger("item-request");
 
@@ -140,48 +141,50 @@
     }
 </script>
 
-<AlertDialog.Root bind:open>
-    <AlertDialog.Trigger>
-        {#snippet child({ props })}
-            <Button {variant} {size} class={className} {...restProps} {...props}>
-                {#if children}
-                    {@render children()}
-                {:else}
-                    {buttonLabel}
-                {/if}
-            </Button>
-        {/snippet}
-    </AlertDialog.Trigger>
-    <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
-        <AlertDialog.Header>
-            <AlertDialog.Title>Requesting "{title ?? "Media Item"}"</AlertDialog.Title>
-            <AlertDialog.Description>
-                This will send a request to Riven to add this media.
-            </AlertDialog.Description>
-        </AlertDialog.Header>
+{#if page.data.permissions?.canRequestItems}
+    <AlertDialog.Root bind:open>
+        <AlertDialog.Trigger>
+            {#snippet child({ props })}
+                <Button {variant} {size} class={className} {...restProps} {...props}>
+                    {#if children}
+                        {@render children()}
+                    {:else}
+                        {buttonLabel}
+                    {/if}
+                </Button>
+            {/snippet}
+        </AlertDialog.Trigger>
+        <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
+            <AlertDialog.Header>
+                <AlertDialog.Title>Requesting "{title ?? "Media Item"}"</AlertDialog.Title>
+                <AlertDialog.Description>
+                    This will send a request to Riven to add this media.
+                </AlertDialog.Description>
+            </AlertDialog.Header>
 
-        {#if mediaType === "tv" && seasons.length > 0}
-            <SeasonSelector
-                {seasons}
-                selectedSeasons={selectedSeasonNums}
-                onToggle={toggleSeason}
-                class="my-4" />
-        {:else}
-            <div class="text-muted-foreground py-4 text-sm">
-                This request will be approved automatically.
-            </div>
-        {/if}
+            {#if mediaType === "tv" && seasons.length > 0}
+                <SeasonSelector
+                    {seasons}
+                    selectedSeasons={selectedSeasonNums}
+                    onToggle={toggleSeason}
+                    class="my-4" />
+            {:else}
+                <div class="text-muted-foreground py-4 text-sm">
+                    This request will be approved automatically.
+                </div>
+            {/if}
 
-        <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <!-- Plain Button instead of AlertDialog.Action — Action auto-closes the dialog
-                 before onclick fires, which would race against the async request. -->
-            <Button disabled={confirmDisabled} onclick={handleConfirm}>
-                {#if loading}
-                    <Loader2 class="mr-1 inline-block animate-spin" />
-                {/if}
-                {mediaType === "tv" && seasons.length > 0 ? "Request Selected" : "Request"}
-            </Button>
-        </AlertDialog.Footer>
-    </AlertDialog.Content>
-</AlertDialog.Root>
+            <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <!-- Plain Button instead of AlertDialog.Action — Action auto-closes the dialog
+                     before onclick fires, which would race against the async request. -->
+                <Button disabled={confirmDisabled} onclick={handleConfirm}>
+                    {#if loading}
+                        <Loader2 class="mr-1 inline-block animate-spin" />
+                    {/if}
+                    {mediaType === "tv" && seasons.length > 0 ? "Request Selected" : "Request"}
+                </Button>
+            </AlertDialog.Footer>
+        </AlertDialog.Content>
+    </AlertDialog.Root>
+{/if}

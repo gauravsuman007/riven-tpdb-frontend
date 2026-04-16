@@ -13,6 +13,7 @@
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
     import HardDrive from "@lucide/svelte/icons/hard-drive";
     import SeasonSelector, { type SeasonInfo } from "./season-selector.svelte";
+    import { page } from "$app/state";
 
     interface Props {
         title: string | null | undefined;
@@ -247,6 +248,7 @@
     });
 </script>
 
+{#if page.data.permissions?.canManageLibrary}
 <Dialog.Root bind:open>
     <Dialog.Trigger>
         {#snippet child({ props })}
@@ -471,3 +473,4 @@
         </div>
     </Dialog.Content>
 </Dialog.Root>
+{/if}

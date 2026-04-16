@@ -1,4 +1,5 @@
 import { gql } from "$lib/graphql-client";
+import { buildBackendRoleHeaders } from "./rbac";
 import { getUsersCount } from "./functions";
 
 const INSTANCE_STATUS_QUERY = `query { instanceStatus { setupCompleted } }`;
@@ -33,7 +34,16 @@ export async function isFirstLaunchSetupComplete(
 export async function markFirstLaunchSetupComplete(
     backendUrl: string,
     apiKey: string,
-    fetchFn: typeof fetch
+    fetchFn: typeof fetch,
+    user: { id?: string | null; role?: string | null },
+    backendAuthSigningSecret: string
 ) {
-    await gql(backendUrl, apiKey, COMPLETE_INITIAL_SETUP, {}, fetchFn);
+    await gql(
+        backendUrl,
+        apiKey,
+        COMPLETE_INITIAL_SETUP,
+        {},
+        fetchFn,
+        buildBackendRoleHeaders(user, backendAuthSigningSecret)
+    );
 }

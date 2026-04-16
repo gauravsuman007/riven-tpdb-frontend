@@ -9,6 +9,7 @@
     import SetPasswordForm from "$lib/components/auth/set-password-form.svelte";
     import AccountLinks from "$lib/components/auth/account-links.svelte";
     import UpdateUserForm from "$lib/components/auth/update-user-form.svelte";
+    import UserManagement from "$lib/components/auth/user-management.svelte";
     import * as dateUtils from "$lib/utils/date";
     import { getInitials } from "$lib/utils";
     import * as Avatar from "$lib/components/ui/avatar/index.js";
@@ -69,6 +70,12 @@
 
         <UpdateUserForm data={data.changeUserDataForm} />
     </div>
+
+    {#if data.permissions.canManageSettings}
+        <div class="mt-8">
+            <UserManagement formData={data.createUserForm} users={data.managedUsers} />
+        </div>
+    {/if}
 
     <div class="mt-8">
         <AccountLinks accounts={data.accounts} providers={data.authProviders} />

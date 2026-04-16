@@ -23,21 +23,31 @@
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
+    import { getPermissionFlags } from "$lib/permissions";
 
-    const navItems = [
+    const navItems: Array<{
+        href: string;
+        icon: typeof Home;
+        label: string;
+        adminOnly?: boolean;
+    }> = [
         { href: "/", icon: Home, label: "Home" },
         { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { href: "/library", icon: Library, label: "Library" },
         { href: "/explore", icon: Search, label: "Explore" },
         { href: "/calendar", icon: CalendarDays, label: "Calendar" },
         { href: "/auth", icon: User, label: "Profile" },
-        { href: "/settings", icon: Settings, label: "Settings" },
+        { href: "/settings", icon: Settings, label: "Settings", adminOnly: true },
         { href: "/logs", icon: FileClock, label: "Logs" }
-    ] as const;
+    ];
 
     let { user } = $props();
+    const permissions = $derived(getPermissionFlags(user?.role));
+    const visibleNavItems = $derived(
+        navItems.filter((item) => !item.adminOnly || permissions.canManageSettings)
+    );
 
-    const SidebarStore = getContext<ReturnType<typeof createSidebarStore>>("sidebarStore");
+    const SidebarStore = getContext<createSidebarStore>("sidebarStore");
 </script>
 
 <aside
@@ -48,18 +58,16 @@
         </div>
     </div>
     <nav class="mt-4 flex flex-col items-center gap-3.5" aria-label="Main Navigation">
-        {#each navItems as item (item.href)}
+        {#each visibleNavItems as item (item.href)}
             <Tooltip>
                 {#snippet trigger()}
                     <a
                         data-sveltekit-preload-data={item.label === "Settings" ? "off" : "hover"}
-                        href={resolve(item.href)}
+                        href={item.href}
                         class="hover:bg-accent/80 group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors"
-                        class:bg-accent={page.url.pathname === resolve(item.href)}
+                        class:bg-accent={page.url.pathname === item.href}
                         aria-label={item.label}
-                        aria-current={page.url.pathname === resolve(item.href)
-                            ? "page"
-                            : undefined}>
+                        aria-current={page.url.pathname === item.href ? "page" : undefined}>
                         <item.icon class="size-5" />
                     </a>
                 {/snippet}
@@ -200,15 +208,13 @@
             {/if}
 
             <nav class="flex flex-col gap-1" aria-label="Mobile Navigation">
-                {#each navItems as item (item.href)}
+                {#each visibleNavItems as item (item.href)}
                     <a
-                        href={resolve(item.href)}
+                        href={item.href}
                         onclick={() => SidebarStore.toggle()}
                         class="hover:text-foreground flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/10
-						{page.url.pathname === resolve(item.href) ? 'text-primary bg-white/10' : 'text-muted-foreground'}"
-                        aria-current={page.url.pathname === resolve(item.href)
-                            ? "page"
-                            : undefined}>
+						{page.url.pathname === item.href ? 'text-primary bg-white/10' : 'text-muted-foreground'}"
+                        aria-current={page.url.pathname === item.href ? "page" : undefined}>
                         <item.icon class="size-4" />
                         <span>{item.label}</span>
                     </a>
