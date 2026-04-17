@@ -3,7 +3,6 @@
     import { gqlClient } from "$lib/graphql-client";
     import { cn } from "$lib/utils";
     import type { PageData } from "./$types";
-    import * as Card from "$lib/components/ui/card/index.js";
     import ActivityCard from "$lib/components/dashboard/activity-card.svelte";
     import LibraryChartsCard from "$lib/components/dashboard/library-charts-card.svelte";
     import ReleaseYearCard from "$lib/components/dashboard/release-year-card.svelte";
@@ -40,24 +39,20 @@
     const kpiCards = $derived.by(() => [
         {
             title: "Total Items",
-            value: statistics?.total_items.toLocaleString(),
-            sub: "All indexed items"
+            value: statistics?.total_items.toLocaleString()
         },
         {
             title: "Completed",
-            value: statistics?.states.Completed?.toLocaleString(),
-            sub: "Fully processed"
+            value: statistics?.states.Completed?.toLocaleString()
         },
         {
             title: "Incomplete",
             value: statistics?.incomplete_items.toLocaleString(),
-            sub: "Pending processing",
             tone: "warning" as const
         },
         {
             title: "Completion Rate",
-            value: completionRate,
-            sub: "Completed / Total"
+            value: completionRate
         }
     ]);
 
@@ -186,46 +181,36 @@
 {#snippet KPICard({
     title,
     value,
-    sub,
     tone = "default"
 }: {
     title: string;
     value: string | undefined;
-    sub?: string;
     tone?: "default" | "warning";
 })}
-    <Card.Root class={cn("", tone === "warning" && "border-amber-600/30")}>
-        <Card.Header class="pb-2">
-            <Card.Title class="text-sm font-medium text-neutral-300">{title}</Card.Title>
-        </Card.Header>
-        <Card.Content>
-            <div
-                class={cn(
-                    "text-2xl font-semibold tracking-tight",
-                    tone === "warning" ? "text-amber-300" : "text-neutral-50"
-                )}>
-                {value}
-            </div>
-            {#if sub}
-                <p class="mt-1 text-sm text-neutral-400">{sub}</p>
-            {/if}
-        </Card.Content>
-    </Card.Root>
+    <div class={cn("border-border/60 border-b py-5", tone === "warning" && "border-amber-600/30")}>
+        <p class="text-sm font-medium text-neutral-300">{title}</p>
+        <div
+            class={cn(
+                "mt-3 text-2xl font-semibold tracking-tight",
+                tone === "warning" ? "text-amber-300" : "text-neutral-50"
+            )}>
+            {value}
+        </div>
+    </div>
 {/snippet}
 
-<PageShell>
-    <h1 class="mb-8 text-3xl font-bold tracking-tight">Media Library Statistics</h1>
+<PageShell class="mx-auto w-full max-w-7xl">
+    <header class="border-border/60 border-b pb-6">
+        <h1 class="text-3xl font-bold tracking-tight">Media Library Statistics</h1>
+    </header>
 
-    <section class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <section class="grid grid-cols-1 gap-x-10 gap-y-4 py-2 md:grid-cols-2 lg:grid-cols-4">
         {#each kpiCards as card (card.title)}
             {@render KPICard(card)}
         {/each}
     </section>
 
-    <section class="mb-8 grid grid-cols-1 gap-4">
-        <ActivityCard activity={statistics?.activity ?? {}} />
-    </section>
-
+    <ActivityCard activity={statistics?.activity ?? {}} />
     <LibraryChartsCard {statistics} />
     <ReleaseYearCard data={statistics?.media_year_releases ?? []} />
     <ServiceStatusCard statuses={serviceStatuses} />

@@ -1,8 +1,7 @@
 <script lang="ts">
-    import * as Card from "$lib/components/ui/card/index.js";
     import * as Chart from "$lib/components/ui/chart/index.js";
     import ResponsiveChartContainer from "$lib/components/media/riven/responsive-chart-container.svelte";
-    import { BarChart, PieChart } from "layerchart";
+    import { PieChart } from "layerchart";
     import type { DashboardStatistics } from "./types";
 
     let { statistics }: { statistics: DashboardStatistics | undefined } = $props();
@@ -12,6 +11,7 @@
             .filter(([, value]) => value > 0)
             .map(([label, value]) => ({ label, value }))
     );
+    const maxStateValue = $derived.by(() => Math.max(...stateRows.map((item) => item.value), 1));
 
     const contentRows = $derived.by(() =>
         !statistics
@@ -29,10 +29,10 @@
     );
 </script>
 
-{#snippet Rows({ items }: { items: { label: string; value: number; color?: string }[] })}
-    <div class="mt-auto pt-4">
+{#snippet LegendRows({ items }: { items: { label: string; value: number; color?: string }[] })}
+    <div class="space-y-3">
         {#each items as item (item.label)}
-            <div class="mt-4 flex items-center gap-2 first:mt-0">
+            <div class="flex items-center gap-2">
                 {#if item.color}
                     <span
                         class="inline-block h-3 w-3 shrink-0 rounded-sm"
@@ -47,36 +47,33 @@
     </div>
 {/snippet}
 
-<section class="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-    <Card.Root class="flex h-full flex-col">
-        <Card.Header class="pb-2">
-            <Card.Title class="text-sm font-medium text-neutral-300">Library States</Card.Title>
-        </Card.Header>
-        <Card.Content class="flex flex-1 flex-col">
-            <ResponsiveChartContainer config={{}} class="min-h-[300px] w-full flex-1">
-                <BarChart
-                    data={stateRows}
-                    x="label"
-                    y="value"
-                    c="label"
-                    labels
-                    padding={{ top: 16, bottom: 32, left: 32, right: 16 }}
-                    props={{ bars: { class: "fill-primary" } }}>
-                    {#snippet tooltip()}
-                        <Chart.Tooltip />
-                    {/snippet}
-                </BarChart>
-            </ResponsiveChartContainer>
-            {@render Rows({ items: stateRows })}
-        </Card.Content>
-    </Card.Root>
+<section class="border-border/60 grid gap-12 border-b py-8 lg:grid-cols-2">
+    <div class="min-w-0">
+        <h2 class="text-base font-semibold">Library States</h2>
 
-    <Card.Root class="flex h-full flex-col">
-        <Card.Header class="pb-2">
-            <Card.Title class="text-sm font-medium text-neutral-300">Content Breakdown</Card.Title>
-        </Card.Header>
-        <Card.Content class="flex flex-1 flex-col">
-            <ResponsiveChartContainer config={{}} class="min-h-[300px] w-full flex-1">
+        <div class="mt-6 space-y-5">
+            {#each stateRows as item (item.label)}
+                <div>
+                    <div class="mb-1 flex items-center justify-between gap-3 text-sm">
+                        <span class="text-neutral-300">{item.label}</span>
+                        <span class="font-mono text-neutral-50">{item.value.toLocaleString()}</span>
+                    </div>
+                    <div class="bg-muted h-2 overflow-hidden rounded-full">
+                        <div
+                            class="bg-primary h-full rounded-full"
+                            style={`width: ${(item.value / maxStateValue) * 100}%`}>
+                        </div>
+                    </div>
+                </div>
+            {/each}
+        </div>
+    </div>
+
+    <div class="min-w-0">
+        <h2 class="text-base font-semibold">Content Breakdown</h2>
+
+        <div class="mt-6 grid items-center gap-6 sm:grid-cols-[14rem_minmax(0,1fr)]">
+            <ResponsiveChartContainer config={{}} class="mx-auto h-56 w-56">
                 <PieChart
                     data={contentRows}
                     key="label"
@@ -91,7 +88,7 @@
                     {/snippet}
                 </PieChart>
             </ResponsiveChartContainer>
-            {@render Rows({ items: contentRows })}
-        </Card.Content>
-    </Card.Root>
+            {@render LegendRows({ items: contentRows })}
+        </div>
+    </div>
 </section>
