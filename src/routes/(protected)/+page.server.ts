@@ -4,6 +4,14 @@ import providers from "$lib/providers";
 import { transformTMDBList, type TMDBListItem } from "$lib/providers/parser";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
+import { gql } from "$lib/graphql-client";
+import {
+    getRecentItemsVariables,
+    mapRecentItemsPage,
+    RECENT_ITEMS_QUERY,
+    type RecentListItem,
+    type RecentItemsResponse
+} from "$lib/services/recent-items";
 
 const logger = createScopedLogger("home");
 
@@ -19,21 +27,30 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
             }
         });
 
-        const recentlyAddedRes = await fetch("/api/library/recent");
-        const recentlyAddedJson = recentlyAddedRes.ok
-            ? await recentlyAddedRes.json()
-            : { items: [] };
-        const recentlyAdded = recentlyAddedJson.items || [];
+        let recentlyAdded: RecentListItem[] = [];
+        try {
+            const recentData = await gql<RecentItemsResponse>(
+                locals.backendUrl,
+                locals.apiKey,
+                RECENT_ITEMS_QUERY,
+                getRecentItemsVariables(),
+                fetch
+            );
+            recentlyAdded = mapRecentItemsPage(recentData).items;
+        } catch (err) {
+            logger.error("Error fetching recently added data:", err);
+        }
 
         // Filter to only movies and TV shows with backdrops
-        const filtered = (data?.results ?? []).filter(
-            (item: any) =>
+        const tmdbResults = (data?.results ?? []) as TMDBListItem[];
+        const filtered = tmdbResults.filter(
+            (item) =>
                 (item.media_type === "movie" || item.media_type === "tv") && item.backdrop_path
         );
 
         return {
-            nowPlaying: transformTMDBList(filtered as TMDBListItem[], "movie", "original"),
-            recentlyAdded: (recentlyAdded || []) as any[]
+            nowPlaying: transformTMDBList(filtered, "movie", "original"),
+            recentlyAdded
         };
     } catch (err) {
         logger.error("Error fetching now playing data:", err);

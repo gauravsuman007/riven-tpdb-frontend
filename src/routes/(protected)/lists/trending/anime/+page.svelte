@@ -5,10 +5,10 @@
     import { onMount } from "svelte";
     import PageShell from "$lib/components/page-shell.svelte";
 
-    const anilistTrendingStore = new MediaListStore<BaseListItem>(
-        "anilistTrending",
-        "/api/anilist/trending"
-    );
+    const anilistTrendingStore = new MediaListStore<BaseListItem>({
+        key: "anilistTrending",
+        apiPath: "/api/anilist/trending"
+    });
     let loadMoreTrigger: HTMLDivElement;
 
     onMount(() => {

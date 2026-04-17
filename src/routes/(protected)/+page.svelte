@@ -9,6 +9,14 @@
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
+    import { gqlClient } from "$lib/graphql-client";
+    import {
+        getRecentItemsVariables,
+        mapRecentItemsPage,
+        RECENT_ITEMS_QUERY,
+        type RecentListItem,
+        type RecentItemsResponse
+    } from "$lib/services/recent-items";
 
     let { data }: { data: PageData } = $props();
 
@@ -16,26 +24,32 @@
         "text-muted-foreground border-white/10 bg-black/20 hover:bg-black/40 hover:text-foreground h-9 w-24 rounded-xl border text-xs font-bold backdrop-blur-md shadow-inner transition-all";
 
     // svelte-ignore state_referenced_locally
-    const recentlyAddedStore = new MediaListStore<BaseListItem>(
-        "recentlyAdded",
-        "/api/library/recent",
-        null,
-        { noCache: true, initialData: data.recentlyAdded }
-    );
-    const trendingMoviesStore = new MediaListStore<BaseListItem>(
-        "trendingMovies",
-        "/api/tmdb/movie",
-        "day"
-    );
-    const trendingShowsStore = new MediaListStore<BaseListItem>(
-        "trendingShows",
-        "/api/tmdb/tv",
-        "day"
-    );
-    const anilistTrendingStore = new MediaListStore<BaseListItem>(
-        "anilistTrending",
-        "/api/anilist/trending"
-    );
+    const recentlyAddedStore = new MediaListStore<RecentListItem>({
+        key: "recentlyAdded",
+        noCache: true,
+        initialData: data.recentlyAdded,
+        loader: async (page) => {
+            const recentData = await gqlClient<RecentItemsResponse>(
+                RECENT_ITEMS_QUERY,
+                getRecentItemsVariables(page)
+            );
+            return mapRecentItemsPage(recentData);
+        }
+    });
+    const trendingMoviesStore = new MediaListStore<BaseListItem>({
+        key: "trendingMovies",
+        apiPath: "/api/tmdb/movie",
+        initialTimeWindow: "day"
+    });
+    const trendingShowsStore = new MediaListStore<BaseListItem>({
+        key: "trendingShows",
+        apiPath: "/api/tmdb/tv",
+        initialTimeWindow: "day"
+    });
+    const anilistTrendingStore = new MediaListStore<BaseListItem>({
+        key: "anilistTrending",
+        apiPath: "/api/anilist/trending"
+    });
 
     $effect(() => {
         return subscribeToMediaUpdates(() => recentlyAddedStore.refresh());
