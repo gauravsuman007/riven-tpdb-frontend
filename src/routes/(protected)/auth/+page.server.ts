@@ -27,6 +27,12 @@ type ManagedUser = {
     createdAt?: Date | string | number | null;
 };
 
+function toIsoDateString(date: Date | string | number): string {
+    if (date instanceof Date) return date.toISOString();
+    if (typeof date === "number") return new Date(date).toISOString();
+    return date;
+}
+
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
         return redirect(302, "/auth/login");
@@ -61,8 +67,18 @@ export const load: PageServerLoad = async (event) => {
         : [];
 
     return {
-        user: event.locals.user,
-        session: event.locals.session,
+        user: {
+            ...event.locals.user,
+            role: normalizeUserRole(event.locals.user.role),
+            createdAt: toIsoDateString(event.locals.user.createdAt),
+            updatedAt: toIsoDateString(event.locals.user.updatedAt)
+        },
+        session: {
+            ...event.locals.session,
+            createdAt: toIsoDateString(event.locals.session.createdAt),
+            updatedAt: toIsoDateString(event.locals.session.updatedAt),
+            expiresAt: toIsoDateString(event.locals.session.expiresAt)
+        },
         permissions,
         authProviders: getAuthProviders(),
         accounts,
@@ -257,5 +273,36 @@ export const actions: Actions = {
         }
 
         return message(createUserForm, "User created successfully.");
+    },
+    deleteManagedUser: async ({ request, locals }) => {
+        if (!getPermissionFlags(locals.user.role).canManageSettings) {
+            return fail(403, { message: "Forbidden" });
+        }
+
+        const formData = await request.formData();
+        const userId = String(formData.get("userId") ?? "");
+
+        if (!userId) {
+            return fail(400, { message: "User id is required." });
+        }
+
+        if (userId === locals.user.id) {
+            return fail(400, { message: "Use Delete Account to remove your own user." });
+        }
+
+        try {
+            await auth.api.removeUser({
+                body: { userId },
+                headers: request.headers
+            });
+        } catch (error) {
+            if (error instanceof APIError) {
+                return fail(400, { message: error.message });
+            }
+            logger.error("Error deleting user:", error);
+            return fail(500, { message: "An unexpected error occurred" });
+        }
+
+        return { message: "User deleted successfully." };
     }
 };
