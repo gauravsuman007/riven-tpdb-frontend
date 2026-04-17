@@ -108,18 +108,18 @@
     });
 </script>
 
-<PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden">
-    <!-- Immersive Background -->
-    <div class="pointer-events-none fixed inset-0 z-0">
-        <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
-        <div
-            class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
-        </div>
-        <div
-            class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
-        </div>
+<!-- Immersive Background -->
+<div class="pointer-events-none fixed inset-0 z-0">
+    <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
+    <div
+        class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
     </div>
+    <div
+        class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
+    </div>
+</div>
 
+<PageShell class="relative z-10 flex min-h-screen flex-col overflow-x-hidden bg-transparent">
     <div class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-8">
         <!-- Header Section -->
         <header class="flex flex-col justify-between gap-6 pt-32 md:flex-row md:items-end md:pt-0">
