@@ -36,6 +36,9 @@ export function pluginStatus(plugin: PluginInfo): {
     return { label: "Invalid", variant: "secondary" };
 }
 
+export const settingsSwitchClass =
+    "data-[state=checked]:bg-primary data-[state=unchecked]:bg-input dark:data-[state=unchecked]:bg-input/80 [&_[data-slot=switch-thumb]]:translate-x-0 [&_[data-state=checked][data-slot=switch-thumb]]:translate-x-[calc(100%-2px)] rtl:[&_[data-state=checked][data-slot=switch-thumb]]:-translate-x-[calc(100%-2px)] dark:[&_[data-state=unchecked][data-slot=switch-thumb]]:bg-foreground dark:[&_[data-state=checked][data-slot=switch-thumb]]:bg-primary-foreground";
+
 export function detectShape(v: unknown): Shape {
     if (typeof v === "boolean") return "boolean";
     if (typeof v === "number") return "number";

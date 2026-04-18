@@ -3,6 +3,7 @@
     import { Label } from "$lib/components/ui/label/index.js";
     import * as Select from "$lib/components/ui/select/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
+    import { settingsSwitchClass } from "./helpers";
     import SettingFieldEditor from "./setting-field-editor.svelte";
     import type { SettingFieldDef } from "./types";
 
@@ -319,7 +320,10 @@
                     <p class="text-muted-foreground text-sm">{field.description}</p>
                 {/if}
             </div>
-            <Switch checked={!!value} onCheckedChange={(next) => (value = next)} />
+            <Switch
+                class={settingsSwitchClass}
+                checked={!!value}
+                onCheckedChange={(next) => (value = next)} />
         </div>
     {:else if field.type === "nullable_boolean"}
         <div class="space-y-2">

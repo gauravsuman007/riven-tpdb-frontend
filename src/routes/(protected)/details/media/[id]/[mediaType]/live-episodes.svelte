@@ -416,7 +416,8 @@
                 </Sheet.Trigger>
                 <Sheet.Content
                     side="right"
-                    class="flex w-full flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 backdrop-blur-2xl sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
+                    style="width: min(calc(100vw - 1rem), 46rem); max-width: min(calc(100vw - 1rem), 46rem);"
+                    class="data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[side=right]:data-[state=open]:slide-in-from-right-10 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[side=right]:data-[state=closed]:slide-out-to-right-10 flex h-full w-full max-w-[min(100vw-1rem,46rem)] flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 backdrop-blur-2xl duration-300 ease-out">
                     <Sheet.Header class="px-6 pt-6">
                         <Sheet.Title class="font-heading text-2xl font-bold tracking-tight">
                             S{episode.seasonNumber}E{episode.number} - {episode.name}

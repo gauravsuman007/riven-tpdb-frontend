@@ -249,7 +249,7 @@
     <!-- Backdrop -->
     <div
         transition:fade={{ duration: skipTransition ? 0 : 200 }}
-        class="fixed inset-0 z-[70] bg-zinc-950/98 backdrop-blur-xl"
+        class="fixed inset-0 z-70 bg-zinc-950/98 backdrop-blur-xl"
         role="presentation">
     </div>
 
@@ -260,7 +260,7 @@
             duration: skipTransition ? 0 : 300,
             easing: cubicOut
         }}
-        class="fixed inset-0 z-[71] flex flex-col overflow-hidden"
+        class="fixed inset-0 z-71 flex flex-col overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-label="Search">

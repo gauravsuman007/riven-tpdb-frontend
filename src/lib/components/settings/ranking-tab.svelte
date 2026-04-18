@@ -7,7 +7,7 @@
     import { Label } from "$lib/components/ui/label/index.js";
     import { Separator } from "$lib/components/ui/separator/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
-    import { detectShape, toLabel } from "./helpers";
+    import { detectShape, settingsSwitchClass, toLabel } from "./helpers";
     import type { CustomProfile, QualityProfile } from "./types";
 
     type CustomRank = { fetch: boolean; rank?: number | null; default?: number };
@@ -171,6 +171,7 @@
                                         {selected ? "Editing" : "Edit"}
                                     </span>
                                     <Switch
+                                        class={settingsSwitchClass}
                                         checked={enabled}
                                         onCheckedChange={(next) =>
                                             setProfileEnabled(profile.id, next)} />
@@ -219,6 +220,7 @@
                                         </button>
                                     </span>
                                     <Switch
+                                        class={settingsSwitchClass}
                                         checked={profile.enabled}
                                         onCheckedChange={(next) =>
                                             setProfileEnabled(profile.name, next)} />
@@ -328,6 +330,7 @@
                                     class="bg-muted/30 flex items-center justify-between rounded-lg p-3">
                                     <Label class="cursor-pointer">{toLabel(subkey)}</Label>
                                     <Switch
+                                        class={settingsSwitchClass}
                                         checked={enabled}
                                         onCheckedChange={(v) =>
                                             ((rank[key] as Record<string, boolean>)[subkey] = v)} />
@@ -374,6 +377,7 @@
                                         <span class="min-w-0 truncate text-sm"
                                             >{toLabel(attr)}</span>
                                         <Switch
+                                            class={settingsSwitchClass}
                                             checked={cr.fetch}
                                             onCheckedChange={(v) => (cr.fetch = v)} />
                                         <Input
@@ -434,6 +438,7 @@
                                                             {toLabel(attr)}
                                                         </span>
                                                         <Switch
+                                                            class={settingsSwitchClass}
                                                             checked={cr.fetch}
                                                             onCheckedChange={(v) =>
                                                                 (cr.fetch = v)} />
@@ -465,6 +470,7 @@
                                         class="flex items-center justify-between rounded-lg border p-3">
                                         <Label>{toLabel(subkey)}</Label>
                                         <Switch
+                                            class={settingsSwitchClass}
                                             checked={!!subval}
                                             onCheckedChange={(v) =>
                                                 ((rank[key] as Record<string, unknown>)[subkey] =
@@ -529,7 +535,10 @@
                     {#if shape === "boolean"}
                         <div class="flex items-center justify-between rounded-lg border p-4">
                             <Label>{toLabel(key)}</Label>
-                            <Switch checked={!!value} onCheckedChange={(v) => (rank[key] = v)} />
+                            <Switch
+                                class={settingsSwitchClass}
+                                checked={!!value}
+                                onCheckedChange={(v) => (rank[key] = v)} />
                         </div>
                     {:else}
                         <div class="space-y-1.5">

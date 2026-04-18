@@ -1,4 +1,7 @@
 <script lang="ts">
+    import Eye from "@lucide/svelte/icons/eye";
+    import EyeOff from "@lucide/svelte/icons/eye-off";
+    import * as ButtonGroup from "$lib/components/ui/button-group/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
@@ -92,12 +95,20 @@
                         (event.currentTarget as HTMLInputElement).value
                     )} />
             {#if field.type === "password"}
-                <Button
-                    type="button"
-                    variant="outline"
-                    onclick={() => toggleReveal(pluginName, field.key)}>
-                    {revealed ? "Hide" : "Show"}
-                </Button>
+                <ButtonGroup.Root class="shrink-0">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={revealed ? "Hide password" : "Show password"}
+                        onclick={() => toggleReveal(pluginName, field.key)}>
+                        {#if revealed}
+                            <EyeOff />
+                        {:else}
+                            <Eye />
+                        {/if}
+                    </Button>
+                </ButtonGroup.Root>
             {/if}
         </div>
     {/if}

@@ -1,13 +1,16 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import { toast } from "svelte-sonner";
+    import Eye from "@lucide/svelte/icons/eye";
+    import EyeOff from "@lucide/svelte/icons/eye-off";
+    import * as ButtonGroup from "$lib/components/ui/button-group/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { Separator } from "$lib/components/ui/separator/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
-    import { pluginStatus } from "./helpers";
+    import { pluginStatus, settingsSwitchClass } from "./helpers";
     import type { PluginInfo, SettingFieldDef } from "./types";
 
     let {
@@ -116,6 +119,7 @@
                                         {#if f.type === "boolean"}
                                             <Switch
                                                 id="plg-{f.key}"
+                                                class={settingsSwitchClass}
                                                 checked={pluginFields[f.key] === "true"}
                                                 onCheckedChange={(v) =>
                                                     (pluginFields[f.key] = String(v))} />
@@ -169,30 +173,35 @@
                                                         ).value)}
                                                     class="flex-1" />
                                                 {#if f.type === "password"}
-                                                    <button
-                                                        type="button"
-                                                        class="text-muted-foreground hover:text-foreground shrink-0"
-                                                        aria-label={revealedFields.has(f.key)
-                                                            ? "Hide"
-                                                            : "Reveal"}
-                                                        onclick={() => {
-                                                            if (revealedFields.has(f.key)) {
-                                                                revealedFields = new Set(
-                                                                    [...revealedFields].filter(
-                                                                        (k) => k !== f.key
-                                                                    )
-                                                                );
-                                                            } else {
-                                                                revealedFields = new Set([
-                                                                    ...revealedFields,
-                                                                    f.key
-                                                                ]);
-                                                            }
-                                                        }}>
-                                                        {revealedFields.has(f.key)
-                                                            ? "Hide"
-                                                            : "Show"}
-                                                    </button>
+                                                    <ButtonGroup.Root class="shrink-0">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            aria-label={revealedFields.has(f.key)
+                                                                ? "Hide password"
+                                                                : "Show password"}
+                                                            onclick={() => {
+                                                                if (revealedFields.has(f.key)) {
+                                                                    revealedFields = new Set(
+                                                                        [...revealedFields].filter(
+                                                                            (k) => k !== f.key
+                                                                        )
+                                                                    );
+                                                                } else {
+                                                                    revealedFields = new Set([
+                                                                        ...revealedFields,
+                                                                        f.key
+                                                                    ]);
+                                                                }
+                                                            }}>
+                                                            {#if revealedFields.has(f.key)}
+                                                                <EyeOff />
+                                                            {:else}
+                                                                <Eye />
+                                                            {/if}
+                                                        </Button>
+                                                    </ButtonGroup.Root>
                                                 {/if}
                                             </div>
                                         {/if}
