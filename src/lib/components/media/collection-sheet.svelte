@@ -7,7 +7,7 @@
     import { gqlClient } from "$lib/graphql-client";
     import { createScopedLogger } from "$lib/logger";
     import { isMobileStore } from "$lib/stores/global.svelte";
-    import type { CollectionDetails } from "$lib/providers/parser";
+    import type { CollectionDetails } from "$lib/metadata/parser";
     import { type Snippet } from "svelte";
     import { resolve } from "$app/paths";
     import { page } from "$app/state";

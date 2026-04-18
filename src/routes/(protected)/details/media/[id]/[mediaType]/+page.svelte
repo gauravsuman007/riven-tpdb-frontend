@@ -2,7 +2,7 @@
     import { browser } from "$app/environment";
     import { page } from "$app/state";
     import { type PageProps } from "./$types";
-    import type { ParsedShowDetails } from "$lib/providers/parser";
+    import type { ParsedShowDetails } from "$lib/metadata/parser";
     import { fade, fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import * as Carousel from "$lib/components/ui/carousel/index.js";

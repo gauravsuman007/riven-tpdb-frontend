@@ -4,7 +4,7 @@
     import { cubicOut } from "svelte/easing";
     import { type CarouselAPI } from "$lib/components/ui/carousel/context.js";
     import Autoplay from "embla-carousel-autoplay";
-    import { TMDB_IMAGE_BASE_URL, TMDB_GENRES } from "$lib/providers";
+    import { TMDB_IMAGE_BASE_URL, TMDB_GENRES } from "$lib/indexer-constants";
     import { gqlClient } from "$lib/graphql-client";
     import { getSeasonAndYear } from "$lib/helpers";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -91,7 +91,9 @@
 
         const mediaType = item.media_type === "tv" ? "tv" : "movie";
         try {
-            const result = await gqlClient<{ tmdbLogoAndCert: { logo: string | null; certification: string | null } }>(
+            const result = await gqlClient<{
+                tmdbLogoAndCert: { logo: string | null; certification: string | null };
+            }>(
                 `query TmdbLogoAndCert($type: String!, $id: Int!) {
                     tmdbLogoAndCert(type: $type, id: $id) { logo certification }
                 }`,

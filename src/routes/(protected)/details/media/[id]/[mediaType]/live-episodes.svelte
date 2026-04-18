@@ -5,7 +5,7 @@
     import LandscapeCard from "$lib/components/media/landscape-card.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
     import { IsMobile } from "$lib/hooks/is-mobile.svelte";
-    import type { ParsedShowDetails } from "$lib/providers/parser";
+    import type { ParsedShowDetails } from "$lib/metadata/parser";
     import type { FilesystemEntry, MediaMetadata, RivenEpisode } from "$lib/types/riven";
 
     interface Props {

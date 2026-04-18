@@ -1,10 +1,10 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import providers from "$lib/providers";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
 import { resolveId } from "$lib/services/resolver";
 import * as dateUtils from "$lib/utils/date";
+import { fetchTmdbDetails } from "$lib/services/backend-metadata";
 
 const logger = createScopedLogger("ratings");
 
@@ -173,7 +173,7 @@ function findBestRTMatch(hits: RTAlgoliaHit[], title: string, year?: number): RT
     return scored[0]?.hit || null;
 }
 
-export const GET: RequestHandler = async ({ params, url, fetch, setHeaders }) => {
+export const GET: RequestHandler = async ({ params, url, fetch, setHeaders, locals }) => {
     const { tmdbId } = params;
     const mediaType = url.searchParams.get("type") as "movie" | "tv" | null;
     const customFetch = createCustomFetch(fetch);
@@ -194,60 +194,49 @@ export const GET: RequestHandler = async ({ params, url, fetch, setHeaders }) =>
 
     // SINGLE TMDB call with append_to_response
     try {
-        const tmdbData =
-            mediaType === "movie"
-                ? await providers.tmdb.GET("/3/movie/{movie_id}", {
-                      params: {
-                          path: { movie_id: Number(tmdbId) },
-                          query: { append_to_response: "external_ids" }
-                      },
-                      fetch: customFetch
-                  })
-                : await providers.tmdb.GET("/3/tv/{series_id}", {
-                      params: {
-                          path: { series_id: Number(tmdbId) },
-                          query: { append_to_response: "external_ids" }
-                      },
-                      fetch: customFetch
-                  });
-
-        if (tmdbData.data) {
-            const data = tmdbData.data as Record<string, unknown>;
-
-            // Get title and year for RT search
-            if (mediaType === "movie") {
-                title = (data.title as string) || null;
-                year = dateUtils.getYearFromISO(data.release_date as string) ?? undefined;
-            } else {
-                title = (data.name as string) || null;
-                year = dateUtils.getYearFromISO(data.first_air_date as string) ?? undefined;
-            }
-
-            // Add TMDB rating
-            const voteAverage = data.vote_average as number | undefined;
-            if (voteAverage && voteAverage > 0) {
-                tmdbScore = {
-                    name: "tmdb",
-                    image: "tmdb.svg",
-                    score: `${Math.round(voteAverage * 10)}%`,
-                    url: `https://www.themoviedb.org/${mediaType}/${tmdbId}`
-                };
-            }
-
-            // Get IMDB ID using the consolidated resolver
-            // Pass the already fetched data to avoid redundant API calls
-            const resolvedImdb = await resolveId({
-                from: "tmdb",
-                to: "imdb",
+        const data = await fetchTmdbDetails<Record<string, unknown>>(
+            { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+            {
+                type: mediaType,
                 id: Number(tmdbId),
-                mediaType,
-                customFetch,
-                data: data
-            });
-
-            if (resolvedImdb.resolved) {
-                imdbId = String(resolvedImdb.id);
+                appendToResponse: "external_ids"
             }
+        );
+
+        // Get title and year for RT search
+        if (mediaType === "movie") {
+            title = (data.title as string) || null;
+            year = dateUtils.getYearFromISO(data.release_date as string) ?? undefined;
+        } else {
+            title = (data.name as string) || null;
+            year = dateUtils.getYearFromISO(data.first_air_date as string) ?? undefined;
+        }
+
+        // Add TMDB rating
+        const voteAverage = data.vote_average as number | undefined;
+        if (voteAverage && voteAverage > 0) {
+            tmdbScore = {
+                name: "tmdb",
+                image: "tmdb.svg",
+                score: `${Math.round(voteAverage * 10)}%`,
+                url: `https://www.themoviedb.org/${mediaType}/${tmdbId}`
+            };
+        }
+
+        // Get IMDB ID using the consolidated resolver
+        const resolvedImdb = await resolveId({
+            from: "tmdb",
+            to: "imdb",
+            id: Number(tmdbId),
+            mediaType,
+            customFetch,
+            backendUrl: locals.backendUrl,
+            apiKey: locals.apiKey,
+            data
+        });
+
+        if (resolvedImdb.resolved) {
+            imdbId = String(resolvedImdb.id);
         }
     } catch (e) {
         logger.error("[ratings] TMDB fetch failed:", e);

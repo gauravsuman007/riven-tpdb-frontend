@@ -1,10 +1,16 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { getMediaDetails } from "$lib/providers/anilist";
-import { createCustomFetch } from "$lib/custom-fetch";
+import { gql } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("anilist-ratings");
+
+const ANILIST_RATING_QUERY = `query($id: Int!) {
+    anilistRating(id: $id) {
+        id
+        score
+    }
+}`;
 
 interface RatingScore {
     name: string;
@@ -12,28 +18,31 @@ interface RatingScore {
     score: number | string | null;
 }
 
-export const GET: RequestHandler = async ({ params, fetch }) => {
+export const GET: RequestHandler = async ({ params, fetch, locals }) => {
     const { anilistId } = params;
-    const customFetch = createCustomFetch(fetch);
 
     const scores: RatingScore[] = [];
 
     try {
-        // Fetch AniList rating
-        const mediaDetails = await getMediaDetails(Number(anilistId), customFetch);
+        const data = await gql<{
+            anilistRating: {
+                id: number;
+                score: number | null;
+            };
+        }>(
+            locals.backendUrl,
+            locals.apiKey,
+            ANILIST_RATING_QUERY,
+            { id: Number(anilistId) },
+            fetch
+        );
 
-        if (mediaDetails?.data?.Media) {
-            const { averageScore, meanScore } = mediaDetails.data.Media;
-
-            // AniList uses a 0-100 scale, convert to 0-10
-            const score = averageScore || meanScore;
-            if (score) {
-                scores.push({
-                    name: "anilist",
-                    image: "anilist.svg",
-                    score: Math.round(score) / 10
-                });
-            }
+        if (data.anilistRating.score) {
+            scores.push({
+                name: "anilist",
+                image: "anilist.svg",
+                score: data.anilistRating.score
+            });
         }
 
         // Filter out null scores

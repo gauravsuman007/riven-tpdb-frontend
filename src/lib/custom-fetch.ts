@@ -26,38 +26,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
     retryOnStatus: [408, 429, 500, 502, 503, 504]
 };
 
-const DEFAULT_DOMAIN_CONFIGS: DomainConfig[] = [
-    {
-        pattern: "api.themoviedb.org",
-        maxAttempts: 3,
-        baseDelay: 1000,
-        retryOnStatus: [429, 500, 502, 503, 504]
-    },
-    {
-        pattern: "api.trakt.tv",
-        maxAttempts: 3,
-        baseDelay: 1000,
-        retryOnStatus: [429, 500, 502, 503, 504]
-    },
-    {
-        pattern: "api4.thetvdb.com",
-        maxAttempts: 3,
-        baseDelay: 1000,
-        retryOnStatus: [429, 500, 502, 503, 504]
-    },
-    {
-        pattern: "graphql.anilist.co",
-        maxAttempts: 3,
-        baseDelay: 1000,
-        retryOnStatus: [429, 500, 502, 503, 504]
-    },
-    {
-        pattern: "api.ani.zip",
-        maxAttempts: 3,
-        baseDelay: 1000,
-        retryOnStatus: [429, 500, 502, 503, 504]
-    }
-];
+const DEFAULT_DOMAIN_CONFIGS: DomainConfig[] = [];
 
 function matchesDomain(url: string, pattern: string | RegExp): boolean {
     try {

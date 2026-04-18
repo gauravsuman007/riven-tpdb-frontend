@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from "$app/paths";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { cn } from "$lib/utils";
@@ -38,20 +39,21 @@
             (indexer === "tmdb" || indexer === "tvdb" || indexer === undefined) &&
             (normalizedType === "movie" || normalizedType === "tv")
         ) {
-            // Include indexer as query param when it's tvdb so details page knows to skip resolution
-            const params = new URLSearchParams();
-            if (indexer === "tvdb") params.set("indexer", "tvdb");
+            const params: string[] = [];
+            if (indexer === "tvdb") params.push("indexer=tvdb");
             if (data.details_query) {
-                const detailParams = new URLSearchParams(data.details_query);
-                detailParams.forEach((value, key) => params.set(key, value));
+                for (const [key, value] of Object.entries(data.details_query)) {
+                    params.push(
+                        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
+                    );
+                }
             }
-            const queryParam = params.toString() ? `?${params.toString()}` : "";
+            const queryParam = params.length > 0 ? `?${params.join("&")}` : "";
             // If indexer is undefined, assume tmdb behavior for now as default
             return `/details/media/${data.id}/${normalizedType}${queryParam}`;
         }
         return `/details/${indexer}${normalizedType ? `/${normalizedType}` : ""}/${data.id}`;
     });
-
     let subtitle = $derived.by(() => {
         const parts = [];
         if (data.media_type === "tv" || normalizedType === "tv") parts.push("TV");
@@ -95,8 +97,7 @@
 {/snippet}
 
 {#if mediaURL}
-    <!-- svelte-ignore svelte/no-navigation-without-resolve -->
-    <a href={mediaURL} class={containerClasses}>
+    <a href={resolve(mediaURL as never)} class={containerClasses}>
         {@render cardContent()}
     </a>
 {:else}

@@ -1,4 +1,4 @@
-import { TMDB_IMAGE_BASE_URL, TVDB_ARTWORK_BASE_URL } from "./index";
+import { TMDB_IMAGE_BASE_URL, TVDB_ARTWORK_BASE_URL } from "$lib/indexer-constants";
 import * as dateUtils from "$lib/utils/date";
 
 interface ParsedGenre {

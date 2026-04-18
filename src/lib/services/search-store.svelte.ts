@@ -1,9 +1,11 @@
 import { browser } from "$app/environment";
 import type { ParsedSearchQuery } from "$lib/search-parser";
+import { SvelteSet } from "svelte/reactivity";
 
 import { createScopedLogger } from "$lib/logger";
 import { gqlClient } from "$lib/graphql-client";
-import type { TMDBTransformedListItem } from "$lib/providers/parser";
+import type { TMDBTransformedListItem } from "$lib/metadata/parser";
+import { mapGqlTmdbList, type GqlTmdbListItem } from "$lib/services/backend-metadata";
 
 const logger = createScopedLogger("search");
 
@@ -15,27 +17,8 @@ export interface SearchResult {
     total_results: number;
 }
 
-interface GqlTmdbItem {
-    id: number;
-    title: string;
-    posterPath: string | null;
-    mediaType: string;
-    year: string;
-    voteAverage: number | null;
-    voteCount: number | null;
-    popularity: number | null;
-    overview: string | null;
-    backdropPath: string | null;
-    genreIds: number[];
-    releaseDate: string | null;
-    firstAirDate: string | null;
-    originalTitle: string | null;
-    originalLanguage: string | null;
-    indexer: string;
-}
-
 interface GqlTmdbPage {
-    results: GqlTmdbItem[];
+    results: GqlTmdbListItem[];
     page: number;
     totalPages: number;
     totalResults: number;
@@ -43,24 +26,7 @@ interface GqlTmdbPage {
 
 function mapTmdbPage(gql: GqlTmdbPage): SearchResult {
     return {
-        results: gql.results.map((item) => ({
-            id: item.id,
-            title: item.title,
-            poster_path: item.posterPath,
-            media_type: item.mediaType as TMDBTransformedListItem["media_type"],
-            year: item.year,
-            vote_average: item.voteAverage,
-            vote_count: item.voteCount,
-            popularity: item.popularity ?? undefined,
-            overview: item.overview,
-            backdrop_path: item.backdropPath,
-            genre_ids: item.genreIds,
-            release_date: item.releaseDate,
-            first_air_date: item.firstAirDate,
-            original_title: item.originalTitle,
-            original_language: item.originalLanguage,
-            indexer: "tmdb" as const
-        })),
+        results: mapGqlTmdbList(gql.results),
         page: gql.page,
         total_pages: gql.totalPages,
         total_results: gql.totalResults
@@ -359,7 +325,7 @@ export class SearchStore {
         newItems: TMDBTransformedListItem[],
         existingItems: TMDBTransformedListItem[] = []
     ): TMDBTransformedListItem[] {
-        const seenIds = new Set(existingItems.map((i) => i.id));
+        const seenIds = new SvelteSet(existingItems.map((i) => i.id));
         const uniqueItems: TMDBTransformedListItem[] = [];
 
         for (const item of newItems) {

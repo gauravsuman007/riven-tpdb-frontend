@@ -8,8 +8,9 @@
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { fly, fade } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
-    import type { TMDBTransformedListItem } from "$lib/providers/parser";
+    import type { TMDBTransformedListItem } from "$lib/metadata/parser";
     import { gqlClient } from "$lib/graphql-client";
+    import { mapGqlTmdbList, type GqlTmdbListItem } from "$lib/services/backend-metadata";
 
     interface Props {
         open: boolean;
@@ -35,6 +36,15 @@
     let hasMorePages = true;
     let currentQuery = "";
 
+    type SearchTmdbResponse = {
+        searchTmdb: {
+            results: GqlTmdbListItem[];
+            page: number;
+            totalPages: number;
+            totalResults: number;
+        };
+    };
+
     onDestroy(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
         abortController?.abort();
@@ -44,7 +54,6 @@
     let savedQuery = "";
     let savedResults: TMDBTransformedListItem[] = [];
     let navigatedFromModal = false;
-    let savedOrigin = "";
     // When true, skip transitions (instant hide/show for navigation)
     let skipTransition = $state(false);
 
@@ -113,12 +122,12 @@
             }`;
             const searchParams = { query: q, page: String(currentPage) };
             const [movieData, tvData] = await Promise.all([
-                gqlClient<{ searchTmdb: { results: TMDBTransformedListItem[] } }>(
+                gqlClient<SearchTmdbResponse>(
                     searchQuery,
                     { type: "movie", params: searchParams, searchMode: "search" },
                     signal
                 ).catch(() => null),
-                gqlClient<{ searchTmdb: { results: TMDBTransformedListItem[] } }>(
+                gqlClient<SearchTmdbResponse>(
                     searchQuery,
                     { type: "tv", params: searchParams, searchMode: "search" },
                     signal
@@ -127,24 +136,12 @@
 
             if (signal.aborted) return;
 
-            const mapResults = (data: { searchTmdb: { results: TMDBTransformedListItem[] } } | null) =>
-                (data?.searchTmdb.results ?? []).map((item: any) => ({
-                    ...item,
-                    poster_path: item.posterPath ?? item.poster_path,
-                    media_type: item.mediaType ?? item.media_type,
-                    vote_average: item.voteAverage ?? item.vote_average,
-                    vote_count: item.voteCount ?? item.vote_count,
-                    backdrop_path: item.backdropPath ?? item.backdrop_path,
-                    genre_ids: item.genreIds ?? item.genre_ids,
-                    release_date: item.releaseDate ?? item.release_date,
-                    first_air_date: item.firstAirDate ?? item.first_air_date,
-                    original_title: item.originalTitle ?? item.original_title,
-                    original_language: item.originalLanguage ?? item.original_language
-                })) as TMDBTransformedListItem[];
+            const mapResults = (data: SearchTmdbResponse | null) =>
+                mapGqlTmdbList(data?.searchTmdb.results ?? []);
 
             const maxTotalPages = Math.max(
-                movieData?.searchTmdb ? 1 : 0,
-                tvData?.searchTmdb ? 1 : 0
+                movieData?.searchTmdb.totalPages ?? 0,
+                tvData?.searchTmdb.totalPages ?? 0
             );
             hasMorePages = currentPage < maxTotalPages;
 
@@ -191,7 +188,6 @@
         savedResults = results;
         navigatedFromModal = true;
         pendingNavigation = true;
-        savedOrigin = window.location.pathname + window.location.search;
         // Keep modal open — it will be hidden after the new page loads
         goto(resolve(`/details/media/${item.id}/${item.media_type}`));
     }

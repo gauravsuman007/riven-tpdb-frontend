@@ -9,8 +9,8 @@ interface ResolveAndRedirectOptions {
     id: string;
     mediaType: MediaType;
     customFetch: typeof fetch;
-    rivenBaseUrl?: string;
-    rivenApiKey?: string;
+    backendUrl: string;
+    apiKey: string;
 }
 
 /**
@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ params, fetch, locals }) => {
     const { indexer, type, id } = params;
     const customFetch = createCustomFetch(fetch);
 
-    const rivenOpts = { rivenBaseUrl: locals.backendUrl, rivenApiKey: locals.apiKey };
+    const backendOpts = { backendUrl: locals.backendUrl, apiKey: locals.apiKey };
 
     switch (indexer) {
         case "tmdb":
@@ -54,7 +54,14 @@ export const GET: RequestHandler = async ({ params, fetch, locals }) => {
             if (type === "movie") throw redirect(307, `/details/media/${id}/movie`);
             if (type === "tv") {
                 return resolveAndRedirect(
-                    { from: "tmdb", to: "tvdb", id: id!, mediaType: "tv", customFetch },
+                    {
+                        from: "tmdb",
+                        to: "tvdb",
+                        id: id!,
+                        mediaType: "tv",
+                        customFetch,
+                        ...backendOpts
+                    },
                     "TVDB ID not found for this show"
                 );
             }
@@ -72,13 +79,27 @@ export const GET: RequestHandler = async ({ params, fetch, locals }) => {
 
             if (isTV) {
                 return resolveAndRedirect(
-                    { from: "anilist", to: "tmdb", id: id!, mediaType: "tv", customFetch },
+                    {
+                        from: "anilist",
+                        to: "tmdb",
+                        id: id!,
+                        mediaType: "tv",
+                        customFetch,
+                        ...backendOpts
+                    },
                     "No TMDB ID found for this anime"
                 );
             }
             if (isMovie) {
                 return resolveAndRedirect(
-                    { from: "anilist", to: "tmdb", id: id!, mediaType: "movie", customFetch },
+                    {
+                        from: "anilist",
+                        to: "tmdb",
+                        id: id!,
+                        mediaType: "movie",
+                        customFetch,
+                        ...backendOpts
+                    },
                     "No TMDB ID found for this anime movie"
                 );
             }
@@ -95,7 +116,7 @@ export const GET: RequestHandler = async ({ params, fetch, locals }) => {
                         id: id!,
                         mediaType: "tv",
                         customFetch,
-                        ...rivenOpts
+                        ...backendOpts
                     },
                     "TV item not found"
                 );
@@ -108,7 +129,7 @@ export const GET: RequestHandler = async ({ params, fetch, locals }) => {
                         id: id!,
                         mediaType: "movie",
                         customFetch,
-                        ...rivenOpts
+                        ...backendOpts
                     },
                     "Movie item not found"
                 );

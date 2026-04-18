@@ -1,16 +1,21 @@
 import type { PageServerLoad } from "./$types";
-import providers from "$lib/providers";
 import type {
     TMDBMovieDetailsExtended,
     ParsedMovieDetails,
     ParsedShowDetails,
     TVDBBaseItem
-} from "$lib/providers/parser";
+} from "$lib/metadata/parser";
+import { parseTMDBMovieDetails, parseTVDBShowDetails } from "$lib/metadata/parser";
 import { error } from "@sveltejs/kit";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
 import { resolveId } from "$lib/services/resolver";
 import { gql } from "$lib/graphql-client";
+import {
+    fetchTmdbDetails,
+    fetchTvdbEpisodes,
+    fetchTvdbSeriesExtended
+} from "$lib/services/backend-metadata";
 import {
     MEDIA_ITEM_STATE_BY_TMDB_QUERY,
     MEDIA_ITEM_STATE_BY_TVDB_QUERY,
@@ -65,37 +70,42 @@ export type MediaDetails =
     | { type: "movie"; details: ParsedMovieDetails }
     | { type: "tv"; details: ParsedShowDetails };
 
-async function getTraktData(mediaId: string, isMovie: boolean, idType?: "tmdb" | "tvdb") {
-    const id_type = idType ?? (isMovie ? "tmdb" : "tvdb");
-    const mediaType = isMovie ? "movie" : "show";
-    const endpointPrefix = isMovie ? "movies" : "shows";
+type GqlTraktRecommendation = {
+    id: number;
+    title: string;
+    posterPath: string | null;
+    mediaType: "movie" | "tv";
+    year: string;
+    indexer: "tmdb" | "tvdb";
+};
 
-    try {
-        const { data: searchResp, error: searchErr } = await providers.trakt.GET(
-            "/search/{id_type}/{id}",
-            { params: { path: { id_type, id: mediaId }, query: { type: mediaType } } }
-        );
+type TVDBTranslations = NonNullable<TVDBBaseItem["translations"]>;
 
-        if (searchErr || !searchResp?.length) return { traktSlug: null, traktRecs: null };
-
-        const traktSlug = (searchResp[0] as Record<string, { ids: { slug: string } } | undefined>)[
-            mediaType
-        ]?.ids?.slug;
-        if (!traktSlug) return { traktSlug: null, traktRecs: null };
-
-        const { data: recs, error: recsErr } = await providers.trakt.GET(
-            `/${endpointPrefix}/{id}/related`,
-            { params: { path: { id: traktSlug }, query: { extended: "images" } as never } }
-        );
-
-        return { traktSlug, traktRecs: !recsErr && recs ? recs : null };
-    } catch (err) {
-        logger.error(`Trakt fetch failed for ${mediaType} id=${mediaId}:`, err);
-        return { traktSlug: null, traktRecs: null };
+const TRAKT_RECOMMENDATIONS_QUERY = `query($id: String!, $idType: String!, $mediaType: String!) {
+    traktRecommendations(id: $id, idType: $idType, mediaType: $mediaType) {
+        id
+        title
+        posterPath
+        mediaType
+        year
+        indexer
     }
+}`;
+
+function mapTraktRecommendations(items: GqlTraktRecommendation[]) {
+    return items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        poster_path: item.posterPath,
+        media_type: item.mediaType,
+        year: item.year,
+        indexer: item.indexer,
+        vote_average: null,
+        vote_count: null
+    }));
 }
 
-export const load = (async ({ fetch, params, cookies, locals, url }) => {
+export const load = (async ({ fetch, params, locals, url }) => {
     const { id, mediaType } = params;
     const customFetch = createCustomFetch(fetch);
 
@@ -111,20 +121,30 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
         if (mediaType === "movie") {
             const [tmdbResult, traktResult, rivenResult] = await Promise.all([
                 normalizeFetch(
-                    providers.tmdb.GET(`/3/movie/{movie_id}`, {
-                        params: {
-                            path: {
-                                movie_id: Number(id)
-                            },
-                            query: {
-                                append_to_response:
-                                    "external_ids,images,recommendations,similar,videos,credits,release_dates"
-                            }
-                        },
-                        fetch: customFetch
-                    })
+                    fetchTmdbDetails<TMDBMovieDetailsExtended>(
+                        { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+                        {
+                            type: "movie",
+                            id: Number(id),
+                            appendToResponse:
+                                "external_ids,images,recommendations,similar,videos,credits,release_dates"
+                        }
+                    ).then((data) => ({ data, error: null }))
                 ),
-                getTraktData(id, true),
+                gql<{
+                    traktRecommendations: GqlTraktRecommendation[];
+                }>(
+                    locals.backendUrl,
+                    locals.apiKey,
+                    TRAKT_RECOMMENDATIONS_QUERY,
+                    { id, idType: "tmdb", mediaType: "movie" },
+                    fetch
+                )
+                    .then((data) => mapTraktRecommendations(data.traktRecommendations))
+                    .catch((err) => {
+                        logger.error(`Trakt fetch failed for movie id=${id}:`, err);
+                        return null;
+                    }),
                 gql<{ mediaItemStateByTmdb: GqlMediaItemStateTree | null }>(
                     locals.backendUrl,
                     locals.apiKey,
@@ -143,10 +163,11 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                 error(503, "Unable to connect to TMDB. Please try again later.");
             }
 
-            const parsedDetails = providers.parser.parseTMDBMovieDetails(
-                details as TMDBMovieDetailsExtended,
-                traktResult.traktRecs
-            );
+            const parsedDetails = parseTMDBMovieDetails(details as TMDBMovieDetailsExtended, null);
+            if (!parsedDetails) {
+                error(500, "Failed to parse movie details");
+            }
+            parsedDetails.trakt_recommendations = traktResult ?? [];
 
             return {
                 riven: rivenResult,
@@ -158,8 +179,6 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                 } as MediaDetails
             };
         } else if (mediaType === "tv") {
-            const tvdbToken = cookies.get("tvdb_cookie") || "";
-
             // Check if the ID is already a TVDB ID (passed via query param from library)
             const indexerParam = url.searchParams.get("indexer");
             const isAlreadyTvdbId = indexerParam === "tvdb";
@@ -177,8 +196,9 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                         to: "tvdb",
                         id: Number(id),
                         mediaType: "tv",
-                        tvdbToken,
-                        customFetch
+                        customFetch,
+                        backendUrl: locals.backendUrl,
+                        apiKey: locals.apiKey
                     })
                 );
 
@@ -193,30 +213,37 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
             const [tvdbEpisodesResult, tvdbTranslationsResult, traktResult, rivenResult] =
                 await Promise.all([
                     normalizeFetch(
-                        providers.tvdb.GET(`/series/{id}/extended`, {
-                            params: {
-                                path: { id: tvdbId },
-                                query: { meta: "episodes" }
-                            },
-                            headers: { Authorization: `Bearer ${tvdbToken}` },
-                            fetch: customFetch
-                        })
+                        fetchTvdbSeriesExtended<{ data: TVDBBaseItem }>(
+                            { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+                            tvdbId,
+                            "episodes"
+                        ).then((data) => ({ data, error: null }))
                     ),
                     normalizeFetch(
-                        providers.tvdb.GET(`/series/{id}/extended`, {
-                            params: {
-                                path: { id: tvdbId },
-                                query: { meta: "translations" }
-                            },
-                            headers: { Authorization: `Bearer ${tvdbToken}` },
-                            fetch: customFetch
-                        })
+                        fetchTvdbSeriesExtended<{ data: { translations: TVDBTranslations | null } }>(
+                            { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+                            tvdbId,
+                            "translations"
+                        ).then((data) => ({ data, error: null }))
                     ),
-                    getTraktData(
-                        isAlreadyTvdbId ? String(tvdbId) : id,
-                        false,
-                        isAlreadyTvdbId ? "tvdb" : "tmdb"
-                    ),
+                    gql<{
+                        traktRecommendations: GqlTraktRecommendation[];
+                    }>(
+                        locals.backendUrl,
+                        locals.apiKey,
+                        TRAKT_RECOMMENDATIONS_QUERY,
+                        {
+                            id: isAlreadyTvdbId ? String(tvdbId) : id,
+                            idType: isAlreadyTvdbId ? "tvdb" : "tmdb",
+                            mediaType: "show"
+                        },
+                        fetch
+                    )
+                        .then((data) => mapTraktRecommendations(data.traktRecommendations))
+                        .catch((err) => {
+                            logger.error(`Trakt fetch failed for show id=${id}:`, err);
+                            return null;
+                        }),
                     gql<{ mediaItemStateByTvdb: GqlMediaItemStateTree | null }>(
                         locals.backendUrl,
                         locals.apiKey,
@@ -271,28 +298,19 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
                 languagesToCheck.includes(details.data.originalLanguage)
             ) {
                 try {
+                    type EpisodeType = ParsedShowDetails["episodes"][number];
                     const { data: engEpisodesData, error: engEpisodesError } = await normalizeFetch(
-                        providers.tvdb.GET("/series/{id}/episodes/{season-type}/{lang}", {
-                            params: {
-                                path: {
-                                    id: tvdbId,
-                                    "season-type": "official",
-                                    lang: "eng"
-                                },
-                                query: {
-                                    page: 0
-                                }
-                            },
-                            headers: {
-                                Authorization: `Bearer ${tvdbToken}`
-                            },
-                            fetch: customFetch
-                        })
+                        fetchTvdbEpisodes<{ data: { episodes: EpisodeType[] } }>(
+                            { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+                            {
+                                id: tvdbId,
+                                seasonType: "official",
+                                lang: "eng",
+                                page: 0
+                            }
+                        ).then((data) => ({ data, error: null }))
                     );
 
-                    // The generated types for this endpoint are incorrect (expects data.series.episodes),
-                    // but the actual API returns data.episodes.
-                    type EpisodeType = ParsedShowDetails["episodes"][number];
                     interface EngEpisodesResponse {
                         data: {
                             episodes: EpisodeType[];
@@ -314,10 +332,11 @@ export const load = (async ({ fetch, params, cookies, locals, url }) => {
             }
 
             const validatedData = assertTVDBShowData(details.data);
-            const parsedDetails = providers.parser.parseTVDBShowDetails(
-                validatedData,
-                traktResult.traktRecs
-            );
+            const parsedDetails = parseTVDBShowDetails(validatedData, null);
+            if (!parsedDetails) {
+                error(500, "Failed to parse TV show details");
+            }
+            parsedDetails.trakt_recommendations = traktResult ?? [];
 
             return {
                 riven: rivenResult,

@@ -130,33 +130,7 @@ class RateLimiter {
 
 // Pre-configured rate limiters
 // Note: Lower maxConcurrent to prevent pool exhaustion while waiting on intervals
-const rateLimiters: Record<string, RateLimiter> = {
-    "api.themoviedb.org": new RateLimiter({
-        name: "TMDB",
-        maxConcurrent: 10,
-        maxRPS: 35 // Slightly under 40 allow
-    }),
-    "api4.thetvdb.com": new RateLimiter({
-        name: "TVDB",
-        maxConcurrent: 5, // Very strict concurrency for TVDB
-        maxRPS: 10 // Strict RPS
-    }),
-    "api.trakt.tv": new RateLimiter({
-        name: "Trakt",
-        maxConcurrent: 5,
-        maxRPS: 2 // Very conservative
-    }),
-    "graphql.anilist.co": new RateLimiter({
-        name: "AniList",
-        maxConcurrent: 5,
-        maxRPS: 1.5
-    }),
-    "api.ani.zip": new RateLimiter({
-        name: "AniZip",
-        maxConcurrent: 3,
-        maxRPS: 2
-    })
-};
+const rateLimiters: Record<string, RateLimiter> = {};
 
 export function getRateLimiterForUrl(url: string): RateLimiter | null {
     try {
@@ -184,7 +158,7 @@ export async function withRateLimit<T>(url: string, fn: () => Promise<T>): Promi
 }
 
 export function getAllRateLimiterStats() {
-    const stats: Record<string, any> = {};
+    const stats: Record<string, ReturnType<RateLimiter["getStats"]>> = {};
     for (const [domain, limiter] of Object.entries(rateLimiters)) {
         stats[domain] = limiter.getStats();
     }

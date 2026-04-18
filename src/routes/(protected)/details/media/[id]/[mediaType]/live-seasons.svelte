@@ -3,7 +3,7 @@
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
     import { cn } from "$lib/utils";
-    import type { ParsedShowDetails } from "$lib/providers/parser";
+    import type { ParsedShowDetails } from "$lib/metadata/parser";
     import type { RivenSeason } from "$lib/types/riven";
 
     interface Props {
