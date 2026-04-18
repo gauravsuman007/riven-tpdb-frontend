@@ -93,16 +93,34 @@ const TRAKT_RECOMMENDATIONS_QUERY = `query($id: String!, $idType: String!, $medi
 }`;
 
 function mapTraktRecommendations(items: GqlTraktRecommendation[]) {
-    return items.map((item) => ({
-        id: item.id,
-        title: item.title,
-        poster_path: item.posterPath,
-        media_type: item.mediaType,
-        year: item.year,
-        indexer: item.indexer,
-        vote_average: null,
-        vote_count: null
-    }));
+    const seen = new Set<string>();
+    return items.reduce<
+        Array<{
+            id: number;
+            title: string;
+            poster_path: string | null;
+            media_type: "movie" | "tv";
+            year: string;
+            indexer: "tmdb" | "tvdb";
+            vote_average: null;
+            vote_count: null;
+        }>
+    >((acc, item) => {
+        const key = `${item.mediaType}-${item.id}`;
+        if (seen.has(key)) return acc;
+        seen.add(key);
+        acc.push({
+            id: item.id,
+            title: item.title,
+            poster_path: item.posterPath,
+            media_type: item.mediaType,
+            year: item.year,
+            indexer: item.indexer,
+            vote_average: null,
+            vote_count: null
+        });
+        return acc;
+    }, []);
 }
 
 export const load = (async ({ fetch, params, locals, url }) => {

@@ -197,7 +197,7 @@
                         Audio
                     </span>
                     <div class="flex flex-wrap gap-2">
-                        {#each meta.audio_tracks as track (track)}
+                        {#each meta.audio_tracks as track, i (i)}
                             <Badge variant="outline" class="font-mono text-xs">
                                 {track.codec}{track.channels
                                     ? track.channels === 8
@@ -221,7 +221,7 @@
                         Subtitles
                     </span>
                     <div class="flex flex-wrap gap-2">
-                        {#each meta.subtitle_tracks as track (track)}
+                        {#each meta.subtitle_tracks as track, i (i)}
                             <Badge variant="outline" class="font-mono text-xs">
                                 {track.language ? track.language.toUpperCase() : "Unknown"}
                             </Badge>
@@ -383,7 +383,7 @@
 {/snippet}
 
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:grid-cols-4">
-    {#each selectedEpisodes as episode (episode.id)}
+    {#each selectedEpisodes as episode, i (i)}
         {@const rivenEpisode = stateByEpisodeNumber.get(episode.number ?? 0)}
         {@const detailedEpisode = detailsByEpisodeNumber.get(episode.number ?? 0)}
 

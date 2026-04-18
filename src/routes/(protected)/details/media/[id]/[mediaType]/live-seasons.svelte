@@ -25,7 +25,7 @@
 
 <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
     <Carousel.Content>
-        {#each seasons as season (season.id)}
+        {#each seasons as season, i (i)}
             {@const rivenSeason = stateBySeasonNumber.get(season.number ?? 0)}
             {@const expectedCount = expectedBySeasonNumber?.get(season.number ?? 0)}
             {@const completedCount =

@@ -309,40 +309,46 @@ export function transformTMDBList(
     type: "movie" | "tv" | "person" | "company" = "movie",
     backdropSize: string = "w1280"
 ) {
+    const seen = new Set<number>();
     return (
-        (items as any)?.map((item: Record<string, any>) => ({
-            id: item.id,
-            title: item.title || item.name || item.original_title || item.original_name || "",
-            poster_path: item.poster_path
-                ? `${TMDB_IMAGE_BASE_URL}/w500${item.poster_path}`
-                : item.profile_path
-                  ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}`
-                  : item.logo_path
-                    ? `${TMDB_IMAGE_BASE_URL}/w500${item.logo_path}`
+        (items as any)?.reduce((acc: any[], item: Record<string, any>) => {
+            if (item.id == null || seen.has(item.id)) return acc;
+            seen.add(item.id);
+            acc.push({
+                id: item.id,
+                title: item.title || item.name || item.original_title || item.original_name || "",
+                poster_path: item.poster_path
+                    ? `${TMDB_IMAGE_BASE_URL}/w500${item.poster_path}`
+                    : item.profile_path
+                      ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}`
+                      : item.logo_path
+                        ? `${TMDB_IMAGE_BASE_URL}/w500${item.logo_path}`
+                        : null,
+                media_type: item.media_type || type,
+                year:
+                    (item.media_type || type) === "movie"
+                        ? item.release_date
+                            ? (dateUtils.getYearFromISO(item.release_date) ?? "N/A")
+                            : "N/A"
+                        : item.first_air_date
+                          ? (dateUtils.getYearFromISO(item.first_air_date) ?? "N/A")
+                          : "N/A",
+                vote_average: item.vote_average ? item.vote_average : null,
+                vote_count: item.vote_count ? item.vote_count : null,
+                popularity: item.popularity,
+                indexer: "tmdb" as const,
+                original_language: item.original_language,
+                overview: item.overview,
+                backdrop_path: item.backdrop_path
+                    ? `${TMDB_IMAGE_BASE_URL}/${backdropSize}${item.backdrop_path}`
                     : null,
-            media_type: item.media_type || type,
-            year:
-                (item.media_type || type) === "movie"
-                    ? item.release_date
-                        ? (dateUtils.getYearFromISO(item.release_date) ?? "N/A")
-                        : "N/A"
-                    : item.first_air_date
-                      ? (dateUtils.getYearFromISO(item.first_air_date) ?? "N/A")
-                      : "N/A",
-            vote_average: item.vote_average ? item.vote_average : null,
-            vote_count: item.vote_count ? item.vote_count : null,
-            popularity: item.popularity,
-            indexer: "tmdb" as const,
-            original_language: item.original_language,
-            overview: item.overview,
-            backdrop_path: item.backdrop_path
-                ? `${TMDB_IMAGE_BASE_URL}/${backdropSize}${item.backdrop_path}`
-                : null,
-            genre_ids: item.genre_ids,
-            release_date: item.release_date,
-            first_air_date: item.first_air_date,
-            original_title: item.original_title ?? item.original_name
-        })) || ([] as TMDBTransformedListItem[])
+                genre_ids: item.genre_ids,
+                release_date: item.release_date,
+                first_air_date: item.first_air_date,
+                original_title: item.original_title ?? item.original_name
+            });
+            return acc;
+        }, [] as TMDBTransformedListItem[]) || ([] as TMDBTransformedListItem[])
     );
 }
 

@@ -537,6 +537,8 @@
             }
 
             completedDetailsHydrated = true;
+        } catch {
+            // non-critical, ignore
         } finally {
             completedDetailsHydrating = false;
         }
@@ -616,6 +618,8 @@
                 mediaItemStateByTvdb?: GqlMediaItemStateTree | null;
             }>(request.query, request.variables);
             applyLiveState(payload[request.resultKey]);
+        } catch {
+            // non-critical, ignore
         } finally {
             rivenPending = false;
         }
@@ -720,7 +724,7 @@
         {@render sectionHeading(title)}
         <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
             <Carousel.Content class="-ml-3">
-                {#each items as item (item.id)}
+                {#each items as item (`${item.media_type}-${item.id}`)}
                     <Carousel.Item class="basis-auto pl-3">
                         <a
                             href={mediaHref(item.id, item.media_type)}
@@ -1171,7 +1175,7 @@
                         {@render sectionHeading("Cast")}
                         <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
                             <Carousel.Content class="-ml-3">
-                                {#each data.mediaDetails.details.cast as member (member.id)}
+                                {#each data.mediaDetails.details.cast as member, i (i)}
                                     <Carousel.Item class="basis-auto pl-3">
                                         <a
                                             href={entityHref(member.id, "person")}
@@ -1261,7 +1265,7 @@
                                             class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                             >Production</span>
                                         <div class="flex flex-wrap gap-2">
-                                            {#each data.mediaDetails.details.production_companies as company (company.id)}
+                                            {#each data.mediaDetails.details.production_companies as company, i (i)}
                                                 <span
                                                     class="text-muted-foreground rounded border border-white/10 bg-white/5 px-2 py-1 text-xs">
                                                     {company.name}
@@ -1414,7 +1418,7 @@
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Audio</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#each meta.audio_tracks as track (track.codec)}
+                                                    {#each meta.audio_tracks as track, i (i)}
                                                         <Badge
                                                             variant="secondary"
                                                             class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
@@ -1439,7 +1443,7 @@
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Subtitles</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#each meta.subtitle_tracks as track (track.language)}
+                                                    {#each meta.subtitle_tracks as track, i (i)}
                                                         <Badge
                                                             variant="secondary"
                                                             class="text-muted-foreground border border-white/10 bg-white/5 text-[10px] backdrop-blur-sm"
