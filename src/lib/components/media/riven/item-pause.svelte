@@ -63,44 +63,44 @@
 </script>
 
 {#if page.data.permissions?.canManageLibrary}
-<AlertDialog.Root bind:open>
-    <AlertDialog.Trigger>
-        {#snippet child({ props })}
-            <Button {variant} {size} {...restProps} {...props}>
-                {#if children}
-                    {@render children()}
-                {:else}
+    <AlertDialog.Root bind:open>
+        <AlertDialog.Trigger>
+            {#snippet child({ props })}
+                <Button {variant} {size} {...restProps} {...props}>
+                    {#if children}
+                        {@render children()}
+                    {:else}
+                        {isPaused ? "Resume" : "Pause"}
+                    {/if}
+                </Button>
+            {/snippet}
+        </AlertDialog.Trigger>
+        <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
+            <AlertDialog.Header>
+                <AlertDialog.Title>
+                    {isPaused ? "Resume" : "Pause"} "{title ?? "Media Item"}"
+                </AlertDialog.Title>
+                <AlertDialog.Description>
+                    This will send a request to Riven to {isPaused ? "resume" : "pause"} this media. You
+                    will be notified when it's done.
+                </AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <AlertDialog.Action
+                    disabled={loading}
+                    onclick={async () => {
+                        loading = true;
+                        await togglePauseMediaItem(ids);
+                        loading = false;
+                        open = false;
+                    }}>
+                    {#if loading}
+                        <Loader2 class="mr-1 inline-block animate-spin" />
+                    {/if}
                     {isPaused ? "Resume" : "Pause"}
-                {/if}
-            </Button>
-        {/snippet}
-    </AlertDialog.Trigger>
-    <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
-        <AlertDialog.Header>
-            <AlertDialog.Title>
-                {isPaused ? "Resume" : "Pause"} "{title ?? "Media Item"}"
-            </AlertDialog.Title>
-            <AlertDialog.Description>
-                This will send a request to Riven to {isPaused ? "resume" : "pause"} this media. You will
-                be notified when it's done.
-            </AlertDialog.Description>
-        </AlertDialog.Header>
-        <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action
-                disabled={loading}
-                onclick={async () => {
-                    loading = true;
-                    await togglePauseMediaItem(ids);
-                    loading = false;
-                    open = false;
-                }}>
-                {#if loading}
-                    <Loader2 class="mr-1 inline-block animate-spin" />
-                {/if}
-                {isPaused ? "Resume" : "Pause"}
-            </AlertDialog.Action>
-        </AlertDialog.Footer>
-    </AlertDialog.Content>
-</AlertDialog.Root>
+                </AlertDialog.Action>
+            </AlertDialog.Footer>
+        </AlertDialog.Content>
+    </AlertDialog.Root>
 {/if}

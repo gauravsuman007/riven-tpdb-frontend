@@ -16,7 +16,16 @@
 
     const SidebarStore = getContext<createSidebarStore>("sidebarStore");
 
-    const MAIN_PAGES = ["/", "/explore", "/dashboard", "/library", "/settings", "/calendar", "/logs", "/auth"];
+    const MAIN_PAGES = [
+        "/",
+        "/explore",
+        "/dashboard",
+        "/library",
+        "/settings",
+        "/calendar",
+        "/logs",
+        "/auth"
+    ];
 
     const isMainPage = $derived(MAIN_PAGES.includes(page.url.pathname));
 
@@ -30,7 +39,7 @@
             if (history.length > 1) {
                 history.back();
             } else {
-                goto(resolve('/'));
+                goto(resolve("/"));
             }
         }}
         aria-label="Go back"
@@ -95,5 +104,8 @@
 </div>
 
 <div class="md:hidden">
-    <SearchModal open={searchModalOpen} onclose={() => (searchModalOpen = false)} onopen={() => (searchModalOpen = true)} />
+    <SearchModal
+        open={searchModalOpen}
+        onclose={() => (searchModalOpen = false)}
+        onopen={() => (searchModalOpen = true)} />
 </div>

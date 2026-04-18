@@ -225,7 +225,11 @@
                             {@render emptyState("Connected. Waiting for live logs...")}
                         {:else if error}
                             <div class="p-8">
-                                {@render errorDisplay(error, () => logStore.reconnect(), "Reconnect")}
+                                {@render errorDisplay(
+                                    error,
+                                    () => logStore.reconnect(),
+                                    "Reconnect"
+                                )}
                             </div>
                         {/if}
                     {:else if isLoadingHistorical}

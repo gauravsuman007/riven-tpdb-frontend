@@ -38,7 +38,6 @@ export interface FilesystemEntry {
     file_size?: number;
     original_filename?: string;
     download_url?: string;
-    stream_url?: string;
     provider?: string;
     provider_download_id?: string;
     path?: string;

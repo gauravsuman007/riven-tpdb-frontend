@@ -2,10 +2,13 @@ import { createHmac } from "node:crypto";
 import { error } from "@sveltejs/kit";
 import { getPermissionFlags, normalizeUserRole } from "$lib/permissions";
 
-type AuthenticatedUser = {
-    id?: string | null;
-    role?: string | null;
-} | null | undefined;
+type AuthenticatedUser =
+    | {
+          id?: string | null;
+          role?: string | null;
+      }
+    | null
+    | undefined;
 
 function signingPayload(userId: string, role: string, timestamp: number): string {
     return `v1\n${userId}\n${role}\n${timestamp}`;

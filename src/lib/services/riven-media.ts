@@ -5,7 +5,6 @@ export interface GqlFilesystemEntry {
     fileSize?: number | null;
     originalFilename?: string | null;
     downloadUrl?: string | null;
-    streamUrl?: string | null;
     provider?: string | null;
     providerDownloadId?: string | null;
     path?: string | null;
@@ -75,11 +74,11 @@ export interface GqlMediaItemStateTree {
 const MEDIA_ITEM_FULL_FIELDS = `
     id state imdbId tmdbId tvdbId
     filesystemEntry {
-        id fileSize originalFilename downloadUrl streamUrl
+        id fileSize originalFilename downloadUrl
         provider providerDownloadId path plugin rankingProfileName mediaMetadata
     }
     filesystemEntries {
-        id fileSize originalFilename downloadUrl streamUrl
+        id fileSize originalFilename downloadUrl
         provider providerDownloadId path plugin rankingProfileName mediaMetadata
     }
     seasons {
@@ -87,11 +86,11 @@ const MEDIA_ITEM_FULL_FIELDS = `
         episodes {
             episodeNumber state
             filesystemEntry {
-                id fileSize originalFilename downloadUrl streamUrl
+                id fileSize originalFilename downloadUrl
                 provider providerDownloadId path plugin rankingProfileName mediaMetadata
             }
             filesystemEntries {
-                id fileSize originalFilename downloadUrl streamUrl
+                id fileSize originalFilename downloadUrl
                 provider providerDownloadId path plugin rankingProfileName mediaMetadata
             }
         }
@@ -100,7 +99,7 @@ const MEDIA_ITEM_FULL_FIELDS = `
 
 const RAW_FILESYSTEM_ENTRY_FIELDS = `
     id fileSize createdAt updatedAt mediaItemId entryType path
-    originalFilename downloadUrl streamUrl plugin provider providerDownloadId
+    originalFilename downloadUrl plugin provider providerDownloadId
     libraryProfiles mediaMetadata language parentOriginalFilename subtitleContent
     fileHash videoFileSize opensubtitlesId streamId resolution rankingProfileName
 `;
@@ -264,7 +263,6 @@ function mapFsEntry(
         file_size: entry.fileSize ?? undefined,
         original_filename: entry.originalFilename ?? undefined,
         download_url: entry.downloadUrl ?? undefined,
-        stream_url: entry.streamUrl ?? undefined,
         provider: entry.provider ?? undefined,
         provider_download_id: entry.providerDownloadId ?? undefined,
         path: entry.path ?? undefined,

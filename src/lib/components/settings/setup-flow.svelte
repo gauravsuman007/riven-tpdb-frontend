@@ -18,9 +18,7 @@
     import SetupWelcomeStep from "./setup-welcome-step.svelte";
     import type { CustomProfile, PluginInfo, SetupData } from "./types";
 
-    type ActionResult<T> =
-        | { ok: true; data: T; redirect?: string }
-        | { ok: false; error: string };
+    type ActionResult<T> = { ok: true; data: T; redirect?: string } | { ok: false; error: string };
 
     let { data }: { data: SetupData } = $props();
     const initialState = untrack(() =>

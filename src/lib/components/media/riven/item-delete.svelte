@@ -54,44 +54,44 @@
 </script>
 
 {#if page.data.permissions?.canManageLibrary}
-<AlertDialog.Root bind:open>
-    <AlertDialog.Trigger>
-        {#snippet child({ props })}
-            <Button {variant} {size} {...restProps} {...props}>
-                {#if children}
-                    {@render children()}
-                {:else}
+    <AlertDialog.Root bind:open>
+        <AlertDialog.Trigger>
+            {#snippet child({ props })}
+                <Button {variant} {size} {...restProps} {...props}>
+                    {#if children}
+                        {@render children()}
+                    {:else}
+                        Delete
+                    {/if}
+                </Button>
+            {/snippet}
+        </AlertDialog.Trigger>
+        <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
+            <AlertDialog.Header>
+                <AlertDialog.Title>
+                    Deleting "{title ?? "Media Item"}"
+                </AlertDialog.Title>
+                <AlertDialog.Description>
+                    This will send a request to Riven to delete this media. You will be notified
+                    when it's removed.
+                </AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <AlertDialog.Action
+                    disabled={loading}
+                    onclick={async () => {
+                        loading = true;
+                        await removeMediaItem(ids);
+                        loading = false;
+                        open = false;
+                    }}>
+                    {#if loading}
+                        <Loader2 class="mr-1 inline-block animate-spin" />
+                    {/if}
                     Delete
-                {/if}
-            </Button>
-        {/snippet}
-    </AlertDialog.Trigger>
-    <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
-        <AlertDialog.Header>
-            <AlertDialog.Title>
-                Deleting "{title ?? "Media Item"}"
-            </AlertDialog.Title>
-            <AlertDialog.Description>
-                This will send a request to Riven to delete this media. You will be notified when
-                it's removed.
-            </AlertDialog.Description>
-        </AlertDialog.Header>
-        <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action
-                disabled={loading}
-                onclick={async () => {
-                    loading = true;
-                    await removeMediaItem(ids);
-                    loading = false;
-                    open = false;
-                }}>
-                {#if loading}
-                    <Loader2 class="mr-1 inline-block animate-spin" />
-                {/if}
-                Delete
-            </AlertDialog.Action>
-        </AlertDialog.Footer>
-    </AlertDialog.Content>
-</AlertDialog.Root>
+                </AlertDialog.Action>
+            </AlertDialog.Footer>
+        </AlertDialog.Content>
+    </AlertDialog.Root>
 {/if}

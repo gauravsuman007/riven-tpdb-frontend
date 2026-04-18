@@ -57,7 +57,10 @@
         return Object.fromEntries(entries);
     }
 
-    function ensurePlainObject(input: unknown, fields: SettingFieldDef[] = []): Record<string, unknown> {
+    function ensurePlainObject(
+        input: unknown,
+        fields: SettingFieldDef[] = []
+    ): Record<string, unknown> {
         return isRecord(input) ? (input as Record<string, unknown>) : createDefaultObject(fields);
     }
 
@@ -146,11 +149,7 @@
         value = Object.fromEntries(entries);
     }
 
-    function updateObjectField(
-        fields: SettingFieldDef[],
-        key: string,
-        nextValue: unknown
-    ) {
+    function updateObjectField(fields: SettingFieldDef[], key: string, nextValue: unknown) {
         const objectValue = ensurePlainObject(value, fields);
         value = {
             ...objectValue,
@@ -187,7 +186,8 @@
                     field={subfield}
                     bind:value={
                         () => objectValue[subfield.key],
-                        (nextValue) => updateObjectField(field.fields ?? [], subfield.key, nextValue)
+                        (nextValue) =>
+                            updateObjectField(field.fields ?? [], subfield.key, nextValue)
                     }
                     path={`${path}.${subfield.key}`}
                     nested={true} />

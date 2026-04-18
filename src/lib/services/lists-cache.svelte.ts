@@ -10,7 +10,7 @@ interface CachedData<T> {
 }
 
 type TimeWindow = "day" | "week";
-type MediaListLoader = (page: number) => Promise<unknown>;
+type MediaListLoader = (page: number, timeWindow: TimeWindow | null) => Promise<unknown>;
 
 interface MediaListState {
     timeWindow: TimeWindow;
@@ -314,7 +314,7 @@ export class MediaListStore<T = unknown> {
 
     async #loadPage(page: number): Promise<unknown> {
         if (this.#loader) {
-            return this.#loader(page);
+            return this.#loader(page, this.timeWindow);
         }
 
         const response = await fetch(this.#getApiUrl(page));

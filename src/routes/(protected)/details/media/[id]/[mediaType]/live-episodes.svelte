@@ -31,9 +31,7 @@
     }: Props = $props();
 
     const isMobile = new IsMobile();
-    let openEpisodeNumber = $state<number | null>(
-        selectedEpisode ? Number(selectedEpisode) : null
-    );
+    let openEpisodeNumber = $state<number | null>(selectedEpisode ? Number(selectedEpisode) : null);
 
     const selectedEpisodes = $derived.by(() =>
         episodes.filter((episode) => episode.seasonNumber?.toString() === selectedSeason)
@@ -318,26 +316,15 @@
                 </div>
             {/if}
 
-            {#if fs?.download_url || fs?.stream_url}
+            {#if fs?.download_url}
                 <div class="flex flex-wrap gap-2">
-                    {#if fs?.download_url}
-                        <a
-                            href={fs.download_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10">
-                            Download
-                        </a>
-                    {/if}
-                    {#if fs?.stream_url}
-                        <a
-                            href={fs.stream_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10">
-                            Stream
-                        </a>
-                    {/if}
+                    <a
+                        href={fs.download_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10">
+                        Download
+                    </a>
                 </div>
             {/if}
 

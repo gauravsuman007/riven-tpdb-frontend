@@ -1,0 +1,265 @@
+query MediaItemFullByTmdb($tmdbId: String!) {
+    mediaItemFullByTmdb(tmdbId: $tmdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        filesystemEntry {
+            id
+            fileSize
+            originalFilename
+            downloadUrl
+            provider
+            providerDownloadId
+            path
+            plugin
+            rankingProfileName
+            mediaMetadata
+        }
+        filesystemEntries {
+            id
+            fileSize
+            originalFilename
+            downloadUrl
+            provider
+            providerDownloadId
+            path
+            plugin
+            rankingProfileName
+            mediaMetadata
+        }
+        seasons {
+            seasonNumber
+            state
+            isRequested
+            episodes {
+                episodeNumber
+                state
+                filesystemEntry {
+                    id
+                    fileSize
+                    originalFilename
+                    downloadUrl
+                    provider
+                    providerDownloadId
+                    path
+                    plugin
+                    rankingProfileName
+                    mediaMetadata
+                }
+                filesystemEntries {
+                    id
+                    fileSize
+                    originalFilename
+                    downloadUrl
+                    provider
+                    providerDownloadId
+                    path
+                    plugin
+                    rankingProfileName
+                    mediaMetadata
+                }
+            }
+        }
+    }
+}
+
+query MediaItemFullByTvdb($tvdbId: String!) {
+    mediaItemFullByTvdb(tvdbId: $tvdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        filesystemEntry {
+            id
+            fileSize
+            originalFilename
+            downloadUrl
+            provider
+            providerDownloadId
+            path
+            plugin
+            rankingProfileName
+            mediaMetadata
+        }
+        filesystemEntries {
+            id
+            fileSize
+            originalFilename
+            downloadUrl
+            provider
+            providerDownloadId
+            path
+            plugin
+            rankingProfileName
+            mediaMetadata
+        }
+        seasons {
+            seasonNumber
+            state
+            isRequested
+            episodes {
+                episodeNumber
+                state
+                filesystemEntry {
+                    id
+                    fileSize
+                    originalFilename
+                    downloadUrl
+                    provider
+                    providerDownloadId
+                    path
+                    plugin
+                    rankingProfileName
+                    mediaMetadata
+                }
+                filesystemEntries {
+                    id
+                    fileSize
+                    originalFilename
+                    downloadUrl
+                    provider
+                    providerDownloadId
+                    path
+                    plugin
+                    rankingProfileName
+                    mediaMetadata
+                }
+            }
+        }
+    }
+}
+
+query MediaItemStateByTmdb($tmdbId: String!) {
+    mediaItemStateByTmdb(tmdbId: $tmdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        expectedFileCount
+        seasons {
+            id
+            seasonNumber
+            state
+            isRequested
+            expectedFileCount
+            episodes {
+                id
+                episodeNumber
+                state
+            }
+        }
+    }
+}
+
+query MediaItemStateByTvdb($tvdbId: String!) {
+    mediaItemStateByTvdb(tvdbId: $tvdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        expectedFileCount
+        seasons {
+            id
+            seasonNumber
+            state
+            isRequested
+            expectedFileCount
+            episodes {
+                id
+                episodeNumber
+                state
+            }
+        }
+    }
+}
+
+subscription MediaItemStateUpdatesByTmdb($tmdbId: String!) {
+    mediaItemStateUpdatesByTmdb(tmdbId: $tmdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        expectedFileCount
+        seasons {
+            id
+            seasonNumber
+            state
+            isRequested
+            expectedFileCount
+            episodes {
+                id
+                episodeNumber
+                state
+            }
+        }
+    }
+}
+
+subscription MediaItemStateUpdatesByTvdb($tvdbId: String!) {
+    mediaItemStateUpdatesByTvdb(tvdbId: $tvdbId) {
+        id
+        state
+        imdbId
+        tmdbId
+        tvdbId
+        expectedFileCount
+        seasons {
+            id
+            seasonNumber
+            state
+            isRequested
+            expectedFileCount
+            episodes {
+                id
+                episodeNumber
+                state
+            }
+        }
+    }
+}
+
+subscription RivenMovieRequested {
+    movieRequested {
+        id
+        tmdbId
+        imdbId
+        requestType
+        state
+    }
+}
+
+subscription RivenShowRequested {
+    showRequested {
+        id
+        tvdbId
+        imdbId
+        requestType
+        state
+    }
+}
+
+subscription RivenShowRequestUpdated {
+    showRequestUpdated {
+        id
+        tvdbId
+        imdbId
+        requestType
+        state
+    }
+}
+
+subscription RivenShowIndexed {
+    showIndexed {
+        id
+        tvdbId
+        tmdbId
+        imdbId
+        state
+    }
+}

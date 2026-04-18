@@ -110,13 +110,7 @@ async function loadFilterOptions(event: Parameters<PageServerLoad>[0]) {
     const data = await gql<{
         mediaItemType?: { enumValues?: { name: string }[] } | null;
         mediaItemState?: { enumValues?: { name: string }[] } | null;
-    }>(
-        event.locals.backendUrl,
-        event.locals.apiKey,
-        FILTER_ENUMS_QUERY,
-        undefined,
-        event.fetch
-    );
+    }>(event.locals.backendUrl, event.locals.apiKey, FILTER_ENUMS_QUERY, undefined, event.fetch);
 
     const typeEnums = data.mediaItemType?.enumValues?.map((item) => item.name) ?? [];
     const stateEnums = data.mediaItemState?.enumValues?.map((item) => item.name) ?? [];

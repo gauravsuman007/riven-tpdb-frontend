@@ -73,11 +73,7 @@
             class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
             value={value || field.default_value || options[0] || ""}
             onchange={(event) =>
-                setField(
-                    pluginName,
-                    field.key,
-                    (event.currentTarget as HTMLSelectElement).value
-                )}>
+                setField(pluginName, field.key, (event.currentTarget as HTMLSelectElement).value)}>
             {#each options as option}
                 <option value={option}>{option}</option>
             {/each}

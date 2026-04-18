@@ -5,6 +5,7 @@
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import * as Form from "$lib/components/ui/form/index.js";
+    import type { Component } from "svelte";
     import { superForm } from "sveltekit-superforms";
     import { zod4Client } from "sveltekit-superforms/adapters";
     import { Input } from "$lib/components/ui/input/index.js";
@@ -22,15 +23,47 @@
     import * as Pagination from "$lib/components/ui/pagination/index.js";
     import Loading2Circle from "@lucide/svelte/icons/loader-2";
     import { toast } from "svelte-sonner";
-    import { goto, invalidate } from "$app/navigation";
+    import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
-    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
+    import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
+    import { gqlClient } from "$lib/graphql-client";
+    import * as dateUtils from "$lib/utils/date";
 
-    const LIBRARY_ITEMS_DEPENDENCY = "riven:library-items";
+    type LibraryItem = PageProps["data"]["items"][number];
+    type GqlMediaItem = {
+        id: number;
+        itemType: string;
+        title: string;
+        tmdbId?: string | null;
+        tvdbId?: string | null;
+        parentId?: number | null;
+        posterPath?: string | null;
+        airedAt?: string | null;
+        seasonNumber?: number | null;
+        episodeNumber?: number | null;
+        showId?: number | null;
+        showTitle?: string | null;
+        showTmdbId?: string | null;
+        showTvdbId?: string | null;
+        showPosterPath?: string | null;
+    };
+    type GqlItemsPage = {
+        items: GqlMediaItem[];
+        page: number;
+        limit: number;
+        totalItems: number;
+        totalPages: number;
+    };
 
     let { data }: PageProps = $props();
+    // svelte-ignore state_referenced_locally
+    let liveItems = $state<LibraryItem[]>(data.items);
+    // svelte-ignore state_referenced_locally
+    let liveLimit = $state(data.limit);
+    // svelte-ignore state_referenced_locally
+    let liveTotalItems = $state(data.totalItems);
 
     // svelte-ignore state_referenced_locally
     const form = superForm(data.itemsSearchForm, {
@@ -44,6 +77,41 @@
 
     let actionInProgress = $state(false);
     let formElement: HTMLFormElement;
+
+    const ITEMS_QUERY = `
+        query GetItems(
+            $page: Int
+            $limit: Int
+            $sort: String
+            $types: [MediaItemType!]
+            $search: String
+            $states: [MediaItemState!]
+        ) {
+            items(page: $page, limit: $limit, sort: $sort, types: $types, search: $search, states: $states) {
+                items {
+                    id
+                    itemType
+                    title
+                    tmdbId
+                    tvdbId
+                    parentId
+                    posterPath
+                    airedAt
+                    seasonNumber
+                    episodeNumber
+                    showId
+                    showTitle
+                    showTmdbId
+                    showTvdbId
+                    showPosterPath
+                }
+                page
+                limit
+                totalItems
+                totalPages
+            }
+        }
+    `;
 
     // Live Search Logic
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -71,7 +139,7 @@
         url.searchParams.set("page", "1");
         $formData.page = 1;
 
-        goto(url.toString(), {
+        goto(resolve("/library") + url.search, {
             keepFocus: true,
             noScroll: true
         });
@@ -103,8 +171,86 @@
         return labels.length > 0 ? labels.join(", ") : fallback;
     }
 
+    function extractYear(airedAt: string | null | undefined): number | string {
+        if (!airedAt) return "N/A";
+        return dateUtils.getYearFromISO(airedAt) ?? "N/A";
+    }
+
+    function transformItems(items: GqlMediaItem[]): LibraryItem[] {
+        return items.map((item) => {
+            const rawType = item.itemType.toLowerCase();
+            let id: string | number | null = null;
+            let indexer: "tmdb" | "tvdb" = "tmdb";
+            let mediaPageType = rawType === "show" ? "tv" : rawType;
+            let posterPath = item.posterPath;
+            const detailParams: string[] = [];
+
+            if (rawType === "movie") {
+                id = item.tmdbId ?? null;
+            } else if (rawType === "show") {
+                id = item.tvdbId ?? null;
+                indexer = "tvdb";
+            } else if (rawType === "season" || rawType === "episode") {
+                id = item.showTvdbId ?? item.showTmdbId ?? null;
+                indexer = item.showTvdbId ? "tvdb" : "tmdb";
+                mediaPageType = "tv";
+                posterPath = item.showPosterPath ?? item.posterPath;
+                if (item.seasonNumber != null) {
+                    detailParams.push(`season=${encodeURIComponent(item.seasonNumber)}`);
+                }
+                if (item.episodeNumber != null) {
+                    detailParams.push(`episode=${encodeURIComponent(item.episodeNumber)}`);
+                }
+            }
+
+            return {
+                id,
+                title: item.title,
+                poster_path: posterPath,
+                media_type: mediaPageType,
+                year: extractYear(item.airedAt),
+                indexer,
+                type: mediaPageType,
+                details_query: detailParams.join("&"),
+                badge:
+                    rawType === "season"
+                        ? { text: "Season", variant: "default" }
+                        : rawType === "episode"
+                          ? { text: "Episode", variant: "default" }
+                          : undefined,
+                riven_id: item.id
+            } satisfies LibraryItem;
+        });
+    }
+
+    async function refreshLiveLibrary() {
+        const types = $formData.type?.length
+            ? $formData.type.map((type) => type.toUpperCase())
+            : undefined;
+        const states = $formData.states?.filter((state) => state !== "All");
+        const result = await gqlClient<{ items: GqlItemsPage }>(ITEMS_QUERY, {
+            page: $formData.page ?? 1,
+            limit: $formData.limit ?? liveLimit,
+            sort:
+                (Array.isArray($formData.sort) ? $formData.sort[0] : $formData.sort) ?? "date_desc",
+            types,
+            search: $formData.search || undefined,
+            states: states && states.length > 0 ? states : undefined
+        });
+
+        liveItems = transformItems(result.items.items);
+        liveLimit = result.items.limit;
+        liveTotalItems = result.items.totalItems;
+    }
+
     $effect(() => {
-        return subscribeToMediaUpdates(() => invalidate(LIBRARY_ITEMS_DEPENDENCY));
+        liveItems = data.items;
+        liveLimit = data.limit;
+        liveTotalItems = data.totalItems;
+    });
+
+    $effect(() => {
+        return subscribeToRivenMediaEvents(refreshLiveLibrary);
     });
 </script>
 
@@ -132,7 +278,7 @@
                     <span class="font-mono text-xs tracking-widest uppercase">Index</span>
                     <span class="h-px w-8 bg-zinc-800"></span>
                     <span class="text-primary font-mono text-sm"
-                        >{data.totalItems.toLocaleString()} items</span>
+                        >{liveTotalItems.toLocaleString()} items</span>
                 </div>
             </div>
 
@@ -224,10 +370,10 @@
         </header>
 
         <!-- Content Grid -->
-        {#if data.totalItems > 0}
+        {#if liveTotalItems > 0}
             <div
                 class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-                {#each data.items as item, i (item.riven_id)}
+                {#each liveItems as item, i (item.riven_id)}
                     <div
                         class="animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards duration-700"
                         style="animation-delay: {i * 30}ms">
@@ -245,8 +391,8 @@
             <!-- Pagination -->
             <div class="flex justify-center pt-12 pb-24">
                 <Pagination.Root
-                    count={data.totalItems}
-                    perPage={$formData.limit}
+                    count={liveTotalItems}
+                    perPage={liveLimit}
                     bind:page={$formData.page}>
                     {#snippet children({ pages, currentPage })}
                         <Pagination.Content>
@@ -329,7 +475,7 @@
                 <div class="flex items-center gap-1">
                     {#snippet actionButton(
                         label: string,
-                        icon: any,
+                        icon: { component: Component },
                         onClick: () => Promise<void>,
                         variant: "default" | "destructive" = "default"
                     )}
@@ -366,7 +512,7 @@
                                 toast.info("No matching items were reset");
                             }
                             itemsStore.clear();
-                            await invalidate(LIBRARY_ITEMS_DEPENDENCY);
+                            await refreshLiveLibrary();
                         } catch (e) {
                             if (e instanceof Error) toast.error(`Error: ${e.message}`);
                             else toast.error("An unknown error occurred");
@@ -387,7 +533,7 @@
                                 toast.info("No matching items were marked for retry");
                             }
                             itemsStore.clear();
-                            await invalidate(LIBRARY_ITEMS_DEPENDENCY);
+                            await refreshLiveLibrary();
                         } catch (e) {
                             if (e instanceof Error) toast.error(`Error: ${e.message}`);
                             else toast.error("An unknown error occurred");
@@ -407,7 +553,7 @@
                                 });
                                 toast.success(`Removed ${itemsStore.count} items`);
                                 itemsStore.clear();
-                                await invalidate(LIBRARY_ITEMS_DEPENDENCY);
+                                await refreshLiveLibrary();
                             } catch (e) {
                                 if (e instanceof Error) toast.error(`Error: ${e.message}`);
                                 else toast.error("An unknown error occurred");

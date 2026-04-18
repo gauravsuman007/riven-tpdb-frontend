@@ -11,17 +11,15 @@
     import WatchingNowCard from "$lib/components/dashboard/watching-now-card.svelte";
     import type { ActivePlaybackSession, DownloaderService } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
-    import { invalidate } from "$app/navigation";
-    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
-
-    const DASHBOARD_STATS_DEPENDENCY = "riven:dashboard-stats";
+    import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
 
     let { data }: { data: PageData } = $props();
 
     let activePlaybackSessions = $state<ActivePlaybackSession[]>([]);
     let downloaderServices = $state<DownloaderService[]>([]);
+    // svelte-ignore state_referenced_locally
+    let statistics = $state(data.statistics);
 
-    const statistics = $derived(data.statistics);
     const serviceStatuses = $derived(
         (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
     );
@@ -92,6 +90,30 @@
         }
     `;
 
+    const STATS_QUERY = `
+        query DashboardStats {
+            stats {
+                totalMovies
+                totalShows
+                totalSeasons
+                totalEpisodes
+                completed
+                scraped
+                indexed
+                failed
+                paused
+                ongoing
+                partiallyCompleted
+                unreleased
+            }
+            activity
+            yearReleases {
+                year
+                count
+            }
+        }
+    `;
+
     type GqlDebridAccountInfo = {
         store: string;
         email: string | null;
@@ -101,6 +123,24 @@
         cooldownUntil: string | null;
         totalDownloadedBytes: number | null;
         points: number | null;
+    };
+    type GqlDashboardStats = {
+        stats: {
+            totalMovies: number;
+            totalShows: number;
+            totalSeasons: number;
+            totalEpisodes: number;
+            completed: number;
+            scraped: number;
+            indexed: number;
+            failed: number;
+            paused: number;
+            ongoing: number;
+            partiallyCompleted: number;
+            unreleased: number;
+        };
+        activity: Record<string, number>;
+        yearReleases: { year: number; count: number }[];
     };
 
     function mapDebridService(info: GqlDebridAccountInfo): DownloaderService {
@@ -124,13 +164,45 @@
         };
     }
 
+    function mapDashboardStats(result: GqlDashboardStats): PageData["statistics"] {
+        const s = result.stats;
+        const total_items = s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
+
+        return {
+            total_movies: s.totalMovies,
+            total_shows: s.totalShows,
+            total_seasons: s.totalSeasons,
+            total_episodes: s.totalEpisodes,
+            total_items,
+            incomplete_items: total_items - s.completed,
+            states: {
+                Completed: s.completed,
+                Scraped: s.scraped,
+                Indexed: s.indexed,
+                Failed: s.failed,
+                Paused: s.paused,
+                Ongoing: s.ongoing,
+                PartiallyCompleted: s.partiallyCompleted,
+                Unreleased: s.unreleased
+            },
+            activity: result.activity ?? {},
+            media_year_releases: result.yearReleases ?? []
+        };
+    }
+
+    async function refreshDashboardStats() {
+        const result = await gqlClient<GqlDashboardStats>(STATS_QUERY);
+        statistics = mapDashboardStats(result);
+    }
+
     $effect(() => {
+        statistics = data.statistics;
         activePlaybackSessions = data.activePlaybackSessions ?? [];
         downloaderServices = data.downloaderInfo?.services ?? [];
     });
 
     $effect(() => {
-        return subscribeToMediaUpdates(() => invalidate(DASHBOARD_STATS_DEPENDENCY));
+        return subscribeToRivenMediaEvents(refreshDashboardStats);
     });
 
     onMount(() => {

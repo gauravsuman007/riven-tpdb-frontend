@@ -9,6 +9,7 @@
     import { fly, fade } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import type { TMDBTransformedListItem } from "$lib/providers/parser";
+    import { gqlClient } from "$lib/graphql-client";
 
     interface Props {
         open: boolean;
@@ -100,43 +101,67 @@
         }
 
         try {
-            const page = String(currentPage);
-            const params = new URLSearchParams({ query: q, searchMode: "search", page });
-            const [movieRes, tvRes] = await Promise.all([
-                fetch(`/api/tmdb/search/movie?${params}`, { signal }),
-                fetch(`/api/tmdb/search/tv?${params}`, { signal })
+            const searchQuery = `query SearchTmdb($type: String!, $params: JSON, $searchMode: String) {
+                searchTmdb(type: $type, params: $params, searchMode: $searchMode) {
+                    results {
+                        id title posterPath mediaType year voteAverage voteCount
+                        popularity overview backdropPath genreIds releaseDate
+                        firstAirDate originalTitle originalLanguage indexer
+                    }
+                    page totalPages totalResults
+                }
+            }`;
+            const searchParams = { query: q, page: String(currentPage) };
+            const [movieData, tvData] = await Promise.all([
+                gqlClient<{ searchTmdb: { results: TMDBTransformedListItem[] } }>(
+                    searchQuery,
+                    { type: "movie", params: searchParams, searchMode: "search" },
+                    signal
+                ).catch(() => null),
+                gqlClient<{ searchTmdb: { results: TMDBTransformedListItem[] } }>(
+                    searchQuery,
+                    { type: "tv", params: searchParams, searchMode: "search" },
+                    signal
+                ).catch(() => null)
             ]);
 
             if (signal.aborted) return;
 
-            if (!movieRes.ok) {
-                console.error(`TMDB movie search failed: ${movieRes.status} ${movieRes.statusText}`);
-            }
-            if (!tvRes.ok) {
-                console.error(`TMDB TV search failed: ${tvRes.status} ${tvRes.statusText}`);
-            }
+            const mapResults = (data: { searchTmdb: { results: TMDBTransformedListItem[] } } | null) =>
+                (data?.searchTmdb.results ?? []).map((item: any) => ({
+                    ...item,
+                    poster_path: item.posterPath ?? item.poster_path,
+                    media_type: item.mediaType ?? item.media_type,
+                    vote_average: item.voteAverage ?? item.vote_average,
+                    vote_count: item.voteCount ?? item.vote_count,
+                    backdrop_path: item.backdropPath ?? item.backdrop_path,
+                    genre_ids: item.genreIds ?? item.genre_ids,
+                    release_date: item.releaseDate ?? item.release_date,
+                    first_air_date: item.firstAirDate ?? item.first_air_date,
+                    original_title: item.originalTitle ?? item.original_title,
+                    original_language: item.originalLanguage ?? item.original_language
+                })) as TMDBTransformedListItem[];
 
-            const [movies, tv] = await Promise.all([
-                movieRes.ok ? movieRes.json() : { results: [], total_pages: 0 },
-                tvRes.ok ? tvRes.json() : { results: [], total_pages: 0 }
-            ]);
-
-            if (signal.aborted) return;
-
-            const maxTotalPages = Math.max(movies.total_pages ?? 0, tv.total_pages ?? 0);
+            const maxTotalPages = Math.max(
+                movieData?.searchTmdb ? 1 : 0,
+                tvData?.searchTmdb ? 1 : 0
+            );
             hasMorePages = currentPage < maxTotalPages;
 
             const merged: TMDBTransformedListItem[] = [
-                ...(movies.results ?? []),
-                ...(tv.results ?? [])
+                ...mapResults(movieData),
+                ...mapResults(tvData)
             ].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
 
             if (reset) {
                 results = merged;
             } else {
                 // Deduplicate by id+media_type
-                const seen = new Set(results.map(r => `${r.media_type}-${r.id}`));
-                results = [...results, ...merged.filter(r => !seen.has(`${r.media_type}-${r.id}`))];
+                const seen = new Set(results.map((r) => `${r.media_type}-${r.id}`));
+                results = [
+                    ...results,
+                    ...merged.filter((r) => !seen.has(`${r.media_type}-${r.id}`))
+                ];
             }
             currentPage++;
         } catch (err) {
@@ -268,10 +293,7 @@
         </div>
 
         <!-- Results -->
-        <div
-            bind:this={scrollContainer}
-            onscroll={handleScroll}
-            class="flex-1 overflow-y-auto">
+        <div bind:this={scrollContainer} onscroll={handleScroll} class="flex-1 overflow-y-auto">
             {#if loading}
                 <div class="grid grid-cols-2 gap-3 px-4 pt-4 pb-24">
                     {#each Array.from({ length: 8 }, (_, i) => i) as i (i)}

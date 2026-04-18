@@ -1,26 +1,11 @@
-/*
-TMDB V3 OPENAPI SPEC: https://developer.themoviedb.org/openapi/tmdb-api.json
-TVDB V4 OPENAPI SPEC: https://thetvdb.github.io/v4-api/swagger.yml
-RIVEN SPEC: https://riven.domain.com/openapi.json
-
-COMMAND TO GENERATE: pnpx openapi-typescript URL -o src/lib/providers/FILE.ts
-
-This is different from @hey-api openapi-ts package.
-*/
-
 import createClient from "openapi-fetch";
 import { env } from "$env/dynamic/public";
 
 import type { paths as TVDBPaths } from "./tvdb";
 import type { paths as TMDBPaths } from "./tmdb";
 import type { paths as TraktPaths } from "./trakt";
-import type { paths as RivenPaths } from "./riven";
 import { parseTMDBMovieDetails, parseTVDBShowDetails } from "./parser";
 import { customFetch } from "$lib/custom-fetch";
-
-const rivenClient = createClient<RivenPaths>({
-    baseUrl: ""
-});
 
 const tvdbClient = createClient<TVDBPaths>({
     baseUrl: "https://api4.thetvdb.com/v4",
@@ -1337,7 +1322,6 @@ export const TMDB_LANGUAGES: { iso_639_1: string; english_name: string; name: st
 ];
 
 export default {
-    riven: rivenClient,
     tvdb: tvdbClient,
     tmdb: tmdbClient,
     trakt: traktClient,

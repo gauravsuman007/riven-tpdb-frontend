@@ -8,7 +8,7 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
-    import { subscribeToMediaUpdates } from "$lib/services/library-live-updates";
+    import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
     import { gqlClient } from "$lib/graphql-client";
     import {
         getRecentItemsVariables,
@@ -28,7 +28,7 @@
         key: "recentlyAdded",
         noCache: true,
         initialData: data.recentlyAdded,
-        loader: async (page) => {
+        loader: async (page, _timeWindow) => {
             const recentData = await gqlClient<RecentItemsResponse>(
                 RECENT_ITEMS_QUERY,
                 getRecentItemsVariables(page)
@@ -36,15 +36,37 @@
             return mapRecentItemsPage(recentData);
         }
     });
+    const TRENDING_QUERY = `query TrendingTmdb($type: String!, $timeWindow: String!, $page: Int) {
+        trendingTmdb(type: $type, timeWindow: $timeWindow, page: $page) {
+            results { id title posterPath mediaType year popularity }
+        }
+    }`;
+    const mapTrending = (d: { trendingTmdb: { results: any[] } }) =>
+        d.trendingTmdb.results.map((r) => ({
+            ...r,
+            poster_path: r.posterPath,
+            media_type: r.mediaType
+        }));
+
     const trendingMoviesStore = new MediaListStore<BaseListItem>({
         key: "trendingMovies",
-        apiPath: "/api/tmdb/movie",
-        initialTimeWindow: "day"
+        initialTimeWindow: "day",
+        loader: (page, timeWindow) =>
+            gqlClient<{ trendingTmdb: { results: any[] } }>(TRENDING_QUERY, {
+                type: "movie",
+                timeWindow: timeWindow ?? "day",
+                page
+            }).then(mapTrending)
     });
     const trendingShowsStore = new MediaListStore<BaseListItem>({
         key: "trendingShows",
-        apiPath: "/api/tmdb/tv",
-        initialTimeWindow: "day"
+        initialTimeWindow: "day",
+        loader: (page, timeWindow) =>
+            gqlClient<{ trendingTmdb: { results: any[] } }>(TRENDING_QUERY, {
+                type: "tv",
+                timeWindow: timeWindow ?? "day",
+                page
+            }).then(mapTrending)
     });
     const anilistTrendingStore = new MediaListStore<BaseListItem>({
         key: "anilistTrending",
@@ -52,7 +74,7 @@
     });
 
     $effect(() => {
-        return subscribeToMediaUpdates(() => recentlyAddedStore.refresh());
+        return subscribeToRivenMediaEvents(() => recentlyAddedStore.refresh());
     });
 </script>
 

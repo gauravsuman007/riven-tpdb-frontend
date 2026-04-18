@@ -135,7 +135,10 @@
                                             <select
                                                 id="plg-{f.key}"
                                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 max-w-sm rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
-                                                value={pluginFields[f.key] ?? f.default_value ?? options[0] ?? ""}
+                                                value={pluginFields[f.key] ??
+                                                    f.default_value ??
+                                                    options[0] ??
+                                                    ""}
                                                 onchange={(e) =>
                                                     (pluginFields[f.key] = (
                                                         e.currentTarget as HTMLSelectElement

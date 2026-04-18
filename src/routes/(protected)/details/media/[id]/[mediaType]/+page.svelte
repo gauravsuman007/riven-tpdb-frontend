@@ -27,7 +27,6 @@
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import CollectionSheet from "$lib/components/media/collection-sheet.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
-    import VideoPlayer from "$lib/components/media/video-player.svelte";
     import LiveSeasons from "./live-seasons.svelte";
     import LiveEpisodes from "./live-episodes.svelte";
     import { toast } from "svelte-sonner";
@@ -68,11 +67,6 @@
 
     let showTrailerOverride = $state(false);
     const showTrailer = $derived(showTrailerOverride && data.mediaDetails?.details?.trailer);
-
-    let showVideoPlayer = $state(false);
-    function toggleVideoPlayer() {
-        showVideoPlayer = !showVideoPlayer;
-    }
 
     let liveRiven = $state<RivenMediaItem | undefined>(data.riven);
     let hydratedRiven = $state<RivenMediaItem | undefined>(undefined);
@@ -782,16 +776,6 @@
                                 {:else}<div></div>{/if}
 
                                 <div class="flex gap-2 md:gap-4">
-                                    {#if riven?.state === "Completed"}
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            class="border border-white/10 bg-white/10 px-6 text-sm font-bold text-white shadow-lg backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20"
-                                            onclick={toggleVideoPlayer}>
-                                            <Play class="mr-2 h-4 w-4 fill-current" />
-                                            Play
-                                        </Button>
-                                    {/if}
                                     {#if data.mediaDetails?.details.trailer}
                                         <Button
                                             variant="secondary"
@@ -1558,26 +1542,18 @@
                                         {/if}
 
                                         <!-- Links -->
-                                        {#if fs?.download_url || fs?.stream_url}
+                                        {#if fs?.download_url}
                                             <div class="flex flex-col gap-2">
                                                 <span
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Links</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#if fs?.download_url}<a
-                                                            href={fs.download_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                            >Download</a
-                                                        >{/if}
-                                                    {#if fs?.stream_url}<a
-                                                            href={fs.stream_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                            >Stream</a
-                                                        >{/if}
+                                                    <a
+                                                        href={fs.download_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
+                                                        >Download</a>
                                                 </div>
                                             </div>
                                         {/if}
@@ -1623,19 +1599,4 @@
             </div>
         </div>
     </div>
-
-    <!-- Video Player Dialog -->
-    <Dialog.Root bind:open={showVideoPlayer}>
-        <Dialog.Content class="border-border/50 max-w-5xl overflow-hidden bg-black p-0">
-            <Dialog.Header class="sr-only">
-                <Dialog.Title>Video Player</Dialog.Title>
-                <Dialog.Description>Playing {data.mediaDetails?.details.title}</Dialog.Description>
-            </Dialog.Header>
-            <div class="aspect-video w-full">
-                {#if showVideoPlayer && rivenId}
-                    <VideoPlayer itemId={rivenId} class="h-full w-full" />
-                {/if}
-            </div>
-        </Dialog.Content>
-    </Dialog.Root>
 {/key}

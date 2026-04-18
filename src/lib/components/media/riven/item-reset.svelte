@@ -73,46 +73,46 @@
 </script>
 
 {#if page.data.permissions?.canManageLibrary}
-<AlertDialog.Root bind:open>
-    <AlertDialog.Trigger>
-        {#snippet child({ props })}
-            <Button {variant} {size} {...restProps} {...props}>
-                {#if children}
-                    {@render children()}
-                {:else}
+    <AlertDialog.Root bind:open>
+        <AlertDialog.Trigger>
+            {#snippet child({ props })}
+                <Button {variant} {size} {...restProps} {...props}>
+                    {#if children}
+                        {@render children()}
+                    {:else}
+                        Reset
+                    {/if}
+                </Button>
+            {/snippet}
+        </AlertDialog.Trigger>
+        <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
+            <AlertDialog.Header>
+                <AlertDialog.Title>
+                    Resetting "{title ?? "Media Item"}"
+                </AlertDialog.Title>
+                <AlertDialog.Description>
+                    This will send a request to Riven to reset this media. You will be notified when
+                    it's done.
+                </AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <Button
+                    disabled={loading}
+                    onclick={async () => {
+                        loading = true;
+                        const success = await resetMediaItem(ids);
+                        loading = false;
+                        if (success) {
+                            open = false;
+                        }
+                    }}>
+                    {#if loading}
+                        <Loader2 class="mr-1 inline-block animate-spin" />
+                    {/if}
                     Reset
-                {/if}
-            </Button>
-        {/snippet}
-    </AlertDialog.Trigger>
-    <AlertDialog.Content class="border border-white/10 bg-zinc-950/95 backdrop-blur-2xl">
-        <AlertDialog.Header>
-            <AlertDialog.Title>
-                Resetting "{title ?? "Media Item"}"
-            </AlertDialog.Title>
-            <AlertDialog.Description>
-                This will send a request to Riven to reset this media. You will be notified when
-                it's done.
-            </AlertDialog.Description>
-        </AlertDialog.Header>
-        <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <Button
-                disabled={loading}
-                onclick={async () => {
-                    loading = true;
-                    const success = await resetMediaItem(ids);
-                    loading = false;
-                    if (success) {
-                        open = false;
-                    }
-                }}>
-                {#if loading}
-                    <Loader2 class="mr-1 inline-block animate-spin" />
-                {/if}
-                Reset
-            </Button>
-        </AlertDialog.Footer>
-    </AlertDialog.Content>
-</AlertDialog.Root>
+                </Button>
+            </AlertDialog.Footer>
+        </AlertDialog.Content>
+    </AlertDialog.Root>
 {/if}

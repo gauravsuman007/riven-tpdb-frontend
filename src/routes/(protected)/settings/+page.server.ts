@@ -56,11 +56,13 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
                 rankSettings: Record<string, unknown>;
                 qualityProfiles: QualityProfile[];
                 customProfiles: CustomProfile[];
-            }>(locals.backendUrl, locals.apiKey, RANK_SETTINGS_QUERY, {}, fetch, authHeaders).catch(() => ({
-                rankSettings: {},
-                qualityProfiles: [],
-                customProfiles: []
-            })),
+            }>(locals.backendUrl, locals.apiKey, RANK_SETTINGS_QUERY, {}, fetch, authHeaders).catch(
+                () => ({
+                    rankSettings: {},
+                    qualityProfiles: [],
+                    customProfiles: []
+                })
+            ),
             gql<{ generalSettings: Record<string, unknown> }>(
                 locals.backendUrl,
                 locals.apiKey,

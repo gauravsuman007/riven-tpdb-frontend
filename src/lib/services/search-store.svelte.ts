@@ -2,6 +2,7 @@ import { browser } from "$app/environment";
 import type { ParsedSearchQuery } from "$lib/search-parser";
 
 import { createScopedLogger } from "$lib/logger";
+import { gqlClient } from "$lib/graphql-client";
 import type { TMDBTransformedListItem } from "$lib/providers/parser";
 
 const logger = createScopedLogger("search");
@@ -12,6 +13,58 @@ export interface SearchResult {
     page: number;
     total_pages: number;
     total_results: number;
+}
+
+interface GqlTmdbItem {
+    id: number;
+    title: string;
+    posterPath: string | null;
+    mediaType: string;
+    year: string;
+    voteAverage: number | null;
+    voteCount: number | null;
+    popularity: number | null;
+    overview: string | null;
+    backdropPath: string | null;
+    genreIds: number[];
+    releaseDate: string | null;
+    firstAirDate: string | null;
+    originalTitle: string | null;
+    originalLanguage: string | null;
+    indexer: string;
+}
+
+interface GqlTmdbPage {
+    results: GqlTmdbItem[];
+    page: number;
+    totalPages: number;
+    totalResults: number;
+}
+
+function mapTmdbPage(gql: GqlTmdbPage): SearchResult {
+    return {
+        results: gql.results.map((item) => ({
+            id: item.id,
+            title: item.title,
+            poster_path: item.posterPath,
+            media_type: item.mediaType as TMDBTransformedListItem["media_type"],
+            year: item.year,
+            vote_average: item.voteAverage,
+            vote_count: item.voteCount,
+            popularity: item.popularity ?? undefined,
+            overview: item.overview,
+            backdrop_path: item.backdropPath,
+            genre_ids: item.genreIds,
+            release_date: item.releaseDate,
+            first_air_date: item.firstAirDate,
+            original_title: item.originalTitle,
+            original_language: item.originalLanguage,
+            indexer: "tmdb" as const
+        })),
+        page: gql.page,
+        total_pages: gql.totalPages,
+        total_results: gql.totalResults
+    };
 }
 
 // Filter parameters that can be applied to TMDB searches
@@ -347,56 +400,52 @@ export class SearchStore {
         this.filterParams = {};
     }
 
-    /**
-     * Build the search endpoint URL for a given type and page
-     */
-    private buildSearchUrl(type: "movie" | "tv" | "person" | "company", page: number): string {
-        // Merge parsed search params with filter params
-        // Filter params take precedence
+    private buildSearchParams(type: "movie" | "tv" | "person" | "company", page: number) {
         const hasFilters = Object.keys(this.filterParams).length > 0;
-
-        // When filters are active, always use discover mode because
-        // TMDB's search endpoints don't support most filter params
         const searchMode = hasFilters ? "discover" : this.parsedSearch?.searchMode || "discover";
 
-        const params = {
+        const params: Record<string, unknown> = {
             ...(this.parsedSearch?.tmdbParams || {}),
             ...this.filterParams,
-            page,
-            searchMode
+            page
         };
 
-        // Remove 'query' param when using discover mode (it's not supported)
         if (searchMode === "discover") {
             delete params.query;
         }
 
-        const searchParams = new URLSearchParams();
+        // Strip undefined/null/empty values
+        const cleaned: Record<string, string> = {};
         for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && value !== "") {
-                searchParams.append(key, String(value));
+                cleaned[key] = String(value);
             }
         }
 
-        return `/api/tmdb/search/${type}?${searchParams.toString()}`;
+        return { searchMode, params: cleaned };
     }
 
-    /**
-     * Fetch search results from the API
-     */
     private async fetchSearchResults(
         type: "movie" | "tv" | "person" | "company",
         page: number,
         signal?: AbortSignal
     ): Promise<SearchResult> {
-        const endpoint = this.buildSearchUrl(type, page);
-        const response = await fetch(endpoint, { signal });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch ${type}: ${response.statusText}`);
-        }
-
-        return response.json();
+        const { searchMode, params } = this.buildSearchParams(type, page);
+        const data = await gqlClient<{ searchTmdb: GqlTmdbPage }>(
+            `query SearchTmdb($type: String!, $params: JSON, $searchMode: String) {
+                searchTmdb(type: $type, params: $params, searchMode: $searchMode) {
+                    results {
+                        id title posterPath mediaType year voteAverage voteCount
+                        popularity overview backdropPath genreIds releaseDate
+                        firstAirDate originalTitle originalLanguage indexer
+                    }
+                    page totalPages totalResults
+                }
+            }`,
+            { type, params, searchMode },
+            signal
+        );
+        return mapTmdbPage(data.searchTmdb);
     }
 
     private async fetchMedia(

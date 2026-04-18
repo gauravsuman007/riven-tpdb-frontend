@@ -166,11 +166,16 @@ export async function gql<T>(
  * Execute a GraphQL operation client-side via the /graphql SvelteKit proxy.
  * Auth is handled transparently by the proxy route.
  */
-export async function gqlClient<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+export async function gqlClient<T>(
+    query: string,
+    variables?: Record<string, unknown>,
+    signal?: AbortSignal
+): Promise<T> {
     const response = await fetch(GRAPHQL_PROXY_URL, {
         method: "POST",
         headers: { "Content-Type": JSON_CONTENT_TYPE },
-        body: JSON.stringify({ query, variables: variables ?? {} })
+        body: JSON.stringify({ query, variables: variables ?? {} }),
+        signal
     });
 
     if (!response.ok) {
@@ -183,8 +188,8 @@ export async function gqlClient<T>(query: string, variables?: Record<string, unk
 }
 
 /**
- * Execute a client-side GraphQL subscription via multipart HTTP responses.
- * Returns an unsubscribe function that aborts the underlying request.
+ * Execute a client-side GraphQL subscription via multipart HTTP streaming.
+ * Auth is handled transparently by the /graphql SvelteKit proxy route.
  */
 export function gqlSubscribeClient<T>(
     query: string,
@@ -215,19 +220,13 @@ export function gqlSubscribeClient<T>(
             await consumeMultipartStream<T>(
                 response,
                 (payload) => {
-                    if (!active) {
-                        return;
-                    }
-
+                    if (!active) return;
                     handlers.onData(getGraphQLData(payload));
                 },
                 controller.signal
             );
         } catch (error) {
-            if (!active || controller.signal.aborted) {
-                return;
-            }
-
+            if (!active || controller.signal.aborted) return;
             handlers.onError?.(error instanceof Error ? error : new Error("Subscription failed"));
         }
     })();

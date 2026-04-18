@@ -28,6 +28,15 @@
         state === "Unreleased" && "bg-slate-500/80 text-slate-50 hover:bg-slate-500/70",
         state === "Paused" && "bg-slate-500/80 text-slate-50 hover:bg-slate-500/70",
         state === "Failed" && "bg-red-600/80 text-red-50 hover:bg-red-600/70",
-        !["Completed", "PartiallyCompleted", "Ongoing", "Scraped", "Indexed", "Unreleased", "Paused", "Failed"].includes(state) && "bg-amber-600/80 text-amber-50 hover:bg-amber-600/70",
+        ![
+            "Completed",
+            "PartiallyCompleted",
+            "Ongoing",
+            "Scraped",
+            "Indexed",
+            "Unreleased",
+            "Paused",
+            "Failed"
+        ].includes(state) && "bg-amber-600/80 text-amber-50 hover:bg-amber-600/70",
         className
     )}>{state}</Badge>

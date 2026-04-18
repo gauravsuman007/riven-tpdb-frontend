@@ -5,6 +5,7 @@
     import { type CarouselAPI } from "$lib/components/ui/carousel/context.js";
     import Autoplay from "embla-carousel-autoplay";
     import { TMDB_IMAGE_BASE_URL, TMDB_GENRES } from "$lib/providers";
+    import { gqlClient } from "$lib/graphql-client";
     import { getSeasonAndYear } from "$lib/helpers";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
@@ -90,8 +91,13 @@
 
         const mediaType = item.media_type === "tv" ? "tv" : "movie";
         try {
-            const res = await fetch(`/api/tmdb/${mediaType}/${item.id}/logo`);
-            const data = await res.json();
+            const result = await gqlClient<{ tmdbLogoAndCert: { logo: string | null; certification: string | null } }>(
+                `query TmdbLogoAndCert($type: String!, $id: Int!) {
+                    tmdbLogoAndCert(type: $type, id: $id) { logo certification }
+                }`,
+                { type: mediaType, id: item.id }
+            );
+            const data = result.tmdbLogoAndCert;
 
             // Set certification if available
             if (data.certification) {

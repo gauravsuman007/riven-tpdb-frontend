@@ -15,19 +15,14 @@
         class?: string;
     }
 
-    let {
-        seasons,
-        selectedSeasons,
-        onToggle,
-        class: className = ""
-    }: Props = $props();
+    let { seasons, selectedSeasons, onToggle, class: className = "" }: Props = $props();
 
     function isSeasonLocked(season: SeasonInfo): boolean {
         return season.status === "Available";
     }
 </script>
 
-<div class="{className} flex w-full flex-col gap-0.5 max-h-60 overflow-y-auto">
+<div class="{className} flex max-h-60 w-full flex-col gap-0.5 overflow-y-auto">
     {#each seasons as season (season.id)}
         {@const locked = isSeasonLocked(season)}
         {@const selected = selectedSeasons.includes(season.season_number)}

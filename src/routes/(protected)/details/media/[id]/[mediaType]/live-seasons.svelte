@@ -14,7 +14,13 @@
         onSelectSeason: (season: string | undefined) => void;
     }
 
-    let { seasons, selectedSeason, stateBySeasonNumber, expectedBySeasonNumber, onSelectSeason }: Props = $props();
+    let {
+        seasons,
+        selectedSeason,
+        stateBySeasonNumber,
+        expectedBySeasonNumber,
+        onSelectSeason
+    }: Props = $props();
 </script>
 
 <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
@@ -22,7 +28,8 @@
         {#each seasons as season (season.id)}
             {@const rivenSeason = stateBySeasonNumber.get(season.number ?? 0)}
             {@const expectedCount = expectedBySeasonNumber?.get(season.number ?? 0)}
-            {@const completedCount = rivenSeason?.episodes?.filter(e => e.state === 'Completed').length ?? 0}
+            {@const completedCount =
+                rivenSeason?.episodes?.filter((e) => e.state === "Completed").length ?? 0}
             <Carousel.Item class="basis-auto">
                 <button
                     onclick={() => onSelectSeason(season.number?.toString())}
@@ -48,10 +55,14 @@
                             <div class="bg-muted h-1 flex-1 overflow-hidden rounded-full">
                                 <div
                                     class="bg-primary h-full rounded-full transition-all duration-500"
-                                    style="width: {Math.min(100, (completedCount / expectedCount) * 100)}%">
+                                    style="width: {Math.min(
+                                        100,
+                                        (completedCount / expectedCount) * 100
+                                    )}%">
                                 </div>
                             </div>
-                            <span class="text-muted-foreground font-mono text-[10px]">{completedCount}/{expectedCount}</span>
+                            <span class="text-muted-foreground font-mono text-[10px]"
+                                >{completedCount}/{expectedCount}</span>
                         </div>
                     {/if}
                 </button>
