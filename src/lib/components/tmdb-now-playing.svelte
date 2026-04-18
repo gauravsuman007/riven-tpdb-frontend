@@ -249,10 +249,10 @@
                                                 }}
                                                 class="max-h-full max-w-[80%] object-contain drop-shadow-2xl {alignment ===
                                                 'right'
-                                                    ? 'object-right-bottom'
+                                                    ? 'object-bottom-right'
                                                     : alignment === 'center'
                                                       ? 'object-bottom'
-                                                      : 'object-left-bottom'}" />
+                                                      : 'object-bottom-left'}" />
                                         {:else}
                                             <h1
                                                 in:fly={{
@@ -479,7 +479,7 @@
     </div>
 {:else}
     <div class="relative w-full overflow-hidden rounded-2xl {heightClass}">
-        <div class="from-background to-muted absolute inset-0 animate-pulse bg-gradient-to-t"></div>
+        <div class="from-background to-muted absolute inset-0 animate-pulse bg-linear-to-t"></div>
 
         <div class="absolute inset-0 z-2 flex flex-col justify-end p-8 md:p-12">
             <div class="w-full max-w-xl">

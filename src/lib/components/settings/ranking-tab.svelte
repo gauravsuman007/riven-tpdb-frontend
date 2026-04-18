@@ -482,7 +482,7 @@
                                                     Number(
                                                         (e.currentTarget as HTMLInputElement).value
                                                     ))}
-                                            class="max-w-[160px]" />
+                                            class="max-w-40" />
                                     </div>
                                 {:else if subshape === "string_array"}
                                     <div class="space-y-2 rounded-lg border p-3">

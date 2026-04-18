@@ -948,8 +948,6 @@ export function parseTVDBShowDetails(
     if (!data) return null;
 
     const runtime = data.averageRuntime ?? null;
-
-    let title = data.name;
     const originalTitle = data.name;
 
     const engTitle = data.translations?.nameTranslations?.find(
@@ -960,14 +958,13 @@ export function parseTVDBShowDetails(
         (t) => t.language === "eng" && t.isAlias
     )?.name;
 
-    title = engTitle || engAlias || data.name;
+    const title = engTitle || engAlias || data.name;
 
-    let overview = data.overview;
     const engOverview = data.translations?.overviewTranslations?.find(
         (t) => t.language === "eng"
     )?.overview;
 
-    overview = engOverview || data.overview;
+    const overview = engOverview || data.overview;
 
     const posterPath = buildTVDBImage(
         selectArtwork(data.artworks, (art) => art.type === 2 || art.type === 14, "eng")?.image ??

@@ -133,29 +133,28 @@
             {/key}
             <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
             <div
-                class="to-background absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent">
+                class="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/50 to-transparent">
             </div>
             <div
-                class="to-background absolute inset-0 bg-gradient-to-b from-zinc-950/20 via-transparent to-transparent">
+                class="absolute inset-0 bg-linear-to-b from-zinc-950/20 via-transparent to-transparent">
             </div>
         </div>
     {:else}
         <!-- Default subtle background -->
         <div class="pointer-events-none fixed inset-0 z-0">
-            <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black">
+            <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
+            <div
+                class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
             </div>
             <div
-                class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
-            </div>
-            <div
-                class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
+                class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
             </div>
         </div>
     {/if}
 
     <!-- Content Container -->
     <div
-        class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-6 px-6 pt-6 pb-24 md:px-12 md:pt-16 md:pb-12 lg:px-16">
+        class="relative z-10 mx-auto flex w-full max-w-600 flex-col gap-6 px-6 pt-6 pb-24 md:px-12 md:pt-16 md:pb-12 lg:px-16">
         <!-- Header -->
         <div class="flex flex-col gap-4">
             <div class="flex flex-wrap items-center justify-between gap-4">
@@ -381,7 +380,7 @@
                     {/each}
                     {#if searchStore.loading}
                         {#each Array(6) as i (i)}
-                            <div class="aspect-[2/3] w-full">
+                            <div class="aspect-2/3 w-full">
                                 <PortraitCardSkeleton />
                             </div>
                         {/each}
@@ -391,7 +390,7 @@
                 <div
                     class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
                     {#each Array(12) as i (i)}
-                        <div class="aspect-[2/3] w-full">
+                        <div class="aspect-2/3 w-full">
                             <PortraitCardSkeleton />
                         </div>
                     {/each}

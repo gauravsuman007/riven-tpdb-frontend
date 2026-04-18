@@ -60,7 +60,7 @@
                             type="button"
                             variant="ghost"
                             onclick={() => goToStep(index)}
-                            class="group relative h-auto min-w-[112px] justify-start gap-2 rounded-none border px-3 py-3 text-left first:rounded-l-xl first:border-r-0 last:rounded-r-xl sm:min-w-[132px] {index ===
+                            class="group relative h-auto min-w-28 justify-start gap-2 rounded-none border px-3 py-3 text-left first:rounded-l-xl first:border-r-0 last:rounded-r-xl sm:min-w-33 {index ===
                             stepIndex
                                 ? 'border-white/14 bg-white/6 hover:bg-white/6'
                                 : index < stepIndex
@@ -83,7 +83,7 @@
 
             <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col">
                 <Card.Root
-                    class="bg-card/90 border-border/40 flex min-h-0 flex-1 rounded-[1.5rem] border py-0 shadow-lg">
+                    class="bg-card/90 border-border/40 flex min-h-0 flex-1 rounded-3xl border py-0 shadow-lg">
                     <Card.Header class="px-5 py-5 sm:px-6 md:px-10 md:py-6">
                         <div class="max-w-3xl">
                             <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">

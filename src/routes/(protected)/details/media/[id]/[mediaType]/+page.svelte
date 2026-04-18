@@ -753,27 +753,27 @@
                     loading="lazy" />
                 <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
                 <div
-                    class="to-background absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent">
+                    class="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/50 to-transparent">
                 </div>
                 <div
-                    class="to-background absolute inset-0 bg-gradient-to-b from-zinc-950/20 via-transparent to-transparent">
+                    class="absolute inset-0 bg-linear-to-b from-zinc-950/20 via-transparent to-transparent">
                 </div>
             </div>
         {/if}
 
-        <div class="z-10 mx-auto flex h-full w-full max-w-[2400px] flex-col">
+        <div class="z-10 mx-auto flex h-full w-full max-w-600 flex-col">
             <!-- Hero Banner - extends behind search bar -->
             {#if data.mediaDetails?.details.backdrop_path || data.mediaDetails?.details.trailer}
                 <div class="px-2 md:px-4">
                     <div
                         class={cn(
-                            "relative mb-6 flex h-[40vh] max-h-[600px] min-h-[350px] items-end justify-between overflow-hidden rounded-3xl bg-cover bg-center shadow-2xl transition-all duration-500 md:mb-10",
+                            "relative mb-6 flex h-[40vh] max-h-150 min-h-87.5 items-end justify-between overflow-hidden rounded-3xl bg-cover bg-center shadow-2xl transition-all duration-500 md:mb-10",
                             !showTrailer && "p-6 md:p-12"
                         )}
                         style="background-image: url('{data.mediaDetails?.details
                             .backdrop_path}');">
                         <div
-                            class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                            class="absolute inset-0 bg-linear-to-t from-black/90 via-black/40 to-transparent">
                         </div>
                         <!-- Border Overlay to prevent bright edge glitch -->
                         <div
@@ -1099,7 +1099,7 @@
                                 {#snippet trigger({ props })}
                                     <button
                                         {...props}
-                                        class="group border-border/50 relative block min-h-[6rem] w-full overflow-hidden rounded-xl border text-left shadow-lg transition-all duration-300 md:min-h-[9rem]">
+                                        class="group border-border/50 relative block min-h-24 w-full overflow-hidden rounded-xl border text-left shadow-lg transition-all duration-300 md:min-h-36">
                                         <!-- Background Layer -->
                                         <div class="absolute inset-0">
                                             <img
@@ -1108,7 +1108,7 @@
                                                 src={movieDetails.collection?.backdrop_path}
                                                 loading="lazy" />
                                             <div
-                                                class="from-background/90 via-background/40 absolute inset-0 bg-gradient-to-r to-transparent">
+                                                class="from-background/90 via-background/40 absolute inset-0 bg-linear-to-r to-transparent">
                                             </div>
                                         </div>
 
@@ -1201,7 +1201,7 @@
                                 {#if data.mediaDetails?.type === "movie" && (data.mediaDetails?.details.budget || data.mediaDetails?.details.revenue)}
                                     <div class="flex flex-wrap gap-12">
                                         {#if data.mediaDetails.details.budget}
-                                            <div class="flex min-w-[120px] flex-col gap-1">
+                                            <div class="flex min-w-30 flex-col gap-1">
                                                 <span
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Budget</span>
@@ -1212,7 +1212,7 @@
                                             </div>
                                         {/if}
                                         {#if data.mediaDetails.details.revenue}
-                                            <div class="flex min-w-[120px] flex-col gap-1">
+                                            <div class="flex min-w-30 flex-col gap-1">
                                                 <span
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Revenue</span>
@@ -1229,7 +1229,7 @@
                                 {#if data.mediaDetails?.details.origin_country?.length || data.mediaDetails?.details.spoken_languages?.length}
                                     <div class="flex flex-wrap gap-12">
                                         {#if data.mediaDetails?.details.origin_country?.length}
-                                            <div class="flex min-w-[120px] flex-col gap-1">
+                                            <div class="flex min-w-30 flex-col gap-1">
                                                 <span
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Origin</span>
@@ -1240,7 +1240,7 @@
                                             </div>
                                         {/if}
                                         {#if data.mediaDetails?.details.spoken_languages?.length}
-                                            <div class="flex min-w-[120px] flex-col gap-1">
+                                            <div class="flex min-w-30 flex-col gap-1">
                                                 <span
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Languages</span>

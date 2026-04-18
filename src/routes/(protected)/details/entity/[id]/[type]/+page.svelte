@@ -234,10 +234,10 @@
                     src={currentBackdrop.backdrop_path} />
                 <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
                 <div
-                    class="from-background via-background/50 absolute inset-0 bg-gradient-to-t to-transparent">
+                    class="from-background via-background/50 absolute inset-0 bg-linear-to-t to-transparent">
                 </div>
                 <div
-                    class="from-background/20 absolute inset-0 bg-gradient-to-b via-transparent to-transparent">
+                    class="from-background/20 absolute inset-0 bg-linear-to-b via-transparent to-transparent">
                 </div>
             </div>
         {:else if data.entity.profile_path}
@@ -252,7 +252,7 @@
             <div class="fixed top-0 left-0 z-0 h-screen w-full">
                 <div class="bg-background absolute inset-0"></div>
                 <div
-                    class="bg-primary/10 absolute top-[-10%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
+                    class="bg-primary/10 absolute top-[-10%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
                 </div>
             </div>
         {/if}
@@ -274,13 +274,13 @@
             <!-- Hero Content Area -->
             <div
                 class={cn(
-                    "mx-auto w-full max-w-[2400px] px-8 pb-12 md:px-20 md:pb-16 lg:px-24",
+                    "mx-auto w-full max-w-600 px-8 pb-12 md:px-20 md:pb-16 lg:px-24",
                     carouselItems.length === 0 && "pt-24 md:pt-[20vh]"
                 )}>
                 <div class="grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr] lg:gap-12">
                     <!-- Portrait Column (Desktop) -->
                     <div
-                        class="relative sticky top-24 hidden h-fit lg:mx-0 lg:block"
+                        class="sticky top-24 hidden h-fit lg:mx-0 lg:block"
                         in:fly|global={{ y: 20, duration: 400, delay: 50, easing: cubicOut }}>
                         <PortraitCard
                             title={data.entity.name}
@@ -302,7 +302,7 @@
                         <div class="flex gap-6 lg:block">
                             <!-- Mobile Portrait (Hidden on Desktop) -->
                             <div
-                                class="relative flex-shrink-0 lg:hidden"
+                                class="relative shrink-0 lg:hidden"
                                 in:fly|global={{
                                     y: 20,
                                     duration: 400,
@@ -388,13 +388,12 @@
                 </div>
             </div>
 
-            <div class="mx-auto w-full max-w-[2400px] px-8 md:px-20 lg:px-24">
+            <div class="mx-auto w-full max-w-600 px-8 md:px-20 lg:px-24">
                 <div class="bg-border/20 my-8 h-px w-full"></div>
             </div>
 
             <!-- Credits -->
-            <div
-                class="mx-auto flex w-full max-w-[2400px] flex-col gap-20 px-8 pb-24 md:px-20 lg:px-24">
+            <div class="mx-auto flex w-full max-w-600 flex-col gap-20 px-8 pb-24 md:px-20 lg:px-24">
                 {@render creditsSection("Movies", movieCredits, 200)}
                 {@render creditsSection("TV Shows", showCredits, 250)}
                 {@render creditsSection("Crew", crewCredits, 300)}

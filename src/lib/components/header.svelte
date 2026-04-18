@@ -98,7 +98,7 @@
 </script>
 
 <header
-    class="pointer-events-none absolute top-0 left-0 z-50 hidden h-20 w-full items-center bg-gradient-to-b from-black/50 to-transparent px-4 transition-all duration-500 md:flex md:px-16">
+    class="pointer-events-none absolute top-0 left-0 z-50 hidden h-20 w-full items-center bg-linear-to-b from-black/50 to-transparent px-4 transition-all duration-500 md:flex md:px-16">
     <div class="pointer-events-auto flex w-full items-center justify-between gap-6">
         <div class="mx-auto w-full max-w-lg transition-all duration-300 focus-within:max-w-xl">
             <InputGroup.Root
