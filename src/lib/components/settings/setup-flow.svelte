@@ -1,4 +1,5 @@
 <script lang="ts">
+    /* eslint-disable svelte/no-navigation-without-resolve */
     import { deserialize } from "$app/forms";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";

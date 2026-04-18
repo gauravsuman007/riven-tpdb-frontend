@@ -259,7 +259,7 @@
                                         {:then ratings}
                                             {#if ratings?.scores?.length}
                                                 <div class="flex items-center gap-3">
-                                                    {#each ratings.scores as score (score.name)}
+                                                    {#each ratings.scores as score (`${score.name}-${score.score}-${score.url ?? ""}`)}
                                                         <div
                                                             title={score.name}
                                                             class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md transition-transform hover:scale-105">
@@ -351,7 +351,7 @@
                         </h3>
                         {#key currentExampleIndex}
                             <div class="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {#each (data.searchExamples ?? []).slice(currentExampleIndex, currentExampleIndex + 6) as example (example)}
+                                {#each (data.searchExamples ?? []).slice(currentExampleIndex, currentExampleIndex + 6) as example, i (`${currentExampleIndex + i}-${example}`)}
                                     <button
                                         onclick={() => {
                                             window.dispatchEvent(
@@ -375,11 +375,11 @@
             {:else if hasResults}
                 <div
                     class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
-                    {#each searchStore.results as item (`${item.media_type}-${item.id}`)}
+                    {#each searchStore.results as item (`${item.indexer}-${item.media_type}-${item.id}`)}
                         <ListItem data={item} indexer={item.indexer} type={item.media_type} />
                     {/each}
                     {#if searchStore.loading}
-                        {#each Array(6) as i (i)}
+                        {#each Array.from({ length: 6 }, (_, i) => i) as i (i)}
                             <div class="aspect-2/3 w-full">
                                 <PortraitCardSkeleton />
                             </div>
@@ -389,7 +389,7 @@
             {:else if searchStore.loading}
                 <div
                     class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
-                    {#each Array(12) as i (i)}
+                    {#each Array.from({ length: 12 }, (_, i) => i) as i (i)}
                         <div class="aspect-2/3 w-full">
                             <PortraitCardSkeleton />
                         </div>

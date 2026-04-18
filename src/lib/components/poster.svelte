@@ -1,4 +1,5 @@
 <script lang="ts">
+    /* eslint-disable svelte/no-navigation-without-resolve */
     import { cn } from "$lib/utils";
     import Circle from "@lucide/svelte/icons/circle";
     import type { Snippet } from "svelte";

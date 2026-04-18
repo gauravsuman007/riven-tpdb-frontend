@@ -319,10 +319,11 @@
 
             {#if fs?.download_url}
                 <div class="flex flex-wrap gap-2">
+                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
                     <a
                         href={fs.download_url}
                         target="_blank"
-                        rel="noopener noreferrer"
+                        rel="external noopener noreferrer"
                         class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10">
                         Download
                     </a>
@@ -362,7 +363,7 @@
 
         {#if episode.image}
             <div
-                class="relative w-full max-w-[640px] overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
+                class="relative w-full max-w-160 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
                 <img
                     alt={episode.name}
                     class="aspect-video w-full object-cover"

@@ -303,10 +303,11 @@
                                         {#if ratings[item.id]?.scores?.length}
                                             <div class="ml-2 flex items-center gap-4">
                                                 {#each ratings[item.id].scores as score (score.name)}
+                                                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
                                                     <a
                                                         href={score.url}
                                                         target="_blank"
-                                                        rel="noopener noreferrer"
+                                                        rel="external noopener noreferrer"
                                                         class="flex items-center gap-1.5 transition-opacity hover:opacity-80"
                                                         title={score.name}>
                                                         {#if score.image}

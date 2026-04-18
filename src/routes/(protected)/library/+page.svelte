@@ -1,4 +1,5 @@
 <script lang="ts">
+    /* eslint-disable svelte/no-navigation-without-resolve */
     import { tick, onDestroy } from "svelte";
     import { page } from "$app/state";
     import type { PageProps } from "./$types";
@@ -257,17 +258,16 @@
 
 <!-- Immersive Background -->
 <div class="pointer-events-none fixed inset-0 z-0">
-    <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
-    <div
-        class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
+    <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
+    <div class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
     </div>
     <div
-        class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
+        class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
     </div>
 </div>
 
 <PageShell class="relative z-10 flex min-h-screen flex-col overflow-x-hidden bg-transparent">
-    <div class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-8">
+    <div class="relative z-10 mx-auto flex w-full max-w-600 flex-col gap-8">
         <!-- Header Section -->
         <header class="flex flex-col justify-between gap-6 pt-32 md:flex-row md:items-end md:pt-0">
             <div class="space-y-2">
@@ -309,7 +309,7 @@
                 <div class="mx-1 hidden h-6 w-px bg-white/10 md:block"></div>
 
                 <!-- Filters -->
-                <Form.Field {form} name="type" class="min-w-[100px] space-y-0">
+                <Form.Field {form} name="type" class="min-w-25 space-y-0">
                     <Form.Control>
                         {#snippet children({ props })}
                             <Select.Root
@@ -322,7 +322,7 @@
                                 name={props.name}>
                                 <Select.Trigger
                                     {...props}
-                                    class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-[state=open]:bg-white/10 data-[value]:text-white">
+                                    class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-value:text-white data-[state=open]:bg-white/10">
                                     {selectedOptionLabels($formData.type, data.typeOptions, "Type")}
                                 </Select.Trigger>
                                 <Select.Content class="border-zinc-800 bg-zinc-900">
@@ -335,7 +335,7 @@
                     </Form.Control>
                 </Form.Field>
 
-                <Form.Field {form} name="states" class="min-w-[100px] space-y-0">
+                <Form.Field {form} name="states" class="min-w-25 space-y-0">
                     <Form.Control>
                         {#snippet children({ props })}
                             <Select.Root
@@ -348,7 +348,7 @@
                                 name={props.name}>
                                 <Select.Trigger
                                     {...props}
-                                    class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-[state=open]:bg-white/10 data-[value]:text-white">
+                                    class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-value:text-white data-[state=open]:bg-white/10">
                                     {selectedOptionLabels(
                                         $formData.states,
                                         data.stateOptions,
@@ -384,7 +384,7 @@
                             type={item.type}
                             isSelectable
                             selectStore={itemsStore}
-                            class="aspect-[2/3] w-full" />
+                            class="aspect-2/3 w-full" />
                     </div>
                 {/each}
             </div>
@@ -417,7 +417,7 @@
                                                 await tick();
                                                 formElement.requestSubmit();
                                             }}
-                                            class="data-[selected]:bg-primary data-[selected]:text-primary-foreground border-transparent hover:bg-white/10">
+                                            class="data-selected:bg-primary data-selected:text-primary-foreground border-transparent hover:bg-white/10">
                                             {page.value}
                                         </Pagination.Link>
                                     </Pagination.Item>

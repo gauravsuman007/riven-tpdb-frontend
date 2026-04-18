@@ -1,4 +1,5 @@
 <script lang="ts">
+    /* eslint-disable svelte/no-navigation-without-resolve */
     import { browser } from "$app/environment";
     import { page } from "$app/state";
     import { type PageProps } from "./$types";
@@ -1058,7 +1059,7 @@
                                     <a
                                         href={score.url}
                                         target="_blank"
-                                        rel="noopener noreferrer"
+                                        rel="external noopener noreferrer"
                                         class="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 transition-colors">
                                         {#if score.image}<img
                                                 src="/rating-logos/{score.image}"
@@ -1285,7 +1286,7 @@
                                                         ? data.mediaDetails.details.homepage
                                                         : data.mediaDetails.details.homepage}
                                                     target="_blank"
-                                                    rel="noopener noreferrer"
+                                                    rel="external noopener noreferrer"
                                                     class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
                                                     >Website</a>
                                             {/if}
@@ -1309,7 +1310,7 @@
                                                     <a
                                                         href={`${getExternal(key).url}${value}`}
                                                         target="_blank"
-                                                        rel="noopener noreferrer"
+                                                        rel="external noopener noreferrer"
                                                         class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
                                                         >{getExternal(key).name}</a>
                                                 {/each}
@@ -1570,7 +1571,7 @@
                                                     <a
                                                         href={fs.download_url}
                                                         target="_blank"
-                                                        rel="noopener noreferrer"
+                                                        rel="external noopener noreferrer"
                                                         class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
                                                         >Download</a>
                                                 </div>
