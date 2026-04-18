@@ -62,7 +62,7 @@
         <textarea
             id={inputId}
             rows="4"
-            class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-[96px] w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+            class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-24 w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
             placeholder={field.placeholder ?? field.default_value ?? ""}
             oninput={(event) =>
                 setField(pluginName, field.key, (event.currentTarget as HTMLTextAreaElement).value)}

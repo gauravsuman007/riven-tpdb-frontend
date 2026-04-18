@@ -330,7 +330,7 @@
             <Select.Root
                 type="single"
                 value={value == null ? "any" : value === true ? "true" : "false"}
-                onValueChange={(next) => {
+                onValueChange={(next: string) => {
                     value = next === "any" ? null : next === "true";
                 }}>
                 <Select.Trigger class="max-w-xs">
@@ -352,7 +352,7 @@
             <Select.Root
                 type="single"
                 value={value != null ? String(value) : (field.default_value ?? "")}
-                onValueChange={(next) => (value = next)}>
+                onValueChange={(next: string) => (value = next)}>
                 <Select.Trigger class="max-w-xs">
                     {value != null ? String(value) : (field.default_value ?? field.label)}
                 </Select.Trigger>

@@ -503,11 +503,14 @@ export class SearchStore {
         )
             return;
 
-        let hasMore = false;
-        if (type === "movie") hasMore = this.movieHasMore;
-        else if (type === "person") hasMore = this.personHasMore;
-        else if (type === "company") hasMore = this.companyHasMore;
-        else hasMore = this.tvHasMore;
+        const hasMore =
+            type === "movie"
+                ? this.movieHasMore
+                : type === "person"
+                  ? this.personHasMore
+                  : type === "company"
+                    ? this.companyHasMore
+                    : this.tvHasMore;
 
         if (!hasMore) return;
 

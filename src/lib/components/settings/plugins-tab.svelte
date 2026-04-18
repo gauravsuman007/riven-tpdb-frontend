@@ -128,7 +128,7 @@
                                                     (pluginFields[f.key] = (
                                                         e.currentTarget as HTMLTextAreaElement
                                                     ).value)}
-                                                class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                                                class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-20 w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
                                                 >{pluginFields[f.key] ?? ""}</textarea>
                                         {:else if f.options?.length || f.type === "select"}
                                             {@const options = fieldOptions(selectedPlugin.name, f)}

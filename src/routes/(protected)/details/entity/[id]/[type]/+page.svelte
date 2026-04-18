@@ -92,14 +92,17 @@
     // Select Top 5 for carousel (matching Seerr's logic)
     const backdropCandidates = $derived(
         uniqueCredits
-            .filter((c) => c.backdrop_path && c.vote_count != null)
-            .sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0))
+            .filter((c: (typeof uniqueCredits)[number]) => c.backdrop_path && c.vote_count != null)
+            .sort(
+                (a: (typeof uniqueCredits)[number], b: (typeof uniqueCredits)[number]) =>
+                    (b.vote_count ?? 0) - (a.vote_count ?? 0)
+            )
             .slice(0, 5)
     );
 
     // Map to carousel format
     const carouselItems: TMDBNowPlayingItem[] = $derived(
-        backdropCandidates.map((c) => ({
+        backdropCandidates.map((c: (typeof backdropCandidates)[number]) => ({
             id: c.id,
             media_type: c.media_type as "movie" | "tv",
             title: c.title,
