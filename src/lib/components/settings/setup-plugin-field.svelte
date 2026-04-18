@@ -74,7 +74,7 @@
             value={value || field.default_value || options[0] || ""}
             onchange={(event) =>
                 setField(pluginName, field.key, (event.currentTarget as HTMLSelectElement).value)}>
-            {#each options as option}
+            {#each options as option (option)}
                 <option value={option}>{option}</option>
             {/each}
         </select>

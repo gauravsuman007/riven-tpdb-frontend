@@ -29,7 +29,7 @@
             </p>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {#each profiles as profile}
+            {#each profiles as profile (profile.id)}
                 <Card.Root
                     class="gap-4 rounded-3xl py-0 text-left transition-colors {profile.enabled
                         ? 'border-white/14 bg-white/4'
@@ -55,7 +55,7 @@
     </div>
 
     <Accordion.Root type="multiple" class="space-y-4">
-        {#each generalSections as section}
+        {#each generalSections as section (section.title)}
             <Accordion.Item value={section.title} class="rounded-2xl border px-5">
                 <Accordion.Trigger class="py-5 text-left no-underline hover:no-underline">
                     <span>

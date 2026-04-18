@@ -3,6 +3,7 @@
     import Circle from "@lucide/svelte/icons/circle";
     import type { Snippet } from "svelte";
     import { resolve } from "$app/paths";
+
     import type { ItemStore } from "$lib/stores/library-items.svelte";
 
     interface Props {
@@ -26,6 +27,26 @@
         mediaURL,
         children
     }: Props = $props();
+
+    function getMediaHref(mediaURL: string) {
+        const [pathname, search = ""] = mediaURL.split("?");
+
+        if (pathname.startsWith("/details/media/")) {
+            const [, , , id, mediaType] = pathname.split("/");
+            const basePath = resolve("/(protected)/details/media/[id]/[mediaType]", {
+                id,
+                mediaType
+            });
+            return search ? `${basePath}?${search}` : basePath;
+        }
+
+        if (pathname.startsWith("/details/entity/")) {
+            const [, , , id, type] = pathname.split("/");
+            return resolve("/(protected)/details/entity/[id]/[type]", { id, type });
+        }
+
+        return mediaURL;
+    }
 </script>
 
 <div
@@ -48,14 +69,16 @@
             }}
             class="focus-visible:ring-ring/50 border-primary bg-background/60 hover:bg-background/80 absolute top-2 left-2 z-20 flex size-3 shrink-0 items-center justify-center rounded-full border-2 shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
             aria-label="Select poster">
-            {#if selectStore.has(riven_id!)}
+            {#if selectStore?.has(riven_id!)}
                 <Circle class="fill-primary text-primary size-1.5" />
             {/if}
         </button>
     {/if}
 
-    <a href={resolve(mediaURL)} class="absolute inset-0 z-10" aria-label={title || "View details"}
-    ></a>
+    <a
+        href={getMediaHref(mediaURL)}
+        class="absolute inset-0 z-10"
+        aria-label={title || "View details"}></a>
 
     <div class="relative flex flex-1 p-2 transition-all">
         <div class="hidden h-full w-full flex-col items-start justify-end group-hover:flex">

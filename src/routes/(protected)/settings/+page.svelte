@@ -10,6 +10,7 @@
     import { stringifyPluginFields } from "$lib/components/settings/helpers";
     import type { PageData } from "./$types";
     import type { CustomProfile, PluginInfo, QualityProfile } from "$lib/components/settings/types";
+    import { untrack } from "svelte";
 
     const SAVE_CUSTOM_PROFILE = `mutation SaveCustomProfile($id: Int, $name: String!, $settings: JSON!, $enabled: Boolean) { saveCustomProfile(id: $id, name: $name, settings: $settings, enabled: $enabled) }`;
     const DELETE_CUSTOM_PROFILE = `mutation DeleteCustomProfile($id: Int!) { deleteCustomProfile(id: $id) }`;
@@ -20,12 +21,11 @@
     let { data }: { data: PageData } = $props();
 
     let activeTab = $state("general");
-    const builtinProfileIds = new Set((data.qualityProfiles ?? []).map((profile) => profile.id));
 
     let general = $state<Record<string, unknown>>(
-        JSON.parse(JSON.stringify(data.generalSettings ?? {}))
+        untrack(() => JSON.parse(JSON.stringify(data.generalSettings ?? {})))
     );
-    let plugins = $state<PluginInfo[]>(data.plugins.map((p) => ({ ...p })));
+    let plugins = $state<PluginInfo[]>(untrack(() => data.plugins.map((p) => ({ ...p }))));
     let selectedPlugin = $state<PluginInfo | null>(plugins.length > 0 ? plugins[0] : null);
     let pluginFields = $state<Record<string, string>>({});
     let pluginLoading = $state(false);
@@ -33,9 +33,11 @@
     let loadedPluginName: string | null = null;
     let revealedFields = $state(new Set<string>());
 
-    let rank = $state<Record<string, unknown>>(JSON.parse(JSON.stringify(data.rankSettings ?? {})));
-    const qualityProfiles: QualityProfile[] = data.qualityProfiles ?? [];
-    let customProfiles = $state<CustomProfile[]>(data.customProfiles ?? []);
+    let rank = $state<Record<string, unknown>>(
+        untrack(() => JSON.parse(JSON.stringify(data.rankSettings ?? {})))
+    );
+    const qualityProfiles: QualityProfile[] = untrack(() => data.qualityProfiles ?? []);
+    let customProfiles = $state<CustomProfile[]>(untrack(() => data.customProfiles ?? []));
     let activeProfileName = $state<string | null>(null);
     let newProfileName = $state("");
     let savingProfile = $state(false);

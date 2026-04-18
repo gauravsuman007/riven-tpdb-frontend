@@ -28,7 +28,7 @@
         key: "recentlyAdded",
         noCache: true,
         initialData: data.recentlyAdded,
-        loader: async (page, _timeWindow) => {
+        loader: async (page) => {
             const recentData = await gqlClient<RecentItemsResponse>(
                 RECENT_ITEMS_QUERY,
                 getRecentItemsVariables(page)
@@ -41,7 +41,17 @@
             results { id title posterPath mediaType year popularity }
         }
     }`;
-    const mapTrending = (d: { trendingTmdb: { results: any[] } }) =>
+    type TrendingResult = {
+        id: number;
+        title?: string;
+        name?: string;
+        posterPath?: string;
+        mediaType?: string;
+        year?: number;
+        popularity?: number;
+    };
+    type TrendingResponse = { trendingTmdb: { results: TrendingResult[] } };
+    const mapTrending = (d: TrendingResponse) =>
         d.trendingTmdb.results.map((r) => ({
             ...r,
             poster_path: r.posterPath,
@@ -52,7 +62,7 @@
         key: "trendingMovies",
         initialTimeWindow: "day",
         loader: (page, timeWindow) =>
-            gqlClient<{ trendingTmdb: { results: any[] } }>(TRENDING_QUERY, {
+            gqlClient<TrendingResponse>(TRENDING_QUERY, {
                 type: "movie",
                 timeWindow: timeWindow ?? "day",
                 page
@@ -62,7 +72,7 @@
         key: "trendingShows",
         initialTimeWindow: "day",
         loader: (page, timeWindow) =>
-            gqlClient<{ trendingTmdb: { results: any[] } }>(TRENDING_QUERY, {
+            gqlClient<TrendingResponse>(TRENDING_QUERY, {
                 type: "tv",
                 timeWindow: timeWindow ?? "day",
                 page

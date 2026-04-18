@@ -139,7 +139,8 @@
         url.searchParams.set("page", "1");
         $formData.page = 1;
 
-        goto(resolve("/library") + url.search, {
+        const libraryPath = resolve("/library");
+        goto(url.search ? `${libraryPath}${url.search}` : libraryPath, {
             keepFocus: true,
             noScroll: true
         });

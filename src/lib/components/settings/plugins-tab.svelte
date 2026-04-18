@@ -44,7 +44,7 @@
 {:else}
     <div class="flex gap-6">
         <aside class="w-48 shrink-0 space-y-1">
-            {#each plugins as plugin}
+            {#each plugins as plugin (plugin.name)}
                 <button
                     type="button"
                     onclick={() => selectPlugin(plugin)}
@@ -143,7 +143,7 @@
                                                     (pluginFields[f.key] = (
                                                         e.currentTarget as HTMLSelectElement
                                                     ).value)}>
-                                                {#each options as option}
+                                                {#each options as option (option)}
                                                     <option value={option}>{option}</option>
                                                 {/each}
                                             </select>

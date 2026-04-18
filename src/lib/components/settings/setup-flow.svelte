@@ -3,6 +3,7 @@
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
     import { untrack } from "svelte";
+    import { SvelteSet } from "svelte/reactivity";
     import { toast } from "svelte-sonner";
     import {
         buildGeneralSections,
@@ -33,8 +34,8 @@
     let pluginLoadingMap = $state<Record<string, boolean>>({});
     let pluginSavingMap = $state<Record<string, boolean>>({});
     let revealedFields = $state<Record<string, Set<string>>>({});
-    let loadedPlugins = $state(new Set<string>());
-    let pendingPluginLoads = $state(new Set<string>());
+    let loadedPlugins = new SvelteSet<string>();
+    let pendingPluginLoads = new SvelteSet<string>();
 
     const enabledProfileCount = $derived(
         customProfiles.filter((profile) => profile.enabled).length
@@ -89,7 +90,7 @@
     }
 
     function toggleReveal(pluginName: string, fieldKey: string) {
-        const next = new Set(revealedFields[pluginName] ?? []);
+        const next = new SvelteSet(revealedFields[pluginName] ?? []);
         if (next.has(fieldKey)) next.delete(fieldKey);
         else next.add(fieldKey);
 
@@ -136,7 +137,7 @@
     async function ensurePluginLoaded(pluginName: string) {
         if (loadedPlugins.has(pluginName) || pendingPluginLoads.has(pluginName)) return;
 
-        pendingPluginLoads = new Set([...pendingPluginLoads, pluginName]);
+        pendingPluginLoads.add(pluginName);
         pluginLoadingMap = { ...pluginLoadingMap, [pluginName]: true };
 
         const result = await postAction<{ pluginSettings?: Record<string, unknown> }>(
@@ -150,13 +151,13 @@
                 ...pluginFieldMap,
                 [pluginName]: stringifyPluginFields(result.data.pluginSettings)
             };
-            revealedFields = { ...revealedFields, [pluginName]: new Set<string>() };
-            loadedPlugins = new Set([...loadedPlugins, pluginName]);
+            revealedFields = { ...revealedFields, [pluginName]: new SvelteSet<string>() };
+            loadedPlugins = new SvelteSet([...loadedPlugins, pluginName]);
         } else if (!result.ok) {
             toast.error(result.error);
         }
 
-        const nextPending = new Set(pendingPluginLoads);
+        const nextPending = new SvelteSet(pendingPluginLoads);
         nextPending.delete(pluginName);
         pendingPluginLoads = nextPending;
         pluginLoadingMap = { ...pluginLoadingMap, [pluginName]: false };
@@ -240,7 +241,8 @@
             return;
         }
 
-        await goto(result.redirect ?? resolve("/"));
+        const redirectTo = result.redirect ?? resolve("/");
+        await goto(redirectTo);
     }
 </script>
 
@@ -248,7 +250,7 @@
     <title>Initial Setup - Riven</title>
 </svelte:head>
 
-<SetupShell {steps} {stepIndex} {setupReady} {goToStep} {previousStep} {nextStep}>
+<SetupShell {steps} {stepIndex} {goToStep} {previousStep} {nextStep}>
     {#if currentStep?.id === "welcome"}
         <SetupWelcomeStep />
     {:else if currentPluginSection}

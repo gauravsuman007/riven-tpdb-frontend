@@ -220,7 +220,9 @@ export const load = (async ({ fetch, params, locals, url }) => {
                         ).then((data) => ({ data, error: null }))
                     ),
                     normalizeFetch(
-                        fetchTvdbSeriesExtended<{ data: { translations: TVDBTranslations | null } }>(
+                        fetchTvdbSeriesExtended<{
+                            data: { translations: TVDBTranslations | null };
+                        }>(
                             { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
                             tvdbId,
                             "translations"

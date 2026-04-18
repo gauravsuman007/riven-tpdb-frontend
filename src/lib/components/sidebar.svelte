@@ -1,12 +1,12 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
+    import { resolve } from "$app/paths";
     import { page } from "$app/state";
     import { authClient } from "$lib/auth-client";
     import NotificationCenter from "$lib/components/notification-center.svelte";
     import * as Avatar from "$lib/components/ui/avatar/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { getInitials } from "$lib/utils";
-    import { resolve } from "$app/paths";
     import CalendarDays from "@lucide/svelte/icons/calendar-days";
     import FileClock from "@lucide/svelte/icons/file-clock";
     import Home from "@lucide/svelte/icons/home";
@@ -26,7 +26,15 @@
     import { getPermissionFlags } from "$lib/permissions";
 
     const navItems: Array<{
-        href: string;
+        href:
+            | "/"
+            | "/dashboard"
+            | "/library"
+            | "/explore"
+            | "/calendar"
+            | "/auth"
+            | "/settings"
+            | "/logs";
         icon: typeof Home;
         label: string;
         adminOnly?: boolean;
@@ -63,7 +71,7 @@
                 {#snippet trigger()}
                     <a
                         data-sveltekit-preload-data={item.label === "Settings" ? "off" : "hover"}
-                        href={item.href}
+                        href={resolve(item.href)}
                         class="hover:bg-accent/80 group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors"
                         class:bg-accent={page.url.pathname === item.href}
                         aria-label={item.label}
@@ -138,8 +146,6 @@
 
 {#if SidebarStore.isOpen}
     <!-- Backdrop -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         onclick={() => SidebarStore.toggle()}
         role="button"
@@ -210,7 +216,7 @@
             <nav class="flex flex-col gap-1" aria-label="Mobile Navigation">
                 {#each visibleNavItems as item (item.href)}
                     <a
-                        href={item.href}
+                        href={resolve(item.href)}
                         onclick={() => SidebarStore.toggle()}
                         class="hover:text-foreground flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/10
 						{page.url.pathname === item.href ? 'text-primary bg-white/10' : 'text-muted-foreground'}"

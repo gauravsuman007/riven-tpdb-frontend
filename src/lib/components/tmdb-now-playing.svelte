@@ -10,7 +10,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { getRatings } from "$lib/stores/ratings";
-    import { Play, Info, Star } from "@lucide/svelte";
+    import { Star } from "@lucide/svelte";
 
     export interface TMDBNowPlayingItem {
         id: number;
@@ -50,7 +50,12 @@
 
     let currentIndex = $state(0);
     let logos = $state<Record<number, string | null>>({});
-    let ratings = $state<Record<number, any>>({});
+    let ratings = $state<
+        Record<
+            number,
+            { scores?: Array<{ name: string; image?: string; score: string; url: string }> }
+        >
+    >({});
     let certifications = $state<Record<number, string | null>>({});
 
     // Handle carousel API events with proper cleanup using $effect.pre
@@ -82,7 +87,7 @@
                     ratings[item.id] = data;
                 })
                 .catch(() => {
-                    ratings[item.id] = null;
+                    ratings[item.id] = { scores: [] };
                 });
         }
 
@@ -297,7 +302,7 @@
                                         {/if}
                                         {#if ratings[item.id]?.scores?.length}
                                             <div class="ml-2 flex items-center gap-4">
-                                                {#each ratings[item.id].scores as score}
+                                                {#each ratings[item.id].scores as score (score.name)}
                                                     <a
                                                         href={score.url}
                                                         target="_blank"
@@ -447,7 +452,7 @@
 
             <!-- Desktop Segmented Progress (Hidden until Large screens) -->
             <div class="hidden gap-1.5 lg:flex">
-                {#each data as _, i}
+                {#each data.map((__, idx) => idx) as i (i)}
                     <button
                         class="relative h-1 w-6 cursor-pointer overflow-hidden rounded-full transition-all duration-300 {i ===
                         currentIndex

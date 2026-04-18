@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { TMDB_IMAGE_BASE_URL, TVDB_ARTWORK_BASE_URL } from "$lib/indexer-constants";
 import * as dateUtils from "$lib/utils/date";
 
@@ -309,7 +310,7 @@ export function transformTMDBList(
     backdropSize: string = "w1280"
 ) {
     return (
-        items?.map((item: any) => ({
+        (items as any)?.map((item: Record<string, any>) => ({
             id: item.id,
             title: item.title || item.name || item.original_title || item.original_name || "",
             poster_path: item.poster_path
@@ -435,7 +436,7 @@ function transformTraktRecommendations(
     const seen = new Map<number, TMDBTransformedListItem>();
 
     for (const rawItem of items) {
-        const item = rawItem as any;
+        const item = rawItem as Record<string, any>;
         const posterRaw = item.images?.poster?.[0];
         const poster = posterRaw
             ? posterRaw.startsWith("http")
@@ -865,6 +866,7 @@ type TVDBAirsDays = {
     saturday: boolean;
 };
 
+/*
 interface ParsedShowSeason {
     id: number;
     number: number | null;
@@ -872,6 +874,7 @@ interface ParsedShowSeason {
     image: string | null;
     type: string | null;
 }
+*/
 
 // interface ParsedShowEpisode {
 //     id: number;
@@ -1197,7 +1200,7 @@ export interface CollectionDetails {
     parts: CollectionMovie[];
 }
 
-export function parseCollectionDetails(collectionData: any): CollectionDetails {
+export function parseCollectionDetails(collectionData: Record<string, any>): CollectionDetails {
     return {
         id: collectionData.id ?? 0,
         name: collectionData.name ?? "",
@@ -1205,7 +1208,7 @@ export function parseCollectionDetails(collectionData: any): CollectionDetails {
         poster_path: buildTMDBImage(collectionData.poster_path, "w500"),
         backdrop_path: buildTMDBImage(collectionData.backdrop_path, "w1920"),
         parts: (collectionData.parts ?? [])
-            .map((movie: any) => ({
+            .map((movie: Record<string, any>) => ({
                 id: movie.id ?? 0,
                 title: movie.title ?? movie.original_title ?? "",
                 original_title: movie.original_title ?? "",
@@ -1297,7 +1300,7 @@ function sortByReleaseDateDesc<T extends { release_date: string | null }>(a: T, 
     return a.release_date ? -1 : b.release_date ? 1 : 0;
 }
 
-function transformPersonCredit(credit: any) {
+function transformPersonCredit(credit: Record<string, any>) {
     const releaseDate = credit.release_date || credit.first_air_date || null;
     return {
         id: credit.id ?? 0,
@@ -1307,7 +1310,7 @@ function transformPersonCredit(credit: any) {
         backdrop_path: buildTMDBImage(credit.backdrop_path, "w1920"),
         release_date: releaseDate,
         year: dateUtils.getYearFromISO(releaseDate),
-        media_type: (credit.media_type === "tv" ? "tv" : "movie") as "movie" | "tv",
+        media_type: (credit.media_type === "tv" ? "tv" : "movie") as any,
         vote_average: credit.vote_average ?? null,
         vote_count: credit.vote_count ?? null,
         popularity: credit.popularity ?? null

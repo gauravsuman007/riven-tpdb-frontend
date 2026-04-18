@@ -47,7 +47,7 @@ export const load = (async ({ fetch, locals }) => {
         }));
 
         return { calendar: { data: items } };
-    } catch (err) {
+    } catch {
         error(500, "Unable to fetch calendar data");
     }
 }) satisfies PageServerLoad;

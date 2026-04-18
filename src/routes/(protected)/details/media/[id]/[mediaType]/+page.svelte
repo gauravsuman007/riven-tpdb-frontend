@@ -51,6 +51,9 @@
         type GqlExpectedCounts,
         type GqlIndexedShow
     } from "$lib/services/riven-media";
+    import { untrack } from "svelte";
+    import { SvelteMap } from "svelte/reactivity";
+    import { resolve } from "$app/paths";
 
     let { data }: PageProps = $props();
 
@@ -65,13 +68,27 @@
     };
     const getExternal = (key: string) => externalMeta[key.replace("_id", "")];
 
+    function mediaHref(id: number | string, mediaType: string) {
+        return resolve("/(protected)/details/media/[id]/[mediaType]", {
+            id: String(id),
+            mediaType
+        });
+    }
+
+    function entityHref(id: number | string, type: string) {
+        return resolve("/(protected)/details/entity/[id]/[type]", {
+            id: String(id),
+            type
+        });
+    }
+
     let showTrailerOverride = $state(false);
     const showTrailer = $derived(showTrailerOverride && data.mediaDetails?.details?.trailer);
 
-    let liveRiven = $state<RivenMediaItem | undefined>(data.riven);
+    let liveRiven = $state<RivenMediaItem | undefined>(untrack(() => data.riven));
     let hydratedRiven = $state<RivenMediaItem | undefined>(undefined);
-    let liveRivenItemId = $state<number | undefined>(data.riven?.id);
-    let rivenPending = $state(Boolean(data.rivenPending));
+    let liveRivenItemId = $state<number | undefined>(untrack(() => data.riven?.id));
+    let rivenPending = $state(untrack(() => Boolean(data.rivenPending)));
     let completedDetailsHydrating = false;
     let completedDetailsHydrated = false;
     let rawDataOpen = $state(false);
@@ -310,7 +327,7 @@
     const seasonData = $derived.by(() => {
         if (data.mediaDetails?.type !== "tv" || !data.mediaDetails?.details?.seasons) return [];
         const details = data.mediaDetails.details as ParsedShowDetails;
-        const episodeCountBySeason = new Map<number, number>();
+        const episodeCountBySeason = new SvelteMap<number, number>();
         const seasonsByNumber = new Map(
             (liveRiven?.seasons ?? []).map((season) => [season.season_number, season])
         );
@@ -519,7 +536,6 @@
             }
 
             completedDetailsHydrated = true;
-        } catch {
         } finally {
             completedDetailsHydrating = false;
         }
@@ -599,7 +615,6 @@
                 mediaItemStateByTvdb?: GqlMediaItemStateTree | null;
             }>(request.query, request.variables);
             applyLiveState(payload[request.resultKey]);
-        } catch {
         } finally {
             rivenPending = false;
         }
@@ -707,7 +722,7 @@
                 {#each items as item (item.id)}
                     <Carousel.Item class="basis-auto pl-3">
                         <a
-                            href="/details/media/{item.id}/{item.media_type}"
+                            href={mediaHref(item.id, item.media_type)}
                             class="group relative block opacity-80 transition-all duration-300 hover:opacity-100">
                             <PortraitCard
                                 title={item.title}
@@ -1005,7 +1020,7 @@
                         <div
                             class="text-muted-foreground flex items-center gap-x-2.5 text-sm"
                             in:fly|global={{ y: 20, duration: 400, delay: 200, easing: cubicOut }}>
-                            {#each details as detail, i}
+                            {#each details as detail, i (i)}
                                 <span>{detail}</span>
                                 {#if i < details.length - 1}<span class="text-border">•</span>{/if}
                             {/each}
@@ -1055,7 +1070,7 @@
                             </div>
                         {:else if ratingsLoading}
                             <div class="flex gap-4">
-                                {#each [1, 2, 3] as _, i (i)}
+                                {#each [1, 2, 3] as i (i)}
                                     <div class="bg-muted h-6 w-14 animate-pulse rounded"></div>
                                 {/each}
                             </div>
@@ -1158,7 +1173,7 @@
                                 {#each data.mediaDetails.details.cast as member (member.id)}
                                     <Carousel.Item class="basis-auto pl-3">
                                         <a
-                                            href="/details/entity/{member.id}/person"
+                                            href={entityHref(member.id, "person")}
                                             class="group relative block opacity-80 transition-all duration-300 hover:opacity-100">
                                             <PortraitCard
                                                 title={member.name}
@@ -1264,7 +1279,11 @@
                                         <div class="flex flex-wrap gap-2">
                                             {#if data.mediaDetails?.details.homepage}
                                                 <a
-                                                    href={data.mediaDetails.details.homepage}
+                                                    href={data.mediaDetails.details.homepage?.startsWith(
+                                                        "http"
+                                                    )
+                                                        ? data.mediaDetails.details.homepage
+                                                        : data.mediaDetails.details.homepage}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
@@ -1286,9 +1305,9 @@
                                                 ).filter(
                                                     ([key, value]) => value && getExternal(key)
                                                 )}
-                                                {#each validLinks as [key, value]}
+                                                {#each validLinks as [key, value] (key)}
                                                     <a
-                                                        href="{getExternal(key).url}{value}"
+                                                        href={`${getExternal(key).url}${value}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
@@ -1315,7 +1334,7 @@
                                                 );
                                             }}
                                             class="bg-background border-border text-foreground rounded-md border px-2 py-1 font-mono text-xs">
-                                            {#each allEntries as entry, i}
+                                            {#each allEntries as entry, i (i)}
                                                 <option
                                                     value={i}
                                                     selected={i === selectedMovieVersionIdx}
@@ -1394,7 +1413,7 @@
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Audio</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#each meta.audio_tracks as track}
+                                                    {#each meta.audio_tracks as track (track.codec)}
                                                         <Badge
                                                             variant="secondary"
                                                             class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
@@ -1419,7 +1438,7 @@
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Subtitles</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#each meta.subtitle_tracks as track}
+                                                    {#each meta.subtitle_tracks as track (track.language)}
                                                         <Badge
                                                             variant="secondary"
                                                             class="text-muted-foreground border border-white/10 bg-white/5 text-[10px] backdrop-blur-sm"
@@ -1510,7 +1529,7 @@
                                                     class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
                                                     >Container</span>
                                                 <div class="flex flex-wrap gap-2">
-                                                    {#each meta.container_format as fmt}
+                                                    {#each meta.container_format as fmt (fmt)}
                                                         <Badge
                                                             variant="secondary"
                                                             class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"

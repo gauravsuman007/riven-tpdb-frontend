@@ -255,7 +255,8 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
                     }
                     // All other TVDB params are strings
                     else {
-                        tvdbParams[paramName as Exclude<TVDBAssignableKey, "year">] = processedValue;
+                        tvdbParams[paramName as Exclude<TVDBAssignableKey, "year">] =
+                            processedValue;
                     }
                 }
 

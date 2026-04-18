@@ -1,5 +1,6 @@
 import { gqlSubscribeClient } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
+import { SvelteSet } from "svelte/reactivity";
 
 const logger = createScopedLogger("notifications");
 
@@ -141,7 +142,7 @@ export class NotificationStore {
         "disconnected"
     );
     #unsubscribe: (() => void) | null = null;
-    #eventListeners = new Set<(event: RivenNotificationPayload) => void>();
+    #eventListeners = new SvelteSet<(event: RivenNotificationPayload) => void>();
     #connectionRefs = 0;
     #reconnectAttempts = 0;
     #maxReconnectAttempts = 3;

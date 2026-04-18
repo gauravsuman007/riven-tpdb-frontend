@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { resolve } from "$app/paths";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { cn } from "$lib/utils";
+    import { resolve } from "$app/paths";
 
     const badgeVariantClasses: Record<string, string> = {
         success: "bg-green-600/90 text-white border-0",
@@ -43,9 +43,7 @@
             if (indexer === "tvdb") params.push("indexer=tvdb");
             if (data.details_query) {
                 for (const [key, value] of Object.entries(data.details_query)) {
-                    params.push(
-                        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
-                    );
+                    params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
                 }
             }
             const queryParam = params.length > 0 ? `?${params.join("&")}` : "";
@@ -74,6 +72,26 @@
             className
         )
     );
+
+    function getMediaHref(mediaURL: string) {
+        const [pathname, search = ""] = mediaURL.split("?");
+
+        if (pathname.startsWith("/details/media/")) {
+            const [, , , id, mediaType] = pathname.split("/");
+            const basePath = resolve("/(protected)/details/media/[id]/[mediaType]", {
+                id,
+                mediaType
+            });
+            return search ? `${basePath}?${search}` : basePath;
+        }
+
+        if (pathname.startsWith("/details/entity/")) {
+            const [, , , id, type] = pathname.split("/");
+            return resolve("/(protected)/details/entity/[id]/[type]", { id, type });
+        }
+
+        return mediaURL;
+    }
 </script>
 
 {#snippet cardContent()}
@@ -97,7 +115,7 @@
 {/snippet}
 
 {#if mediaURL}
-    <a href={resolve(mediaURL as never)} class={containerClasses}>
+    <a href={getMediaHref(mediaURL)} class={containerClasses}>
         {@render cardContent()}
     </a>
 {:else}

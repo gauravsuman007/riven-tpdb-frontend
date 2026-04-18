@@ -4,11 +4,11 @@
     import * as Card from "$lib/components/ui/card/index.js";
     import { Separator } from "$lib/components/ui/separator/index.js";
     import type { Step } from "./types";
+    import type { Snippet } from "svelte";
 
     let {
         steps,
         stepIndex,
-        setupReady,
         goToStep,
         previousStep,
         nextStep,
@@ -16,11 +16,11 @@
     }: {
         steps: Step[];
         stepIndex: number;
-        setupReady: boolean;
+
         goToStep: (index: number) => void;
         previousStep: () => void;
         nextStep: () => void;
-        children: () => any;
+        children: Snippet;
     } = $props();
 
     const currentStep = $derived(steps[stepIndex] ?? steps[0]);
@@ -55,7 +55,7 @@
 
             <div class="mx-auto mb-5 w-full max-w-5xl overflow-x-auto pb-2">
                 <div class="flex min-w-max items-center justify-start gap-0 px-1 md:justify-center">
-                    {#each steps as step, index}
+                    {#each steps as step, index (step.label)}
                         <Button
                             type="button"
                             variant="ghost"

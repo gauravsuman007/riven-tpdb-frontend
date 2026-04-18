@@ -70,7 +70,7 @@
     const saveLabel = $derived(activeProfileName ? "Save profile" : "Save global ranking");
 
     $effect(() => {
-        activeProfileName;
+        void activeProfileName;
         savedRankJson = untrack(() => JSON.stringify(rank));
     });
 
@@ -140,7 +140,7 @@
 
                 {#if qualityProfiles.length > 0}
                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {#each qualityProfiles as profile}
+                        {#each qualityProfiles as profile (profile.id)}
                             {@const enabled = profileEnabled(profile.id)}
                             {@const selected = activeProfileName === profile.id}
                             <div
@@ -183,7 +183,7 @@
                 {#if customProfileCount > 0}
                     <h3 class="pt-1 text-sm font-medium">Custom Profiles</h3>
                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {#each customProfiles.filter((p) => !p.is_builtin) as profile}
+                        {#each customProfiles.filter((p) => !p.is_builtin) as profile (profile.name)}
                             {@const selected = activeProfileName === profile.name}
                             <div
                                 class="group relative rounded-lg border transition-colors {selected
@@ -287,7 +287,7 @@
         </div>
 
         <div class="grid gap-4">
-            {#each editorSections as [key, value]}
+            {#each editorSections as [key, value] (key)}
                 {@const shape = detectShape(value)}
 
                 {#if shape === "string_array"}
@@ -298,7 +298,7 @@
                                 >{(value as string[]).length} tags</span>
                         </div>
                         <div class="flex flex-wrap gap-1.5">
-                            {#each value as string[] as tag, i}
+                            {#each value as string[] as tag, i (`${tag}-${i}`)}
                                 <span
                                     class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs">
                                     {tag}
@@ -323,7 +323,7 @@
                     <section class="space-y-3 rounded-lg border p-4">
                         <h2 class="text-base font-semibold">{toLabel(key)}</h2>
                         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                            {#each Object.entries(value as Record<string, boolean>) as [subkey, enabled]}
+                            {#each Object.entries(value as Record<string, boolean>) as [subkey, enabled] (subkey)}
                                 <div
                                     class="bg-muted/30 flex items-center justify-between rounded-lg p-3">
                                     <Label class="cursor-pointer">{toLabel(subkey)}</Label>
@@ -339,7 +339,7 @@
                     <section class="space-y-3 rounded-lg border p-4">
                         <h2 class="text-base font-semibold">{toLabel(key)}</h2>
                         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                            {#each Object.entries(value as Record<string, number>) as [subkey, score]}
+                            {#each Object.entries(value as Record<string, number>) as [subkey, score] (subkey)}
                                 <div
                                     class="bg-muted/30 flex items-center justify-between rounded-lg p-3">
                                     <Label>{toLabel(subkey)}</Label>
@@ -368,7 +368,7 @@
                                 <span>Score</span>
                             </div>
                             <div class="grid gap-2 md:grid-cols-2">
-                                {#each customRankEntries(value) as [attr, cr]}
+                                {#each customRankEntries(value) as [attr, cr] (attr)}
                                     <div
                                         class="bg-muted/30 grid grid-cols-[minmax(0,1fr)_auto_6rem] items-center gap-3 rounded-lg px-3 py-2">
                                         <span class="min-w-0 truncate text-sm"
@@ -402,7 +402,7 @@
                         {#if customRankSections.length > 0}
                             <div class="rounded-lg border">
                                 <div class="flex gap-1 overflow-x-auto border-b p-1">
-                                    {#each customRankSections as [subkey, subval]}
+                                    {#each customRankSections as [subkey, subval] (subkey)}
                                         <button
                                             type="button"
                                             class="shrink-0 rounded-md px-3 py-2 text-left text-xs transition-colors {activeRankSection ===
@@ -417,7 +417,7 @@
                                     {/each}
                                 </div>
 
-                                {#each customRankSections as [subkey, subval]}
+                                {#each customRankSections as [subkey, subval] (subkey)}
                                     {#if subkey === activeRankSection}
                                         <div class="p-3">
                                             <div
@@ -427,7 +427,7 @@
                                                 <span>Score</span>
                                             </div>
                                             <div class="grid gap-2 md:grid-cols-2">
-                                                {#each customRankEntries(subval) as [attr, cr]}
+                                                {#each customRankEntries(subval) as [attr, cr] (attr)}
                                                     <div
                                                         class="bg-muted/30 grid grid-cols-[minmax(0,1fr)_auto_6rem] items-center gap-3 rounded-lg px-3 py-2">
                                                         <span class="min-w-0 truncate text-sm">
@@ -458,7 +458,7 @@
                         {/if}
 
                         <div class="space-y-3">
-                            {#each sectionEntries as [subkey, subval]}
+                            {#each sectionEntries as [subkey, subval] (subkey)}
                                 {@const subshape = detectShape(subval)}
                                 {#if subshape === "boolean"}
                                     <div
@@ -488,7 +488,7 @@
                                     <div class="space-y-2 rounded-lg border p-3">
                                         <Label>{toLabel(subkey)}</Label>
                                         <div class="flex flex-wrap gap-1">
-                                            {#each subval as string[] as tag, i}
+                                            {#each subval as string[] as tag, i (`${tag}-${i}`)}
                                                 <span
                                                     class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
                                                     {tag}

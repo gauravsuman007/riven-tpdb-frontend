@@ -7,6 +7,7 @@
     import * as Kbd from "$lib/components/ui/kbd/index.js";
     import * as InputGroup from "$lib/components/ui/input-group/index.js";
     import { goto, afterNavigate } from "$app/navigation";
+    import { resolve } from "$app/paths";
     import { page } from "$app/state";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
     import type { SearchStore } from "$lib/services/search-store.svelte";
@@ -68,7 +69,11 @@
             searchStore.syncQuery(parsed);
         }
 
-        await goto(query ? `/explore?query=${encodeURIComponent(query)}` : "/explore", {
+        const explorePath = resolve("/explore");
+        const searchPath = query
+            ? `${explorePath}?query=${encodeURIComponent(query)}`
+            : explorePath;
+        await goto(searchPath, {
             keepFocus: true,
             noScroll: true,
             replaceState: currentlyExplore

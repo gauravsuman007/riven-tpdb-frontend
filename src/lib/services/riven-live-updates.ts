@@ -20,6 +20,18 @@ const MEDIA_EVENT_SUBSCRIPTIONS = [
         showIndexed {
             id
         }
+    }`,
+    `subscription RivenItemScraped {
+        itemScraped
+    }`,
+    `subscription RivenItemDownloaded {
+        itemDownloaded
+    }`,
+    `subscription RivenItemFailed {
+        itemFailed
+    }`,
+    `subscription RivenItemsDeleted {
+        itemsDeleted
     }`
 ];
 

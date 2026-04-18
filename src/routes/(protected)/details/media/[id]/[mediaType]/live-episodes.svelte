@@ -7,6 +7,7 @@
     import { IsMobile } from "$lib/hooks/is-mobile.svelte";
     import type { ParsedShowDetails } from "$lib/metadata/parser";
     import type { FilesystemEntry, MediaMetadata, RivenEpisode } from "$lib/types/riven";
+    import { untrack } from "svelte";
 
     interface Props {
         episodes: ParsedShowDetails["episodes"];
@@ -31,19 +32,19 @@
     }: Props = $props();
 
     const isMobile = new IsMobile();
-    let openEpisodeNumber = $state<number | null>(selectedEpisode ? Number(selectedEpisode) : null);
+    let openEpisodeOverride = $state<number | null | "unset">(untrack(() => "unset"));
+    const openEpisodeNumber = $derived.by<number | null>(() => {
+        if (openEpisodeOverride !== "unset") return openEpisodeOverride;
+        return selectedEpisode ? Number(selectedEpisode) : null;
+    });
 
     const selectedEpisodes = $derived.by(() =>
         episodes.filter((episode) => episode.seasonNumber?.toString() === selectedSeason)
     );
 
-    $effect(() => {
-        openEpisodeNumber = selectedEpisode ? Number(selectedEpisode) : null;
-    });
-
     function setEpisodeOpen(episodeNumber: number | null | undefined, open: boolean) {
         if (episodeNumber == null) return;
-        openEpisodeNumber = open ? episodeNumber : null;
+        openEpisodeOverride = open ? episodeNumber : null;
     }
 
     function humanizeProfileName(name: string | undefined) {
@@ -196,7 +197,7 @@
                         Audio
                     </span>
                     <div class="flex flex-wrap gap-2">
-                        {#each meta.audio_tracks as track}
+                        {#each meta.audio_tracks as track (track)}
                             <Badge variant="outline" class="font-mono text-xs">
                                 {track.codec}{track.channels
                                     ? track.channels === 8
@@ -220,7 +221,7 @@
                         Subtitles
                     </span>
                     <div class="flex flex-wrap gap-2">
-                        {#each meta.subtitle_tracks as track}
+                        {#each meta.subtitle_tracks as track (track)}
                             <Badge variant="outline" class="font-mono text-xs">
                                 {track.language ? track.language.toUpperCase() : "Unknown"}
                             </Badge>
@@ -292,7 +293,7 @@
                         Container
                     </span>
                     <div class="flex flex-wrap gap-2">
-                        {#each meta.container_format as fmt}
+                        {#each meta.container_format as fmt (fmt)}
                             <Badge variant="outline" class="font-mono text-xs">{fmt}</Badge>
                         {/each}
                     </div>

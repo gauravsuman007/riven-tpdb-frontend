@@ -1,5 +1,10 @@
 export interface RatingsData {
-    scores: Array<{ name: string; image?: string; score: string; url: string }>;
+    scores: Array<{
+        name: string;
+        image?: string;
+        score: string;
+        url: `https://${string}` | `http://${string}`;
+    }>;
 }
 
 const ratingsCache = new Map<string, Promise<RatingsData>>();

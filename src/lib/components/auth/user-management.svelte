@@ -6,6 +6,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import type { SuperValidated } from "sveltekit-superforms";
     import { superForm } from "sveltekit-superforms";
+    import { untrack } from "svelte";
     import { zod4Client } from "sveltekit-superforms/adapters";
     import { toast } from "svelte-sonner";
     import LoaderCircle from "@lucide/svelte/icons/loader-circle";
@@ -35,10 +36,12 @@
         currentUserId: string;
     } = $props();
 
-    const form = superForm(initialForm, {
-        validators: zod4Client(createUserSchema),
-        resetForm: true
-    });
+    const form = untrack(() =>
+        superForm(initialForm, {
+            validators: zod4Client(createUserSchema),
+            resetForm: true
+        })
+    );
 
     const { form: formData, enhance, message, delayed } = form;
     let lastActionMessage = $state<string | undefined>();

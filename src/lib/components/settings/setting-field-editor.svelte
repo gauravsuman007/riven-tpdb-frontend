@@ -264,7 +264,7 @@
 
             {#if field.options?.length}
                 <div class="flex flex-wrap gap-2">
-                    {#each field.options as option}
+                    {#each field.options as option (option)}
                         <button
                             type="button"
                             class={`rounded-full border px-3 py-1 text-xs ${items.includes(option) ? "bg-accent text-accent-foreground" : ""}`}
@@ -357,7 +357,7 @@
                     {value != null ? String(value) : (field.default_value ?? field.label)}
                 </Select.Trigger>
                 <Select.Content>
-                    {#each field.options as option}
+                    {#each field.options as option (option)}
                         <Select.Item value={option} label={option} />
                     {/each}
                 </Select.Content>

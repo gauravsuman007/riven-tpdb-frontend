@@ -7,6 +7,7 @@
     import { calculateAge, formatDate, isDayAndMonthToday } from "$lib/helpers";
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import { cn, deduplicateById } from "$lib/utils";
+    import { resolve } from "$app/paths";
     import TmdbNowPlaying, {
         type TMDBNowPlayingItem
     } from "$lib/components/tmdb-now-playing.svelte";
@@ -205,7 +206,7 @@
         <!-- Birthday Confetti -->
         {#if birthdayToday && !data.entity.deathday}
             <div class="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-                {#each Array(20) as i}
+                {#each Array(20) as i (i)}
                     <div
                         class="confetti {CONFETTI_CONFIG.shapes[i % CONFETTI_CONFIG.shapes.length]}"
                         style="
@@ -421,7 +422,7 @@
 {#snippet creditList(credits: typeof movieCredits)}
     {#each credits as credit, index (`${credit.id}-${index}`)}
         <a
-            href="/details/media/{credit.id}/{credit.media_type}"
+            href={resolve(`/details/media/${credit.id}/${credit.media_type}`)}
             class="group relative block opacity-80 transition-all duration-300 hover:scale-105 hover:opacity-100">
             <PortraitCard
                 title={credit.title}
@@ -464,7 +465,7 @@
                 Also known as<span class={colonClass}>:</span>
             </h3>
             <div class="flex flex-wrap gap-2">
-                {#each data.entity.also_known_as as alias}
+                {#each data.entity.also_known_as as alias (alias)}
                     <Badge variant="outline" class={badgeClass}>
                         {alias}
                     </Badge>
