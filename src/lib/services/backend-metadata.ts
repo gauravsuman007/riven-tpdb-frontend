@@ -74,28 +74,12 @@ const SEARCH_TMDB_QUERY = `query($type: String!, $params: JSON, $searchMode: Str
     }
 }`;
 
-const TVDB_SERIES_QUERY = `query($id: Int!) {
-    tvdbSeries(id: $id)
-}`;
-
 const TVDB_SERIES_EXTENDED_QUERY = `query($id: Int!, $meta: String) {
     tvdbSeriesExtended(id: $id, meta: $meta)
 }`;
 
 const TVDB_EPISODES_QUERY = `query($id: Int!, $seasonType: String!, $lang: String!, $page: Int) {
     tvdbEpisodes(id: $id, seasonType: $seasonType, lang: $lang, page: $page)
-}`;
-
-const RESOLVE_TMDB_TO_TVDB_QUERY = `query($tmdbId: String!) {
-    resolveTmdbToTvdb(tmdbId: $tmdbId)
-}`;
-
-const ANILIST_MAPPINGS_QUERY = `query($id: Int!) {
-    anilistMappings(id: $id) {
-        anilistId
-        tmdbId
-        tvdbId
-    }
 }`;
 
 export function mapGqlTmdbListItem(item: GqlTmdbListItem): TMDBTransformedListItem {
@@ -214,17 +198,6 @@ export async function searchTmdb(
     return data.searchTmdb.results;
 }
 
-export async function fetchTvdbSeries<T>(ctx: BackendMetadataContext, id: number) {
-    const data = await gql<{ tvdbSeries: T }>(
-        ctx.backendUrl,
-        ctx.apiKey,
-        TVDB_SERIES_QUERY,
-        { id },
-        ctx.fetch
-    );
-    return data.tvdbSeries;
-}
-
 export async function fetchTvdbSeriesExtended<T>(
     ctx: BackendMetadataContext,
     id: number,
@@ -257,26 +230,4 @@ export async function fetchTvdbEpisodes<T>(
         ctx.fetch
     );
     return data.tvdbEpisodes;
-}
-
-export async function resolveTmdbToTvdb(ctx: BackendMetadataContext, tmdbId: string) {
-    const data = await gql<{ resolveTmdbToTvdb: number | null }>(
-        ctx.backendUrl,
-        ctx.apiKey,
-        RESOLVE_TMDB_TO_TVDB_QUERY,
-        { tmdbId },
-        ctx.fetch
-    );
-    return data.resolveTmdbToTvdb;
-}
-
-export async function fetchAnilistMappings(ctx: BackendMetadataContext, id: number) {
-    const data = await gql<{
-        anilistMappings: {
-            anilistId: number;
-            tmdbId: number | null;
-            tvdbId: number | null;
-        };
-    }>(ctx.backendUrl, ctx.apiKey, ANILIST_MAPPINGS_QUERY, { id }, ctx.fetch);
-    return data.anilistMappings;
 }

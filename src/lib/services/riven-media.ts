@@ -38,14 +38,6 @@ export interface GqlMediaItemFull {
     seasons?: GqlSeasonFull[];
 }
 
-export interface GqlMediaItemState {
-    id: number;
-    state: string;
-    imdbId?: string | null;
-    tmdbId?: string | null;
-    tvdbId?: string | null;
-}
-
 export interface GqlEpisodeState {
     id: number;
     episodeNumber?: number | null;
@@ -57,7 +49,6 @@ export interface GqlSeasonState {
     seasonNumber?: number | null;
     state: string;
     isRequested: boolean;
-    expectedFileCount: number;
     episodes?: GqlEpisodeState[];
 }
 
@@ -67,7 +58,6 @@ export interface GqlMediaItemStateTree {
     imdbId?: string | null;
     tmdbId?: string | null;
     tvdbId?: string | null;
-    expectedFileCount: number;
     seasons?: GqlSeasonState[];
 }
 
@@ -133,9 +123,9 @@ const RAW_MEDIA_ITEM_FULL_FIELDS = `
 `;
 
 const MEDIA_ITEM_STATE_FIELDS = `
-    id state imdbId tmdbId tvdbId expectedFileCount
+    id state imdbId tmdbId tvdbId
     seasons {
-        id seasonNumber state isRequested expectedFileCount
+        id seasonNumber state isRequested
         episodes {
             id episodeNumber state
         }
@@ -166,24 +156,6 @@ export const RAW_RIVEN_DATA_BY_TVDB_QUERY = `query($tvdbId: String!) {
     }
 }`;
 
-export const MEDIA_ITEM_BY_TMDB_QUERY = `query($tmdbId: String!) {
-    mediaItemByTmdb(tmdbId: $tmdbId) {
-        id state imdbId tmdbId tvdbId
-    }
-}`;
-
-export const MEDIA_ITEM_BY_TVDB_QUERY = `query($tvdbId: String!) {
-    mediaItemByTvdb(tvdbId: $tvdbId) {
-        id state imdbId tmdbId tvdbId
-    }
-}`;
-
-export const MEDIA_ITEM_BY_ID_QUERY = `query($id: Int!) {
-    mediaItem(id: $id) {
-        id state imdbId tmdbId tvdbId
-    }
-}`;
-
 export const MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION = `subscription($tmdbId: String!) {
     mediaItemStateUpdatesByTmdb(tmdbId: $tmdbId) {
         ${MEDIA_ITEM_STATE_FIELDS}
@@ -197,15 +169,6 @@ export const MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION = `subscription($tvdb
 }`;
 
 // ── New pub-sub subscriptions ──
-
-export interface GqlItemRequest {
-    id: number;
-    tmdbId?: string | null;
-    tvdbId?: string | null;
-    imdbId?: string | null;
-    requestType: string;
-    state: string;
-}
 
 export interface GqlIndexedShow {
     id: number;
@@ -326,46 +289,5 @@ export function mapMediaItemStateTree(
                 state: episode.state
             }))
         }))
-    };
-}
-
-export interface GqlExpectedSeason {
-    seasonNumber: number;
-    expectedFileCount: number;
-}
-
-export interface GqlExpectedCounts {
-    expectedFileCount: number;
-    seasons?: GqlExpectedSeason[];
-}
-
-export const MEDIA_ITEM_EXPECTED_COUNTS_QUERY = `query($id: Int!) {
-    mediaItemById(id: $id) {
-        ... on Movie {
-            expectedFileCount
-        }
-        ... on Show {
-            expectedFileCount
-            seasons(includeSpecials: false) {
-                seasonNumber
-                expectedFileCount
-            }
-        }
-    }
-}`;
-
-export function mapMediaItemState(
-    raw: GqlMediaItemState | null | undefined
-): RivenMediaItem | null {
-    if (!raw) {
-        return null;
-    }
-
-    return {
-        id: raw.id,
-        state: raw.state,
-        imdb_id: raw.imdbId ?? undefined,
-        tmdb_id: raw.tmdbId ?? undefined,
-        tvdb_id: raw.tvdbId ?? undefined
     };
 }

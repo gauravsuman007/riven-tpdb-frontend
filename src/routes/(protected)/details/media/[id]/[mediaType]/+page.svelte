@@ -43,13 +43,11 @@
         MEDIA_ITEM_STATE_BY_TVDB_QUERY,
         MEDIA_ITEM_STATE_UPDATES_BY_TMDB_SUBSCRIPTION,
         MEDIA_ITEM_STATE_UPDATES_BY_TVDB_SUBSCRIPTION,
-        MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
         SHOW_INDEXED_SUBSCRIPTION,
         mapMediaItemStateTree,
         mapMediaItemFull,
         type GqlMediaItemFull,
         type GqlMediaItemStateTree,
-        type GqlExpectedCounts,
         type GqlIndexedShow
     } from "$lib/services/riven-media";
     import { untrack } from "svelte";
@@ -103,27 +101,18 @@
     );
     const rawRivenJson = $derived(JSON.stringify(rawRivenDisplayData, null, 2));
 
-    let expectedCounts = $state<GqlExpectedCounts | undefined>(undefined);
-    let expectedCountsItemId = $state<number | undefined>(undefined);
+    const episodeCountBySeasonNumber = $derived.by(() => {
+        if (data.mediaDetails?.type !== "tv") return undefined;
 
-    async function fetchExpectedCounts(id: number) {
-        if (expectedCountsItemId === id) return;
-        try {
-            const payload = await gqlClient<{ mediaItemById?: GqlExpectedCounts | null }>(
-                MEDIA_ITEM_EXPECTED_COUNTS_QUERY,
-                { id }
-            );
-            expectedCounts = payload.mediaItemById ?? undefined;
-            expectedCountsItemId = id;
-        } catch {
-            // non-critical, ignore
+        const details = data.mediaDetails.details as ParsedShowDetails;
+        const counts = new SvelteMap<number, number>();
+
+        for (const episode of details.episodes ?? []) {
+            if (episode.seasonNumber == null) continue;
+            counts.set(episode.seasonNumber, (counts.get(episode.seasonNumber) ?? 0) + 1);
         }
-    }
 
-    const expectedBySeasonNumber = $derived.by(() => {
-        const seasons = expectedCounts?.seasons;
-        if (!seasons) return undefined;
-        return new Map(seasons.map((s) => [s.seasonNumber, s.expectedFileCount]));
+        return counts;
     });
 
     const completedFileCount = $derived.by(() => {
@@ -143,15 +132,11 @@
     const totalFileCount = $derived.by(() => {
         if (!riven) return 0;
         if (data.mediaDetails?.type === "movie") {
-            return expectedCounts?.expectedFileCount ?? 1;
+            return 1;
         }
 
-        const seasonTotal =
-            expectedCounts?.seasons?.reduce((total, season) => {
-                return total + season.expectedFileCount;
-            }, 0) ?? 0;
-
-        return Math.max(seasonTotal, expectedCounts?.expectedFileCount ?? 0, completedFileCount);
+        const details = data.mediaDetails?.details as ParsedShowDetails | undefined;
+        return details?.episode_count ?? 0;
     });
 
     function getInitialSeason() {
@@ -268,17 +253,10 @@
         rivenPending = Boolean(data.rivenPending);
         completedDetailsHydrated = false;
         completedDetailsHydrating = false;
-        expectedCounts = undefined;
-        expectedCountsItemId = undefined;
         rawDataOpen = false;
         rawRivenLoading = false;
         rawRivenError = undefined;
         rawRivenData = undefined;
-    });
-
-    $effect(() => {
-        if (!browser || !liveRivenItemId) return;
-        void fetchExpectedCounts(liveRivenItemId);
     });
 
     let rivenId = $derived(riven?.id ?? data.mediaDetails?.details?.id);
@@ -337,7 +315,7 @@
         if (data.mediaDetails?.type !== "tv" || !data.mediaDetails?.details?.seasons) return [];
         const details = data.mediaDetails.details as ParsedShowDetails;
         const episodeCountBySeason = new SvelteMap<number, number>();
-        const seasonsByNumber = new Map(
+        const seasonsByNumber = new SvelteMap(
             (liveRiven?.seasons ?? []).map((season) => [season.season_number, season])
         );
 
@@ -352,13 +330,9 @@
         return details.seasons.map((s) => {
             const rivenSeason = seasonsByNumber.get(s.number ?? 0);
             const episodeCount = episodeCountBySeason.get(s.number ?? 0) ?? 0;
-            const expectedCount = expectedBySeasonNumber?.get(s.number ?? 0);
             const completedCount =
                 rivenSeason?.episodes?.filter((e) => e.state === "Completed").length ?? 0;
-            // Lock only when all expected files are present. A partially complete or
-            // in-progress season remains requestable so missing episodes can be added.
-            const isComplete =
-                expectedCount != null && expectedCount > 0 && completedCount >= expectedCount;
+            const isComplete = episodeCount > 0 && completedCount >= episodeCount;
             return {
                 id: s.id,
                 season_number: s.number ?? 0,
@@ -371,7 +345,10 @@
     });
 
     const rivenSeasonsByNumber = $derived.by(
-        () => new Map((liveRiven?.seasons ?? []).map((season) => [season.season_number, season]))
+        () =>
+            new SvelteMap(
+                (liveRiven?.seasons ?? []).map((season) => [season.season_number, season])
+            )
     );
 
     const selectedRivenSeason = $derived.by(() =>
@@ -380,7 +357,7 @@
 
     const selectedRivenEpisodesByNumber = $derived.by(
         () =>
-            new Map(
+            new SvelteMap(
                 (selectedRivenSeason?.episodes ?? []).map((episode) => [
                     episode.episode_number,
                     episode
@@ -398,7 +375,7 @@
 
     const selectedHydratedEpisodesByNumber = $derived.by(
         () =>
-            new Map(
+            new SvelteMap(
                 (selectedHydratedSeason?.episodes ?? []).map((episode) => [
                     episode.episode_number,
                     episode
@@ -592,22 +569,12 @@
         if (nextState && raw) {
             liveRiven = nextState;
             liveRivenItemId = nextState.id;
-            expectedCounts = {
-                expectedFileCount: raw.expectedFileCount,
-                seasons: raw.seasons?.map((s) => ({
-                    seasonNumber: s.seasonNumber ?? 0,
-                    expectedFileCount: s.expectedFileCount
-                }))
-            };
-            expectedCountsItemId = raw.id;
             return;
         }
 
         liveRiven = undefined;
         hydratedRiven = undefined;
         liveRivenItemId = undefined;
-        expectedCounts = undefined;
-        expectedCountsItemId = undefined;
         completedDetailsHydrated = false;
     }
 
@@ -1153,7 +1120,7 @@
                             seasons={data.mediaDetails.details.seasons}
                             {selectedSeason}
                             stateBySeasonNumber={rivenSeasonsByNumber}
-                            {expectedBySeasonNumber}
+                            {episodeCountBySeasonNumber}
                             onSelectSeason={(season) => (selectedSeason = season)} />
                     </section>
                 {/if}

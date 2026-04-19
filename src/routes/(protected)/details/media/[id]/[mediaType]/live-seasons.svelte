@@ -10,7 +10,7 @@
         seasons: ParsedShowDetails["seasons"];
         selectedSeason?: string;
         stateBySeasonNumber: Map<number, RivenSeason>;
-        expectedBySeasonNumber?: Map<number, number>;
+        episodeCountBySeasonNumber?: Map<number, number>;
         onSelectSeason: (season: string | undefined) => void;
     }
 
@@ -18,7 +18,7 @@
         seasons,
         selectedSeason,
         stateBySeasonNumber,
-        expectedBySeasonNumber,
+        episodeCountBySeasonNumber,
         onSelectSeason
     }: Props = $props();
 </script>
@@ -27,7 +27,7 @@
     <Carousel.Content>
         {#each seasons as season, i (i)}
             {@const rivenSeason = stateBySeasonNumber.get(season.number ?? 0)}
-            {@const expectedCount = expectedBySeasonNumber?.get(season.number ?? 0)}
+            {@const episodeCount = episodeCountBySeasonNumber?.get(season.number ?? 0)}
             {@const completedCount =
                 rivenSeason?.episodes?.filter((e) => e.state === "Completed").length ?? 0}
             <Carousel.Item class="basis-auto">
@@ -50,19 +50,19 @@
                             {/if}
                         {/snippet}
                     </PortraitCard>
-                    {#if expectedCount != null && expectedCount > 0}
+                    {#if episodeCount != null && episodeCount > 0}
                         <div class="mt-1.5 flex items-center gap-1.5 px-0.5">
                             <div class="bg-muted h-1 flex-1 overflow-hidden rounded-full">
                                 <div
                                     class="bg-primary h-full rounded-full transition-all duration-500"
                                     style="width: {Math.min(
                                         100,
-                                        (completedCount / expectedCount) * 100
+                                        (completedCount / episodeCount) * 100
                                     )}%">
                                 </div>
                             </div>
                             <span class="text-muted-foreground font-mono text-[10px]"
-                                >{completedCount}/{expectedCount}</span>
+                                >{completedCount}/{episodeCount}</span>
                         </div>
                     {/if}
                 </button>

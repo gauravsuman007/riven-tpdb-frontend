@@ -130,12 +130,12 @@
     class="bg-background relative mt-0 flex min-h-screen flex-col overflow-x-hidden p-0 md:mt-0 md:p-0">
     <!-- Immersive Background -->
     <div class="pointer-events-none fixed inset-0 z-0">
-        <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
+        <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
         <div
-            class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
+            class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
         </div>
         <div
-            class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
+            class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
         </div>
     </div>
 
@@ -148,7 +148,7 @@
                 heightClass="h-[50vh] min-h-[500px] max-h-[800px]" />
         </div>
 
-        <div class="mx-auto flex w-full max-w-[2400px] flex-col gap-12 px-6 md:px-12 lg:px-16">
+        <div class="mx-auto flex w-full max-w-600 flex-col gap-12 px-6 md:px-12 lg:px-16">
             {#if recentlyAddedStore.items.length}
                 <div
                     class="flex flex-col gap-4"

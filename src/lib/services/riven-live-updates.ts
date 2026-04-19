@@ -1,26 +1,16 @@
 import { gqlSubscribeClient } from "$lib/graphql-client";
+import {
+    MOVIE_REQUESTED_SUBSCRIPTION,
+    SHOW_INDEXED_SUBSCRIPTION,
+    SHOW_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUEST_UPDATED_SUBSCRIPTION
+} from "$lib/services/riven-media";
 
 const MEDIA_EVENT_SUBSCRIPTIONS = [
-    `subscription RivenMovieRequested {
-        movieRequested {
-            id
-        }
-    }`,
-    `subscription RivenShowRequested {
-        showRequested {
-            id
-        }
-    }`,
-    `subscription RivenShowRequestUpdated {
-        showRequestUpdated {
-            id
-        }
-    }`,
-    `subscription RivenShowIndexed {
-        showIndexed {
-            id
-        }
-    }`,
+    MOVIE_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUEST_UPDATED_SUBSCRIPTION,
+    SHOW_INDEXED_SUBSCRIPTION,
     `subscription RivenItemScraped {
         itemScraped
     }`,
