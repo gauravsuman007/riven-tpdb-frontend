@@ -1,18 +1,12 @@
 <script lang="ts">
     import "@fontsource/oxanium/300.css";
-    import "@fontsource/oxanium/400.css";
     import "@fontsource/oxanium/500.css";
     import "@fontsource/oxanium/600.css";
-    import "@fontsource/oxanium/700.css";
-    import "@fontsource/jetbrains-mono/latin.css";
-    import "@fontsource/merriweather/latin.css";
     import oxanium400Woff2 from "@fontsource/oxanium/files/oxanium-latin-400-normal.woff2?url";
     import { afterNavigate, beforeNavigate } from "$app/navigation";
     import Sidebar from "$lib/components/sidebar.svelte";
     import { Toaster } from "$lib/components/ui/sonner/index.js";
-    import { ModeWatcher } from "mode-watcher";
     import NProgress from "nprogress";
-    import "../../app.css";
     import type { LayoutProps } from "./$types";
     import { SidebarStore, isMobileStore } from "$lib/stores/global.svelte";
     import { setContext } from "svelte";
@@ -58,7 +52,6 @@
         crossorigin="anonymous" />
 </svelte:head>
 
-<ModeWatcher defaultMode="dark" defaultTheme="darkmatter" />
 <Toaster richColors closeButton />
 
 {#if isSetupRoute}
