@@ -1,5 +1,4 @@
 <script lang="ts">
-    /* eslint-disable svelte/no-navigation-without-resolve */
     import { browser } from "$app/environment";
     import { page } from "$app/state";
     import { type PageProps } from "./$types";
@@ -74,11 +73,12 @@
         });
     }
 
-    function entityHref(id: number | string, type: string) {
-        return resolve("/(protected)/details/entity/[id]/[type]", {
+    function entityHref(id: number | string, type: string, query?: string) {
+        const path = resolve("/(protected)/details/entity/[id]/[type]", {
             id: String(id),
             type
         });
+        return query ? `${path}?${query}` : path;
     }
 
     let showTrailerOverride = $state(false);
@@ -672,6 +672,8 @@
     });
 </script>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
+
 {#snippet sectionHeading(title: string)}
     <div class="mb-4 flex items-center gap-3">
         <div class="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]">
@@ -1152,8 +1154,14 @@
                             <Carousel.Content class="-ml-3">
                                 {#each data.mediaDetails.details.cast as member, i (i)}
                                     <Carousel.Item class="basis-auto pl-3">
-                                        <a
-                                            href={`${entityHref(member.id, "person")}${member.external_source === "tvdb" ? "?indexer=tvdb" : ""}`}
+                                                        <a
+                                                            href={entityHref(
+                                                member.id,
+                                                "person",
+                                                member.external_source === "tvdb"
+                                                    ? "indexer=tvdb"
+                                                    : undefined
+                                            )}
                                             class="group relative block opacity-80 transition-all duration-300 hover:opacity-100">
                                             <PortraitCard
                                                 title={member.name}
@@ -1599,3 +1607,5 @@
         </div>
     </div>
 {/key}
+
+<!-- eslint-enable svelte/no-navigation-without-resolve -->

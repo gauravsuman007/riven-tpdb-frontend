@@ -80,7 +80,8 @@
                 Error
             </Badge>
 
-            <div class="font-heading text-foreground/90 font-mono text-[8rem] leading-none font-bold sm:text-[10rem]">
+            <div
+                class="font-heading text-foreground/90 font-mono text-[8rem] leading-none font-bold sm:text-[10rem]">
                 {status}
             </div>
 
