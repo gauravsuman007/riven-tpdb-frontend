@@ -103,7 +103,7 @@
             const trimmed = explicitHash.trim();
             if (!trimmed) return null;
             // Extract hash from a full magnet URI
-            const btih = trimmed.match(/urn:btih:([0-9a-fA-F]{40,64})/i);
+            const btih = trimmed.match(/urn:btih:([a-fA-F0-9]{40}|[a-zA-Z0-9]{32})/i);
             if (btih) return btih[1].toLowerCase();
             // Accept a bare 40- or 64-char hex hash
             if (/^[0-9a-fA-F]{40}$/.test(trimmed) || /^[0-9a-fA-F]{64}$/.test(trimmed))
