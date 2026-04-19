@@ -98,7 +98,17 @@
     const resolvedTvdbId = $derived(
         mediaType === "tv" ? (clean(customTvdbId) ?? externalId) : null
     );
-    const cleanedHash = $derived(clean(explicitHash));
+    const cleanedHash = $derived((() => {
+        const trimmed = explicitHash.trim();
+        if (!trimmed) return null;
+        // Extract hash from a full magnet URI
+        const btih = trimmed.match(/urn:btih:([0-9a-fA-F]{40,64})/i);
+        if (btih) return btih[1].toLowerCase();
+        // Accept a bare 40- or 64-char hex hash
+        if (/^[0-9a-fA-F]{40}$/.test(trimmed) || /^[0-9a-fA-F]{64}$/.test(trimmed))
+            return trimmed.toLowerCase();
+        return null;
+    })());
     const hadExistingItem = $derived(Boolean(itemId));
 
     function formatBytes(value?: number | null) {
@@ -222,7 +232,7 @@
 
     function downloadExplicitHash() {
         if (!cleanedHash) {
-            error = "Enter a stream hash first";
+            error = "Enter a valid 40-char info hash or paste a magnet link";
             return;
         }
 
