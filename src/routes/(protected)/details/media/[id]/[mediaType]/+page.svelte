@@ -1153,7 +1153,7 @@
                                 {#each data.mediaDetails.details.cast as member, i (i)}
                                     <Carousel.Item class="basis-auto pl-3">
                                         <a
-                                            href={entityHref(member.id, "person")}
+                                            href={`${entityHref(member.id, "person")}${member.external_source === "tvdb" ? "?indexer=tvdb" : ""}`}
                                             class="group relative block opacity-80 transition-all duration-300 hover:opacity-100">
                                             <PortraitCard
                                                 title={member.name}

@@ -15,6 +15,7 @@
     let { data }: PageProps = $props();
 
     const birthdayToday = $derived(isDayAndMonthToday(data.entity.birthday));
+    const sourceLabel = $derived(data.entity.indexer === "tvdb" ? "TVDB" : "TMDB");
 
     // Constants
     const GRID_CLASSES =
@@ -115,6 +116,28 @@
     );
 
     const currentBackdrop = $derived(carouselItems[0]);
+    const externalLinks = $derived.by(() => {
+        const links: Array<{ label: string; href: string }> = [];
+        if (data.entity.tvdb_url) {
+            links.push({ label: "TVDB", href: data.entity.tvdb_url });
+        }
+        if (data.entity.imdb_id) {
+            links.push({
+                label: "IMDb",
+                href: `https://www.imdb.com/name/${data.entity.imdb_id}`
+            });
+        }
+        if (data.entity.external_ids?.tmdb) {
+            links.push({
+                label: "TMDB",
+                href: `https://www.themoviedb.org/person/${data.entity.external_ids.tmdb}`
+            });
+        }
+        if (data.entity.homepage && data.entity.homepage !== data.entity.tvdb_url) {
+            links.push({ label: "Website", href: data.entity.homepage });
+        }
+        return links;
+    });
 
     function formatCreditSubtitle(credit: {
         character?: string | null;
@@ -395,6 +418,22 @@
                 <div class="bg-border/20 my-8 h-px w-full"></div>
             </div>
 
+            {#if externalLinks.length > 0}
+                <section
+                    class="mx-auto w-full max-w-600 px-8 pb-12 md:px-20 lg:px-24"
+                    in:fly|global={{ y: 20, duration: 400, delay: 180, easing: cubicOut }}>
+                    <div class="flex flex-wrap gap-2">
+                        {#each externalLinks as link (link.href)}
+                            <a href={link.href} target="_blank" rel="noopener noreferrer">
+                                <Badge variant="outline" class={badgeClass}>
+                                    {link.label}
+                                </Badge>
+                            </a>
+                        {/each}
+                    </div>
+                </section>
+            {/if}
+
             <!-- Credits -->
             <div class="mx-auto flex w-full max-w-600 flex-col gap-20 px-8 pb-24 md:px-20 lg:px-24">
                 {@render creditsSection("Movies", movieCredits, 200)}
@@ -424,7 +463,7 @@
 {#snippet creditList(credits: typeof movieCredits)}
     {#each credits as credit, index (`${credit.id}-${index}`)}
         <a
-            href={resolve(`/details/media/${credit.id}/${credit.media_type}`)}
+            href={`${resolve(`/details/media/${credit.id}/${credit.media_type}`)}${credit.indexer === "tvdb" ? "?indexer=tvdb" : ""}`}
             class="group relative block opacity-80 transition-all duration-300 hover:scale-105 hover:opacity-100">
             <PortraitCard
                 title={credit.title}
@@ -436,6 +475,9 @@
 {/snippet}
 
 {#snippet metadataBadges()}
+    <Badge variant="outline" class={badgeClass}>
+        {sourceLabel}
+    </Badge>
     {#if data.entity.known_for_department}
         <Badge variant="outline" class={badgeClass}>
             {data.entity.known_for_department}

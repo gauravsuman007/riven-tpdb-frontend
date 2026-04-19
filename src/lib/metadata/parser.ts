@@ -19,6 +19,7 @@ interface ParsedCastMember {
     name: string;
     character: string | null;
     profile_path: string | null;
+    external_source?: "tmdb" | "tvdb";
 }
 
 interface ParsedCrewMember {
@@ -563,7 +564,8 @@ export function parseTMDBMovieDetails(
             id: member.id,
             name: member.name,
             character: member.character || null,
-            profile_path: buildTMDBImage(member.profile_path, "w185")
+            profile_path: buildTMDBImage(member.profile_path, "w185"),
+            external_source: "tmdb"
         })),
         crew: data.credits.crew
             .filter((member) =>
@@ -1059,7 +1061,8 @@ export function parseTVDBShowDetails(
             id: character.peopleId || character.id,
             name: character.personName || character.name,
             character: character.name,
-            profile_path: buildTVDBImage(character.personImgURL || character.image)
+            profile_path: buildTVDBImage(character.personImgURL || character.image),
+            external_source: "tvdb"
         }));
 
     // Map TVDB sourceName to normalized keys
@@ -1194,6 +1197,7 @@ export interface PersonCreditCast {
     vote_average: number | null;
     vote_count: number | null;
     popularity: number | null;
+    indexer?: "tmdb" | "tvdb";
 }
 
 export interface PersonCreditCrew {
@@ -1210,10 +1214,12 @@ export interface PersonCreditCrew {
     vote_average: number | null;
     vote_count: number | null;
     popularity: number | null;
+    indexer?: "tmdb" | "tvdb";
 }
 
 export interface PersonDetails {
     id: number;
+    indexer?: "tmdb" | "tvdb";
     name: string;
     biography: string | null;
     birthday: string | null;
@@ -1225,9 +1231,30 @@ export interface PersonDetails {
     popularity: number | null;
     homepage: string | null;
     imdb_id: string | null;
+    tvdb_url?: string | null;
+    external_ids?: Record<string, string>;
     also_known_as: string[];
     cast_credits: PersonCreditCast[];
     crew_credits: PersonCreditCrew[];
+}
+
+function pickString(...values: unknown[]): string | null {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim()) {
+            return value;
+        }
+    }
+    return null;
+}
+
+function pickNumber(...values: unknown[]): number | null {
+    for (const value of values) {
+        if (typeof value === "number" && Number.isFinite(value)) return value;
+        if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+            return Number(value);
+        }
+    }
+    return null;
 }
 
 function getGenderString(gender: number | null): string | null {
@@ -1241,6 +1268,55 @@ function getGenderString(gender: number | null): string | null {
         default:
             return null;
     }
+}
+
+function normalizeTvdbGender(value: unknown): string | null {
+    if (typeof value === "number") {
+        if (value === 1) return "Male";
+        if (value === 2) return "Female";
+        return null;
+    }
+    if (typeof value === "string") return value || null;
+    if (value && typeof value === "object") {
+        const item = value as Record<string, unknown>;
+        return pickString(item.name, item.gender);
+    }
+    return null;
+}
+
+function tvdbRemoteIds(data: Record<string, any>) {
+    const ids = Array.isArray(data.remoteIds) ? data.remoteIds : [];
+    const normalized: Record<string, string> = {};
+
+    for (const remote of ids) {
+        if (!remote?.id) continue;
+        const source = pickString(remote.sourceName, remote.sourceType, remote.type);
+        if (!source) continue;
+        normalized[source.toLowerCase().replace(".com", "")] = String(remote.id);
+    }
+
+    return normalized;
+}
+
+function asRecord(value: unknown): Record<string, any> | null {
+    return value && typeof value === "object" ? (value as Record<string, any>) : null;
+}
+
+function tvdbAliases(data: Record<string, any>) {
+    const aliases = new Set<string>();
+
+    for (const alias of data.aliases ?? []) {
+        const name = pickString(alias?.name, alias);
+        if (name) aliases.add(name);
+    }
+
+    const translations = data.translations?.nameTranslations ?? data.nameTranslations ?? [];
+    for (const translation of translations) {
+        const name = pickString(translation?.name);
+        if (name && name !== data.name) aliases.add(name);
+    }
+
+    return [...aliases];
 }
 
 // Sort by release date (newest first), items with dates come before those without
@@ -1264,7 +1340,69 @@ function transformPersonCredit(credit: Record<string, any>) {
         media_type: (credit.media_type === "tv" ? "tv" : "movie") as any,
         vote_average: credit.vote_average ?? null,
         vote_count: credit.vote_count ?? null,
-        popularity: credit.popularity ?? null
+        popularity: credit.popularity ?? null,
+        indexer: "tmdb" as const
+    };
+}
+
+function transformTVDBPersonCharacterCredit(
+    character: Record<string, any>
+): PersonCreditCast | null {
+    const series = asRecord(character.series);
+    const movie = asRecord(character.movie);
+    const mediaType = character.movieId || movie ? "movie" : "tv";
+    const id = pickNumber(
+        character.movieId,
+        movie?.id,
+        character.seriesId,
+        series?.id,
+        character.parentId
+    );
+
+    if (!id) return null;
+
+    const title = pickString(
+        movie?.name,
+        movie?.title,
+        movie?.originalTitle,
+        character.movieName,
+        series?.name,
+        series?.title,
+        character.seriesName
+    );
+
+    if (!title) return null;
+
+    const releaseDate = pickString(
+        movie?.releaseDate,
+        movie?.firstRelease?.date,
+        movie?.year,
+        series?.firstAired,
+        series?.year
+    );
+
+    const poster = pickString(movie?.image, movie?.poster, series?.image, series?.poster);
+    const backdrop = pickString(
+        movie?.background,
+        movie?.artwork,
+        series?.background,
+        series?.artwork
+    );
+
+    return {
+        id,
+        title,
+        original_title: pickString(movie?.originalTitle, series?.originalName, title) ?? title,
+        character: pickString(character.name, character.characterName),
+        poster_path: poster ? buildTVDBImage(poster) : null,
+        backdrop_path: backdrop ? buildTVDBImage(backdrop) : null,
+        release_date: releaseDate,
+        year: pickNumber(movie?.year, series?.year) ?? dateUtils.getYearFromISO(releaseDate),
+        media_type: mediaType,
+        vote_average: pickNumber(movie?.score, series?.score),
+        vote_count: null,
+        popularity: pickNumber(character.sort, movie?.score, series?.score),
+        indexer: "tvdb"
     };
 }
 
@@ -1289,6 +1427,7 @@ export function parsePersonDetails(personData: any): PersonDetails {
 
     return {
         id: personData.id ?? 0,
+        indexer: "tmdb",
         name: personData.name ?? "",
         biography: personData.biography ?? null,
         birthday: personData.birthday ?? null,
@@ -1300,9 +1439,53 @@ export function parsePersonDetails(personData: any): PersonDetails {
         popularity: personData.popularity ?? null,
         homepage: personData.homepage ?? null,
         imdb_id: personData.external_ids?.imdb_id ?? null,
+        tvdb_url: null,
+        external_ids: personData.external_ids ?? {},
         also_known_as: personData.also_known_as ?? [],
         cast_credits: castCredits,
         crew_credits: crewCredits
+    };
+}
+
+export function parseTVDBPersonDetails(response: any): PersonDetails {
+    const data = response?.data ?? response ?? {};
+    const remoteIds = tvdbRemoteIds(data);
+    const characterCredits: PersonCreditCast[] = (
+        Array.isArray(data.characters) ? data.characters : []
+    )
+        .map(transformTVDBPersonCharacterCredit)
+        .filter((credit: PersonCreditCast | null): credit is PersonCreditCast => Boolean(credit))
+        .sort(sortByReleaseDateDesc);
+
+    const biography = pickString(
+        data.biography,
+        data.overview,
+        data.bio,
+        data.biographies?.find((t: any) => t?.language === "eng")?.biography,
+        data.translations?.overviewTranslations?.find((t: any) => t?.language === "eng")?.overview,
+        data.translations?.biographies?.find((t: any) => t?.language === "eng")?.biography
+    );
+    const image = pickString(data.image, data.personImgURL, data.photo, data.thumbnail);
+
+    return {
+        id: data.id ?? 0,
+        indexer: "tvdb",
+        name: data.name ?? "",
+        biography,
+        birthday: pickString(data.birth, data.birthday, data.birthDate),
+        deathday: pickString(data.death, data.deathday, data.deathDate),
+        place_of_birth: pickString(data.birthPlace, data.placeOfBirth, data.birthplace),
+        profile_path: image ? buildTVDBImage(image) : null,
+        known_for_department: pickString(data.peopleType, data.type, data.knownForDepartment),
+        gender: normalizeTvdbGender(data.gender),
+        popularity: typeof data.score === "number" ? data.score : null,
+        homepage: data.url ? `https://thetvdb.com${data.url}` : null,
+        imdb_id: remoteIds.imdb ?? null,
+        tvdb_url: data.url ? `https://thetvdb.com${data.url}` : null,
+        external_ids: remoteIds,
+        also_known_as: tvdbAliases(data),
+        cast_credits: characterCredits,
+        crew_credits: []
     };
 }
 
@@ -1352,6 +1535,7 @@ export function parseCompanyDetails(
 
     return {
         id: companyData.id ?? 0,
+        indexer: "tmdb",
         name: companyData.name ?? "",
         biography:
             companyData.description || `Headquarters: ${companyData.headquarters || "Unknown"}`,
@@ -1364,6 +1548,8 @@ export function parseCompanyDetails(
         popularity: null,
         homepage: companyData.homepage ?? null,
         imdb_id: null,
+        tvdb_url: null,
+        external_ids: {},
         also_known_as: [],
         cast_credits: castCredits,
         crew_credits: []

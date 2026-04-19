@@ -78,6 +78,10 @@ const TVDB_SERIES_EXTENDED_QUERY = `query($id: Int!, $meta: String) {
     tvdbSeriesExtended(id: $id, meta: $meta)
 }`;
 
+const TVDB_PERSON_EXTENDED_QUERY = `query($id: Int!, $meta: String) {
+    tvdbPersonExtended(id: $id, meta: $meta)
+}`;
+
 const TVDB_EPISODES_QUERY = `query($id: Int!, $seasonType: String!, $lang: String!, $page: Int) {
     tvdbEpisodes(id: $id, seasonType: $seasonType, lang: $lang, page: $page)
 }`;
@@ -211,6 +215,21 @@ export async function fetchTvdbSeriesExtended<T>(
         ctx.fetch
     );
     return data.tvdbSeriesExtended;
+}
+
+export async function fetchTvdbPersonExtended<T>(
+    ctx: BackendMetadataContext,
+    id: number,
+    meta?: string
+) {
+    const data = await gql<{ tvdbPersonExtended: T }>(
+        ctx.backendUrl,
+        ctx.apiKey,
+        TVDB_PERSON_EXTENDED_QUERY,
+        { id, meta },
+        ctx.fetch
+    );
+    return data.tvdbPersonExtended;
 }
 
 export async function fetchTvdbEpisodes<T>(
