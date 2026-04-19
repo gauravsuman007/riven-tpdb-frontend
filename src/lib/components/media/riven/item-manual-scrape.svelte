@@ -144,7 +144,10 @@
         customTvdbId = "";
         explicitHash = "";
         advancedOpen = false;
-        selectedSeasons = seasons.map((season) => season.season_number).sort((a, b) => a - b);
+        selectedSeasons = seasons
+            .filter((season) => season.status !== "Available")
+            .map((season) => season.season_number)
+            .sort((a, b) => a - b);
     }
 
     async function submitDownload(
