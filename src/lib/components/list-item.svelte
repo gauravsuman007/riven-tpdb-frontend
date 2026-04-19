@@ -101,8 +101,8 @@
         {subtitle}
         image={data.poster_path}
         {isSelectable}
-        isSelected={isSelectable && !!data.riven_id && selectStore?.has(data.riven_id!)}
-        onSelectToggle={() => data.riven_id && selectStore?.toggle(data.riven_id!)}>
+        isSelected={isSelectable && !!data.riven_id && selectStore?.has(data.riven_id)}
+        onSelectToggle={() => selectStore?.toggle(data.riven_id)}>
         {#snippet topRight()}
             {#if data.badge}
                 <Badge
