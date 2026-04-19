@@ -12,6 +12,7 @@
     import { scale, fly } from "svelte/transition";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
+    import { getRatings } from "$lib/stores/ratings";
 
     let { data } = $props();
 
@@ -34,16 +35,12 @@
         const item = heroItem;
         if (!item) return null;
 
-        const res = await fetch(`/api/ratings/${item.id}?type=${item.media_type}`);
+        const ratings = await getRatings(item.id, item.media_type);
 
         // Race condition check: If the hero item has rotated while fetching, ignore this result
         if (heroItem?.id !== item.id) return null;
 
-        return res.ok
-            ? (res.json() as Promise<{
-                  scores: Array<{ name: string; image?: string; score: string; url: string }>;
-              }>)
-            : null;
+        return ratings;
     });
 
     // Derived background image: Use hero item for empty state, first result for active search

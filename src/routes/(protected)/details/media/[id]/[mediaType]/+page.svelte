@@ -306,13 +306,21 @@
         const controller = new AbortController();
         ratingsLoading = true;
 
-        fetch(`/api/ratings/${ratingsId}?type=${mediaType}`, { signal: controller.signal })
-            .then(async (r) => {
-                if (r.ok) {
-                    ratingsData = await r.json();
-                } else {
-                    ratingsData = null;
+        gqlClient<{
+            ratings: {
+                scores: Array<{ name: string; image?: string; score: string; url: string }>;
+            };
+        }>(
+            `query Ratings($id: String!, $mediaType: String!) {
+                ratings(indexer: "tmdb", id: $id, mediaType: $mediaType) {
+                    scores { name image score url }
                 }
+            }`,
+            { id: String(ratingsId), mediaType },
+            controller.signal
+        )
+            .then(({ ratings }) => {
+                ratingsData = ratings;
                 ratingsLoading = false;
             })
             .catch((e) => {

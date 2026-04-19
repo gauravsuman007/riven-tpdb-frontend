@@ -49,8 +49,11 @@ const TMDB_DETAILS_QUERY = `query($type: String!, $id: Int!, $appendToResponse: 
     tmdbDetails(type: $type, id: $id, appendToResponse: $appendToResponse)
 }`;
 
-const TMDB_COLLECTION_QUERY = `query($id: Int!) {
-    tmdbCollection(id: $id)
+const RESOLVE_EXTERNAL_ID_QUERY = `query($from: String!, $to: String!, $id: String!, $mediaType: String) {
+    resolveExternalId(from: $from, to: $to, id: $id, mediaType: $mediaType) {
+        id
+        resolved
+    }
 }`;
 
 const TMDB_TRENDING_QUERY = `query($type: String!, $timeWindow: String!, $page: Int) {
@@ -138,15 +141,23 @@ export async function fetchTmdbDetails<T>(
     return data.tmdbDetails;
 }
 
-export async function fetchTmdbCollection<T>(ctx: BackendMetadataContext, id: number) {
-    const data = await gql<{ tmdbCollection: T }>(
+export async function resolveExternalId(
+    ctx: BackendMetadataContext,
+    options: {
+        from: "tmdb" | "tvdb" | "imdb" | "anilist" | "riven";
+        to: "tmdb" | "tvdb" | "imdb" | "anilist" | "riven";
+        id: string;
+        mediaType?: "movie" | "tv";
+    }
+) {
+    const data = await gql<{ resolveExternalId: { id: string; resolved: boolean } }>(
         ctx.backendUrl,
         ctx.apiKey,
-        TMDB_COLLECTION_QUERY,
-        { id },
+        RESOLVE_EXTERNAL_ID_QUERY,
+        options,
         ctx.fetch
     );
-    return data.tmdbCollection;
+    return data.resolveExternalId;
 }
 
 export async function fetchTmdbTrending(

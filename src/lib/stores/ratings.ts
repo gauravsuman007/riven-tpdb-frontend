@@ -1,3 +1,5 @@
+import { gqlClient } from "$lib/graphql-client";
+
 export interface RatingsData {
     scores: Array<{
         name: string;
@@ -11,13 +13,16 @@ const ratingsCache = new Map<string, Promise<RatingsData>>();
 const MAX_CACHE_SIZE = 100;
 
 async function fetchRatings(id: number, type: string, signal?: AbortSignal): Promise<RatingsData> {
-    const response = await fetch(`/api/ratings/${id}?type=${type}`, { signal });
-    if (!response.ok) {
-        throw new Error(
-            `Failed to fetch ratings: status=${response.status} id=${id} type=${type} text=${await response.text()}`
-        );
-    }
-    return response.json();
+    const data = await gqlClient<{ ratings: RatingsData }>(
+        `query Ratings($id: String!, $mediaType: String!) {
+            ratings(indexer: "tmdb", id: $id, mediaType: $mediaType) {
+                scores { name image score url }
+            }
+        }`,
+        { id: String(id), mediaType: type },
+        signal
+    );
+    return data.ratings;
 }
 
 function pruneCache() {

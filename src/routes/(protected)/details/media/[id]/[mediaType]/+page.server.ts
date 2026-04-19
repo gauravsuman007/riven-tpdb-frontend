@@ -7,12 +7,11 @@ import type {
 } from "$lib/metadata/parser";
 import { parseTMDBMovieDetails, parseTVDBShowDetails } from "$lib/metadata/parser";
 import { error } from "@sveltejs/kit";
-import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
-import { resolveId } from "$lib/services/resolver";
 import { gql } from "$lib/graphql-client";
 import {
     fetchTmdbDetails,
+    resolveExternalId,
     fetchTvdbEpisodes,
     fetchTvdbSeriesExtended
 } from "$lib/services/backend-metadata";
@@ -125,7 +124,6 @@ function mapTraktRecommendations(items: GqlTraktRecommendation[]) {
 
 export const load = (async ({ fetch, params, locals, url }) => {
     const { id, mediaType } = params;
-    const customFetch = createCustomFetch(fetch);
 
     try {
         if (mediaType !== "movie" && mediaType !== "tv") {
@@ -209,15 +207,15 @@ export const load = (async ({ fetch, params, locals, url }) => {
             } else {
                 // Resolve TMDB ID to TVDB ID
                 const resolved = await normalizeFetch(
-                    resolveId({
-                        from: "tmdb",
-                        to: "tvdb",
-                        id: Number(id),
-                        mediaType: "tv",
-                        customFetch,
-                        backendUrl: locals.backendUrl,
-                        apiKey: locals.apiKey
-                    })
+                    resolveExternalId(
+                        { backendUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+                        {
+                            from: "tmdb",
+                            to: "tvdb",
+                            id,
+                            mediaType: "tv"
+                        }
+                    )
                 );
 
                 if (!resolved || !("resolved" in resolved) || !resolved.resolved) {

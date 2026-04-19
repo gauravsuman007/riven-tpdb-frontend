@@ -7,7 +7,6 @@
     import { gqlClient } from "$lib/graphql-client";
     import { createScopedLogger } from "$lib/logger";
     import { isMobileStore } from "$lib/stores/global.svelte";
-    import type { CollectionDetails } from "$lib/metadata/parser";
     import { type Snippet } from "svelte";
     import { resolve } from "$app/paths";
     import { page } from "$app/state";
@@ -19,6 +18,42 @@
         collectionName?: string;
         trigger?: Snippet<[{ props: Record<string, unknown> }]>;
         onRequested?: () => void | Promise<void>;
+    }
+
+    interface CollectionDetails {
+        id: number;
+        name: string;
+        overview: string | null;
+        poster_path: string | null;
+        backdrop_path: string | null;
+        parts: Array<{
+            id: number;
+            title: string;
+            overview?: string | null;
+            poster_path: string | null;
+            backdrop_path: string | null;
+            release_date?: string | null;
+            media_type: "movie";
+            year: string;
+        }>;
+    }
+
+    interface GqlCollectionDetails {
+        id: number;
+        name: string;
+        overview: string | null;
+        posterPath: string | null;
+        backdropPath: string | null;
+        parts: Array<{
+            id: number;
+            title: string;
+            overview?: string | null;
+            posterPath: string | null;
+            backdropPath: string | null;
+            releaseDate?: string | null;
+            mediaType: "movie";
+            year: string;
+        }>;
     }
 
     let { collectionId, collectionName = "Collection", trigger, onRequested }: Props = $props();
@@ -34,10 +69,40 @@
         loading = true;
         error = null;
         try {
-            const res = await fetch(`/api/collection/${collectionId}`);
-            if (!res.ok) throw new Error("Failed to fetch collection");
-            const data = await res.json();
-            collectionData = data.collection;
+            const data = await gqlClient<{ tmdbCollectionDetails: GqlCollectionDetails }>(
+                `query Collection($id: Int!) {
+                    tmdbCollectionDetails(id: $id) {
+                        id
+                        name
+                        overview
+                        posterPath
+                        backdropPath
+                        parts {
+                            id
+                            title
+                            overview
+                            posterPath
+                            backdropPath
+                            releaseDate
+                            mediaType
+                            year
+                        }
+                    }
+                }`,
+                { id: collectionId }
+            );
+            collectionData = {
+                ...data.tmdbCollectionDetails,
+                poster_path: data.tmdbCollectionDetails.posterPath,
+                backdrop_path: data.tmdbCollectionDetails.backdropPath,
+                parts: data.tmdbCollectionDetails.parts.map((part) => ({
+                    ...part,
+                    poster_path: part.posterPath,
+                    backdrop_path: part.backdropPath,
+                    release_date: part.releaseDate,
+                    media_type: part.mediaType
+                }))
+            } as CollectionDetails;
         } catch (e) {
             logger.error("Failed to fetch collection", e);
             error = "Failed to load collection details.";
@@ -178,7 +243,6 @@
                                 overview={part.overview}
                                 tmdbId={part.id}
                                 mediaType="movie"
-                                initialRating={part.vote_average ?? undefined}
                                 class="transition-shadow group-hover:shadow-lg">
                                 {#snippet meta()}
                                     {#if part.year}
