@@ -1154,8 +1154,8 @@
                             <Carousel.Content class="-ml-3">
                                 {#each data.mediaDetails.details.cast as member, i (i)}
                                     <Carousel.Item class="basis-auto pl-3">
-                                                        <a
-                                                            href={entityHref(
+                                        <a
+                                            href={entityHref(
                                                 member.id,
                                                 "person",
                                                 member.external_source === "tvdb"
