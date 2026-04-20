@@ -1,5 +1,5 @@
 import type { PageServerLoad } from "./$types";
-import { redirect, error } from "@sveltejs/kit";
+import { redirect } from "@sveltejs/kit";
 import { itemsSearchSchema } from "$lib/schemas/items";
 import { zod4 } from "sveltekit-superforms/adapters";
 import { superValidate } from "sveltekit-superforms";
@@ -102,36 +102,6 @@ function typeValueFromEnum(value: string): string {
     return value.toLowerCase();
 }
 
-function typeEnumFromValue(value: string, enumValues: string[]): string | undefined {
-    return enumValues.find((enumValue) => enumValue.toLowerCase() === value.toLowerCase());
-}
-
-async function loadFilterOptions(event: Parameters<PageServerLoad>[0]) {
-    const data = await gql<{
-        mediaItemType?: { enumValues?: { name: string }[] } | null;
-        mediaItemState?: { enumValues?: { name: string }[] } | null;
-    }>(event.locals.backendUrl, event.locals.apiKey, FILTER_ENUMS_QUERY, undefined, event.fetch);
-
-    const typeEnums = data.mediaItemType?.enumValues?.map((item) => item.name) ?? [];
-    const stateEnums = data.mediaItemState?.enumValues?.map((item) => item.name) ?? [];
-
-    const typeOptions: FilterOption[] = typeEnums.map((value) => ({
-        value: typeValueFromEnum(value),
-        label: labelFromEnum(value)
-    }));
-    const stateOptions: FilterOption[] = [
-        { value: "All", label: "All" },
-        ...stateEnums.map((value) => ({ value, label: labelFromEnum(value) }))
-    ];
-
-    return {
-        typeEnums,
-        stateEnums,
-        typeOptions,
-        stateOptions
-    };
-}
-
 function extractYear(airedAt: string | null | undefined): number | string {
     if (!airedAt) return "N/A";
     const year = dateUtils.getYearFromISO(airedAt);
@@ -141,7 +111,6 @@ function extractYear(airedAt: string | null | undefined): number | string {
 function transformItems(items: GqlMediaItem[]) {
     return items
         .map((item) => {
-            // GraphQL serialises MediaItemType as SCREAMING_SNAKE_CASE (MOVIE, SHOW…)
             const rawType = item.itemType.toLowerCase();
             let id: string | number | null = null;
             let indexer: "tmdb" | "tvdb" = "tmdb";
@@ -204,55 +173,66 @@ export const load: PageServerLoad = async (event) => {
     const itemsSearchForm = await superValidate(event.url.searchParams, zod4(itemsSearchSchema));
     const { page, limit, sort, type: types, search, states } = itemsSearchForm.data;
 
-    try {
-        const { typeEnums, stateEnums, typeOptions, stateOptions } = await loadFilterOptions(event);
-        const stateEnumSet = new Set(stateEnums);
+    // Apply defaults optimistically without waiting for schema introspection.
+    // The Select only ever emits valid values so this is safe.
+    const effectiveTypes = types?.length ? types : ["movie", "show"];
+    const effectiveStates = states?.filter((s) => s !== "All") ?? [];
+    itemsSearchForm.data.type = effectiveTypes;
+    itemsSearchForm.data.states = effectiveStates.length > 0 ? effectiveStates : ["All"];
 
-        const filteredTypes = types
-            ?.map((type) => typeEnumFromValue(type, typeEnums))
-            .filter((type): type is string => type !== undefined);
-        const gqlTypes = filteredTypes && filteredTypes.length > 0 ? filteredTypes : undefined;
-        const defaultTypeValues = ["movie", "show"].filter((type) =>
-            typeEnumFromValue(type, typeEnums)
-        );
+    // Both queries start in parallel. Bundling into a single streaming Promise
+    // means navigation is instant — the page renders immediately and content fills in.
+    const filterEnumsTask = gql<{
+        mediaItemType?: { enumValues?: { name: string }[] } | null;
+        mediaItemState?: { enumValues?: { name: string }[] } | null;
+    }>(event.locals.backendUrl, event.locals.apiKey, FILTER_ENUMS_QUERY, undefined, event.fetch);
 
-        const filteredStates =
-            states?.filter((state) => state !== "All" && stateEnumSet.has(state)) ?? [];
-        const gqlStates = filteredStates.length > 0 ? filteredStates : undefined;
+    const itemsTask = gql<{ items: GqlItemsPage }>(
+        event.locals.backendUrl,
+        event.locals.apiKey,
+        ITEMS_QUERY,
+        {
+            page: page ?? 1,
+            limit: limit ?? 20,
+            sort: (Array.isArray(sort) ? sort[0] : sort) ?? "date_desc",
+            types: effectiveTypes.map((t) => t.toUpperCase()),
+            search: search ?? undefined,
+            states: effectiveStates.length > 0 ? effectiveStates : undefined
+        },
+        event.fetch
+    );
 
-        itemsSearchForm.data.type =
-            filteredTypes && filteredTypes.length > 0
-                ? filteredTypes.map(typeValueFromEnum)
-                : defaultTypeValues;
-        itemsSearchForm.data.states = filteredStates.length > 0 ? filteredStates : ["All"];
+    const pageData = Promise.all([filterEnumsTask, itemsTask])
+        .then(([filterData, itemsData]) => {
+            const typeEnums = filterData.mediaItemType?.enumValues?.map((e) => e.name) ?? [];
+            const stateEnums = filterData.mediaItemState?.enumValues?.map((e) => e.name) ?? [];
 
-        const data = await gql<{ items: GqlItemsPage }>(
-            event.locals.backendUrl,
-            event.locals.apiKey,
-            ITEMS_QUERY,
-            {
-                page: page ?? 1,
-                limit: limit ?? 20,
-                sort: (Array.isArray(sort) ? sort[0] : sort) ?? "date_desc",
-                types: gqlTypes,
-                search: search ?? undefined,
-                states: gqlStates
-            },
-            event.fetch
-        );
+            const typeOptions: FilterOption[] = typeEnums.map((value) => ({
+                value: typeValueFromEnum(value),
+                label: labelFromEnum(value)
+            }));
+            const stateOptions: FilterOption[] = [
+                { value: "All", label: "All" },
+                ...stateEnums.map((value) => ({ value, label: labelFromEnum(value) }))
+            ];
 
-        return {
-            items: transformItems(data.items.items),
-            page: data.items.page,
-            totalPages: data.items.totalPages,
-            limit: data.items.limit,
-            totalItems: data.items.totalItems,
-            itemsSearchForm,
-            typeOptions,
-            stateOptions
-        };
-    } catch (err) {
-        logger.error("Failed to fetch items:", err);
-        error(500, "Failed to fetch items");
-    }
+            return {
+                items: transformItems(itemsData.items.items),
+                page: itemsData.items.page,
+                totalPages: itemsData.items.totalPages,
+                limit: itemsData.items.limit,
+                totalItems: itemsData.items.totalItems,
+                typeOptions,
+                stateOptions
+            };
+        })
+        .catch((err) => {
+            logger.error("Failed to fetch library data:", err);
+            return null;
+        });
+
+    return {
+        itemsSearchForm,
+        pageData
+    };
 };

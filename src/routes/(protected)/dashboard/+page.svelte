@@ -9,7 +9,11 @@
     import ServiceStatusCard from "$lib/components/dashboard/service-status-card.svelte";
     import DownloaderServicesGrid from "$lib/components/dashboard/downloader-services-grid.svelte";
     import WatchingNowCard from "$lib/components/dashboard/watching-now-card.svelte";
-    import type { ActivePlaybackSession, DownloaderService } from "$lib/components/dashboard/types";
+    import type {
+        ActivePlaybackSession,
+        DownloaderService,
+        DashboardStatistics
+    } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
     import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
 
@@ -17,8 +21,7 @@
 
     let activePlaybackSessions = $state<ActivePlaybackSession[]>([]);
     let downloaderServices = $state<DownloaderService[]>([]);
-    // svelte-ignore state_referenced_locally
-    let statistics = $state(data.statistics);
+    let statistics = $state<DashboardStatistics | undefined>(undefined);
 
     const serviceStatuses = $derived(
         (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
@@ -75,21 +78,6 @@
         }
     `;
 
-    const DEBRID_ACCOUNT_INFO_QUERY = `
-        query {
-            debridAccountInfo {
-                store
-                email
-                username
-                subscriptionStatus
-                premiumUntil
-                cooldownUntil
-                totalDownloadedBytes
-                points
-            }
-        }
-    `;
-
     const STATS_QUERY = `
         query DashboardStats {
             stats {
@@ -114,16 +102,6 @@
         }
     `;
 
-    type GqlDebridAccountInfo = {
-        store: string;
-        email: string | null;
-        username: string | null;
-        subscriptionStatus: string | null;
-        premiumUntil: string | null;
-        cooldownUntil: string | null;
-        totalDownloadedBytes: number | null;
-        points: number | null;
-    };
     type GqlDashboardStats = {
         stats: {
             totalMovies: number;
@@ -143,28 +121,7 @@
         yearReleases: { year: number; count: number }[];
     };
 
-    function mapDebridService(info: GqlDebridAccountInfo): DownloaderService {
-        const now = Date.now();
-        const expiresMs = info.premiumUntil ? new Date(info.premiumUntil).getTime() : null;
-        const daysLeft =
-            expiresMs !== null && !isNaN(expiresMs)
-                ? Math.ceil((expiresMs - now) / (1000 * 60 * 60 * 24))
-                : null;
-
-        return {
-            service: info.store,
-            email: info.email ?? null,
-            username: info.username ?? null,
-            premium_status: info.subscriptionStatus ?? "expired",
-            premium_expires_at: info.premiumUntil ?? null,
-            premium_days_left: daysLeft,
-            points: info.points ?? null,
-            total_downloaded_bytes: info.totalDownloadedBytes ?? null,
-            cooldown_until: info.cooldownUntil ?? null
-        };
-    }
-
-    function mapDashboardStats(result: GqlDashboardStats): PageData["statistics"] {
+    function mapDashboardStats(result: GqlDashboardStats): DashboardStatistics {
         const s = result.stats;
         const total_items = s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
 
@@ -195,10 +152,26 @@
         statistics = mapDashboardStats(result);
     }
 
+    // Resolve streamed Promises from the server load into local state.
+    // data.statistics / activePlaybackSessions / downloaderServices are Promises —
+    // returning them un-awaited from the server load lets SvelteKit transition
+    // immediately while data arrives in the background.
     $effect(() => {
-        statistics = data.statistics;
-        activePlaybackSessions = data.activePlaybackSessions ?? [];
-        downloaderServices = data.downloaderInfo?.services ?? [];
+        let cancelled = false;
+
+        Promise.resolve(data.statistics).then((s) => {
+            if (!cancelled && s != null) statistics = s;
+        });
+        Promise.resolve(data.activePlaybackSessions).then((sessions) => {
+            if (!cancelled) activePlaybackSessions = sessions ?? [];
+        });
+        Promise.resolve(data.downloaderServices).then((services) => {
+            if (!cancelled) downloaderServices = services ?? [];
+        });
+
+        return () => {
+            cancelled = true;
+        };
     });
 
     $effect(() => {
@@ -220,23 +193,6 @@
                 // Keep the last successful snapshot on transient dashboard polling failures.
             }
         };
-
-        const refreshDownloaderServices = async () => {
-            try {
-                const result = await gqlClient<{ debridAccountInfo: GqlDebridAccountInfo[] }>(
-                    DEBRID_ACCOUNT_INFO_QUERY
-                );
-
-                if (!cancelled) {
-                    downloaderServices = (result.debridAccountInfo ?? []).map(mapDebridService);
-                }
-            } catch {
-                // Service account lookups should never block the dashboard shell.
-            }
-        };
-
-        void refresh();
-        void refreshDownloaderServices();
 
         const interval = window.setInterval(refresh, 15000);
         return () => {

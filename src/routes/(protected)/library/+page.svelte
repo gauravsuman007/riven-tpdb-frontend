@@ -32,7 +32,8 @@
     import { gqlClient } from "$lib/graphql-client";
     import * as dateUtils from "$lib/utils/date";
 
-    type LibraryItem = PageProps["data"]["items"][number];
+    type PageDataPayload = NonNullable<Awaited<PageProps["data"]["pageData"]>>;
+    type LibraryItem = PageDataPayload["items"][number];
     type GqlMediaItem = {
         id: number;
         itemType: string;
@@ -59,12 +60,11 @@
     };
 
     let { data }: PageProps = $props();
-    // svelte-ignore state_referenced_locally
-    let liveItems = $state<LibraryItem[]>(data.items);
-    // svelte-ignore state_referenced_locally
-    let liveLimit = $state(data.limit);
-    // svelte-ignore state_referenced_locally
-    let liveTotalItems = $state(data.totalItems);
+    let liveItems = $state<LibraryItem[]>([]);
+    let liveLimit = $state(20);
+    let liveTotalItems = $state(0);
+    let typeOptions = $state<{ value: string; label: string }[]>([]);
+    let stateOptions = $state<{ value: string; label: string }[]>([]);
 
     // svelte-ignore state_referenced_locally
     const form = superForm(data.itemsSearchForm, {
@@ -245,10 +245,22 @@
         liveTotalItems = result.items.totalItems;
     }
 
+    // Resolve the streamed Promise from the server load into local state.
     $effect(() => {
-        liveItems = data.items;
-        liveLimit = data.limit;
-        liveTotalItems = data.totalItems;
+        let cancelled = false;
+
+        data.pageData?.then((d) => {
+            if (cancelled || !d) return;
+            liveItems = d.items;
+            liveLimit = d.limit;
+            liveTotalItems = d.totalItems;
+            typeOptions = d.typeOptions;
+            stateOptions = d.stateOptions;
+        });
+
+        return () => {
+            cancelled = true;
+        };
     });
 
     $effect(() => {
@@ -323,10 +335,10 @@
                                 <Select.Trigger
                                     {...props}
                                     class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-value:text-white data-[state=open]:bg-white/10">
-                                    {selectedOptionLabels($formData.type, data.typeOptions, "Type")}
+                                    {selectedOptionLabels($formData.type, typeOptions, "Type")}
                                 </Select.Trigger>
                                 <Select.Content class="border-zinc-800 bg-zinc-900">
-                                    {#each data.typeOptions as option (option.value)}
+                                    {#each typeOptions as option (option.value)}
                                         <Select.Item value={option.value} label={option.label} />
                                     {/each}
                                 </Select.Content>
@@ -349,14 +361,10 @@
                                 <Select.Trigger
                                     {...props}
                                     class="h-9 border-0 bg-transparent text-zinc-400 hover:bg-white/5 data-value:text-white data-[state=open]:bg-white/10">
-                                    {selectedOptionLabels(
-                                        $formData.states,
-                                        data.stateOptions,
-                                        "State"
-                                    )}
+                                    {selectedOptionLabels($formData.states, stateOptions, "State")}
                                 </Select.Trigger>
                                 <Select.Content class="border-zinc-800 bg-zinc-900">
-                                    {#each data.stateOptions as option (option.value)}
+                                    {#each stateOptions as option (option.value)}
                                         <Select.Item value={option.value} label={option.label} />
                                     {/each}
                                 </Select.Content>
