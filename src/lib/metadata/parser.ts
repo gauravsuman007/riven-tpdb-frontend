@@ -1,83 +1,41 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { TMDB_IMAGE_BASE_URL, TVDB_ARTWORK_BASE_URL } from "$lib/indexer-constants";
 import * as dateUtils from "$lib/utils/date";
+import type {
+    ParsedCastMember,
+    ParsedGenre,
+    ParsedLanguage,
+    ParsedNetwork,
+    ParsedProductionCompany,
+    ParsedTrailer,
+    PersonCreditCast,
+    PersonCreditCrew,
+    PersonDetails,
+    TMDBMovieDetailsExtended,
+    TMDBTransformedListItem,
+    TMDBVideoItem,
+    TVDBAirsDays,
+    TVDBArtworkItem,
+    TVDBBaseItem,
+    TVDBEpisodeItem,
+    TVDBSearchItem
+} from "./parser.types";
 
-interface ParsedGenre {
-    id: number;
-    name: string;
-    slug?: string;
-}
+export type {
+    ParsedMovieDetails,
+    ParsedShowDetails,
+    PersonCreditCast,
+    PersonCreditCrew,
+    PersonDetails,
+    TMDBListItem,
+    TMDBMovieDetailsExtended,
+    TMDBTransformedListItem,
+    TVDBBaseItem
+} from "./parser.types";
 
-interface ParsedLanguage {
-    english_name: string | null;
-    iso_639_1: string | null;
-    name: string | null;
-}
+// ---------------------------------------------------------------------------------
+// Utility functions
+// ---------------------------------------------------------------------------------
 
-interface ParsedCastMember {
-    id: number;
-    name: string;
-    character: string | null;
-    profile_path: string | null;
-    external_source?: "tmdb" | "tvdb";
-}
-
-interface ParsedCrewMember {
-    id: number;
-    name: string;
-    job: string | null;
-    profile_path: string | null;
-}
-
-interface ParsedProductionCompany {
-    id: number;
-    name: string;
-    logo_path: string | null;
-    origin_country: string | null;
-}
-
-interface ParsedTrailer {
-    id?: string | number;
-    name: string;
-    site: string | null;
-    key?: string;
-    url?: string | null;
-}
-
-interface ParsedMediaDetailsBase {
-    id: number | null;
-    type: "movie" | "show";
-    title: string | null;
-    original_title: string | null;
-    original_language: string | null;
-    overview: string | null;
-    tagline: string | null;
-    status: string | null;
-    release_date: string | null;
-    end_date: string | null;
-    next_air_date: string | null;
-    year: number | null;
-    runtime: number | null;
-    formatted_runtime: string | null;
-    homepage: string | null;
-    backdrop_path: string | null;
-    poster_path: string | null;
-    logo: string | null;
-    trailer: ParsedTrailer | null;
-    certification: string | "N/A";
-    genres: ParsedGenre[];
-    cast: ParsedCastMember[];
-    crew: ParsedCrewMember[];
-    origin_country: string[];
-    spoken_languages: ParsedLanguage[] | null;
-    production_companies: ParsedProductionCompany[];
-    production_countries: { iso_3166_1: string; name: string }[];
-    recommendations: TMDBTransformedListItem[];
-    similar: TMDBTransformedListItem[];
-    trakt_recommendations: TMDBTransformedListItem[];
-}
-
-// Common utility functions
 function formatRuntime(totalMinutes: number | null) {
     if (totalMinutes == null || totalMinutes <= 0) return null;
     const hours = Math.floor(totalMinutes / 60);
@@ -113,247 +71,10 @@ function resolveTrailerSite(url: string | null) {
 }
 
 // ---------------------------------------------------------------------------------
-// TMDB Interfaces and Functions
+// TMDB functions
 // ---------------------------------------------------------------------------------
 
-export interface TMDBListItem {
-    adult: boolean;
-    backdrop_path: string | null;
-    id: number;
-    title?: string;
-    name?: string;
-    original_title?: string;
-    original_name?: string;
-    overview: string;
-    poster_path: string | null;
-    media_type: "movie" | "tv" | "person" | "company";
-    original_language: string;
-    genre_ids: number[];
-    popularity: number;
-    release_date?: string;
-    first_air_date?: string;
-    video?: boolean;
-    vote_average: number;
-    vote_count: number;
-    origin_country?: string[];
-    profile_path?: string | null;
-    logo_path?: string | null;
-}
-
-interface TMDBCollectionItem {
-    backdrop_path: string | null;
-    id: number;
-    name: string;
-    poster_path: string | null;
-}
-
-interface TMDBMovieDetailsBase {
-    adult: boolean;
-    backdrop_path: string | null;
-    belongs_to_collection: TMDBCollectionItem | null;
-    budget: number;
-    genres: { id: number; name: string }[];
-    homepage: string | null;
-    id: number;
-    imdb_id: string | null;
-    origin_country: string[];
-    original_language: string;
-    original_title: string;
-    overview: string | null;
-    popularity: number | null;
-    poster_path: string | null;
-    production_companies: {
-        id: number;
-        logo_path: string | null;
-        name: string;
-        origin_country: string;
-    }[];
-    production_countries: { iso_3166_1: string; name: string }[];
-    release_date: string | null;
-    revenue: number | null;
-    runtime: number | null;
-    spoken_languages: { english_name: string; iso_639_1: string; name: string }[];
-    status: string | null;
-    tagline: string | null;
-    title: string;
-    video: boolean;
-    vote_average: number | null;
-    vote_count: number | null;
-}
-
-interface TMDBImageItem {
-    aspect_ratio: number;
-    file_path: string;
-    height: number;
-    iso_3166_1: string | null;
-    iso_639_1: string | null;
-    vote_average: number;
-    vote_count: number;
-    width: number;
-}
-
-interface TMDBVideoItem {
-    iso_639_1: string | null;
-    iso_3166_1: string | null;
-    name: string;
-    key: string;
-    site: string;
-    size: number;
-    type: string;
-    official: boolean;
-    published_at: string;
-    id: string;
-}
-
-interface TMDBCastItem {
-    adult: boolean;
-    gender: number | null;
-    id: number;
-    known_for_department: string;
-    name: string;
-    original_name: string;
-    popularity: number;
-    profile_path: string | null;
-    cast_id: number;
-    character: string;
-    credit_id: string;
-    order: number;
-}
-
-interface TMDBCrewItem {
-    adult: boolean;
-    gender: number | null;
-    id: number;
-    known_for_department: string;
-    name: string;
-    original_name: string;
-    popularity: number;
-    profile_path: string | null;
-    credit_id: string;
-    department: string;
-    job: string;
-}
-
-interface TMDBReleaseDateItem {
-    certification: string;
-    descriptors: string[];
-    iso_639_1: string | null;
-    note: string;
-    release_date: string; // ISO 8601 date string
-    type: number;
-}
-
-// external_ids,images,recommendations,similar,videos,credits,release_dates
-export interface TMDBMovieDetailsExtended extends TMDBMovieDetailsBase {
-    external_ids: {
-        imdb_id: string | null;
-        wikidata_id: string | null;
-        facebook_id: string | null;
-        instagram_id: string | null;
-        twitter_id: string | null;
-    };
-    images: {
-        backdrops: TMDBImageItem[];
-        logos: TMDBImageItem[];
-        posters: TMDBImageItem[];
-    };
-    recommendations: {
-        page: number;
-        results: TMDBListItem[];
-        total_pages: number;
-        total_results: number;
-    };
-    similar: { page: number; results: TMDBListItem[]; total_pages: number; total_results: number };
-    videos: { results: TMDBVideoItem[] };
-    credits: { cast: TMDBCastItem[]; crew: TMDBCrewItem[] };
-    release_dates: { results: { iso_3166_1: string; release_dates: TMDBReleaseDateItem[] }[] };
-}
-
-export interface TMDBTransformedListItem {
-    id: number;
-    title: string;
-    poster_path: string | null;
-    media_type: "movie" | "tv" | "person" | "company";
-    year: string | number;
-    vote_average: number | null;
-    vote_count: number | null;
-    popularity?: number;
-    indexer: "tmdb" | "tvdb";
-    original_language?: string;
-    overview?: string;
-    backdrop_path?: string | null;
-    genre_ids?: number[];
-    release_date?: string;
-    first_air_date?: string;
-    original_title?: string;
-}
-
-export interface ParsedMovieDetails extends ParsedMediaDetailsBase {
-    type: "movie";
-    adult: boolean;
-    vote_average: number | null;
-    vote_count: number | null;
-    budget: number | null;
-    revenue: number | null;
-    imdb_id: string | null;
-    external_ids: TMDBMovieDetailsExtended["external_ids"];
-    collection: {
-        id: number;
-        name: string;
-        poster_path: string | null;
-        backdrop_path: string | null;
-    } | null;
-}
-
-export function transformTMDBList(
-    items: unknown[] | null,
-    type: "movie" | "tv" | "person" | "company" = "movie",
-    backdropSize: string = "w1280"
-) {
-    const seen = new Set<number>();
-    return (
-        (items as any)?.reduce((acc: any[], item: Record<string, any>) => {
-            if (item.id == null || seen.has(item.id)) return acc;
-            seen.add(item.id);
-            acc.push({
-                id: item.id,
-                title: item.title || item.name || item.original_title || item.original_name || "",
-                poster_path: item.poster_path
-                    ? `${TMDB_IMAGE_BASE_URL}/w500${item.poster_path}`
-                    : item.profile_path
-                      ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}`
-                      : item.logo_path
-                        ? `${TMDB_IMAGE_BASE_URL}/w500${item.logo_path}`
-                        : null,
-                media_type: item.media_type || type,
-                year:
-                    (item.media_type || type) === "movie"
-                        ? item.release_date
-                            ? (dateUtils.getYearFromISO(item.release_date) ?? "N/A")
-                            : "N/A"
-                        : item.first_air_date
-                          ? (dateUtils.getYearFromISO(item.first_air_date) ?? "N/A")
-                          : "N/A",
-                vote_average: item.vote_average ? item.vote_average : null,
-                vote_count: item.vote_count ? item.vote_count : null,
-                popularity: item.popularity,
-                indexer: "tmdb" as const,
-                original_language: item.original_language,
-                overview: item.overview,
-                backdrop_path: item.backdrop_path
-                    ? `${TMDB_IMAGE_BASE_URL}/${backdropSize}${item.backdrop_path}`
-                    : null,
-                genre_ids: item.genre_ids,
-                release_date: item.release_date,
-                first_air_date: item.first_air_date,
-                original_title: item.original_title ?? item.original_name
-            });
-            return acc;
-        }, [] as TMDBTransformedListItem[]) || ([] as TMDBTransformedListItem[])
-    );
-}
-
-// Map TVDB genre strings to TMDB Integer IDs
+// Map TVDB genre strings to TMDB integer IDs
 const TVDB_GENRE_MAP: Record<string, number> = {
     Action: 28,
     Adventure: 12,
@@ -385,17 +106,76 @@ const TVDB_GENRE_MAP: Record<string, number> = {
     "War & Politics": 10768
 };
 
-interface TVDBSearchItem {
-    tvdb_id?: number;
-    id?: number;
-    type?: string;
-    name?: string;
-    translations?: { eng?: string };
-    image_url?: string;
-    year?: string | number;
-    first_air_time?: string;
-    overview?: string;
-    genres?: (string | { name: string })[];
+export function transformTMDBList(
+    items: unknown[] | null,
+    type: "movie" | "tv" | "person" | "company" = "movie",
+    backdropSize: string = "w1280"
+) {
+    const seen = new Set<number>();
+    return (
+        (items as Array<Record<string, unknown>>)?.reduce(
+            (acc: TMDBTransformedListItem[], rawItem: Record<string, unknown>) => {
+                const item = rawItem as {
+                    id?: number;
+                    title?: string;
+                    name?: string;
+                    original_title?: string;
+                    original_name?: string;
+                    poster_path?: string;
+                    profile_path?: string;
+                    logo_path?: string;
+                    media_type?: "movie" | "tv" | "person" | "company";
+                    release_date?: string;
+                    first_air_date?: string;
+                    vote_average?: number | null;
+                    vote_count?: number | null;
+                    popularity?: number;
+                    original_language?: string;
+                    overview?: string;
+                    backdrop_path?: string;
+                    genre_ids?: number[];
+                };
+                if (item.id == null || seen.has(item.id)) return acc;
+                seen.add(item.id);
+                acc.push({
+                    id: item.id,
+                    title:
+                        item.title || item.name || item.original_title || item.original_name || "",
+                    poster_path: item.poster_path
+                        ? `${TMDB_IMAGE_BASE_URL}/w500${item.poster_path}`
+                        : item.profile_path
+                          ? `${TMDB_IMAGE_BASE_URL}/w500${item.profile_path}`
+                          : item.logo_path
+                            ? `${TMDB_IMAGE_BASE_URL}/w500${item.logo_path}`
+                            : null,
+                    media_type: item.media_type || type,
+                    year:
+                        (item.media_type || type) === "movie"
+                            ? item.release_date
+                                ? (dateUtils.getYearFromISO(item.release_date) ?? "N/A")
+                                : "N/A"
+                            : item.first_air_date
+                              ? (dateUtils.getYearFromISO(item.first_air_date) ?? "N/A")
+                              : "N/A",
+                    vote_average: item.vote_average ? item.vote_average : null,
+                    vote_count: item.vote_count ? item.vote_count : null,
+                    popularity: item.popularity,
+                    indexer: "tmdb" as const,
+                    original_language: item.original_language,
+                    overview: item.overview,
+                    backdrop_path: item.backdrop_path
+                        ? `${TMDB_IMAGE_BASE_URL}/${backdropSize}${item.backdrop_path}`
+                        : null,
+                    genre_ids: item.genre_ids,
+                    release_date: item.release_date,
+                    first_air_date: item.first_air_date,
+                    original_title: item.original_title ?? item.original_name
+                });
+                return acc;
+            },
+            [] as TMDBTransformedListItem[]
+        ) || ([] as TMDBTransformedListItem[])
+    );
 }
 
 export function transformTVDBList(items: TVDBSearchItem[] | null): TMDBTransformedListItem[] {
@@ -443,7 +223,15 @@ function transformTraktRecommendations(
     const seen = new Map<number, TMDBTransformedListItem>();
 
     for (const rawItem of items) {
-        const item = rawItem as Record<string, any>;
+        const item = rawItem as {
+            images?: { poster?: string[] };
+            type?: string;
+            movie?: { title?: string; year?: string | number; ids?: { tmdb?: number } };
+            show?: { title?: string; year?: string | number; ids?: { tmdb?: number } };
+            ids?: { tmdb?: number };
+            title?: string;
+            year?: string | number;
+        };
         const posterRaw = item.images?.poster?.[0];
         const poster = posterRaw
             ? posterRaw.startsWith("http")
@@ -502,7 +290,7 @@ function findTMDBBestTrailer(videos: TMDBVideoItem[] | null) {
 export function parseTMDBMovieDetails(
     data: TMDBMovieDetailsExtended | null,
     traktRecs: unknown[] | null = null
-): ParsedMovieDetails | null {
+) {
     if (!data) return null;
 
     const runtime = data.runtime ?? null;
@@ -525,7 +313,7 @@ export function parseTMDBMovieDetails(
 
     return {
         id: data.id ?? null,
-        type: "movie",
+        type: "movie" as const,
         adult: data.adult ?? false,
         title: data.title ?? data.original_title ?? null,
         original_title: data.original_title ?? null,
@@ -565,7 +353,7 @@ export function parseTMDBMovieDetails(
             name: member.name,
             character: member.character || null,
             profile_path: buildTMDBImage(member.profile_path, "w185"),
-            external_source: "tmdb"
+            external_source: "tmdb" as const
         })),
         crew: data.credits.crew
             .filter((member) =>
@@ -607,321 +395,8 @@ export function parseTMDBMovieDetails(
 }
 
 // ---------------------------------------------------------------------------------
-// TVDB Interfaces and Functions
+// TVDB functions
 // ---------------------------------------------------------------------------------
-
-export interface TVDBBaseItem {
-    id: number;
-    name: string;
-    slug: string;
-    image: string | null; // https://artworks.thetvdb.com/banners/posters/81189-10.jpg
-    nameTranslations: string[] | null;
-    overviewTranslations: string[] | null;
-    aliases: { language: string; name: string }[];
-    firstAired: string | null; // 2008-01-20
-    lastAired: string | null; // 2013-09-29
-    nextAired: string | null; // 2024-11-10
-    score: number | null;
-    status: {
-        id: number;
-        name: string;
-        recordType: string;
-        keepUpdated: boolean;
-    } | null;
-    originalCountry: string | null;
-    originalLanguage: string | null;
-    defaultSeasonType: number | null;
-    isOrderRandomized: boolean | null;
-    lastUpdated: number | null; // 2025-10-09 14:23:05
-    averageRuntime: number | null; // in minutes
-    episodes: TVDBEpisodeItem[] | null;
-    overview: string | null;
-    year: string | null; // "2008"
-    artworks: TVDBArtworkItem[] | null;
-    companies: TVDBCompanyItem[] | null;
-    originalNetwork: {
-        id: number | null;
-        name: string | null;
-        slug: string | null;
-        nameTranslations: string[] | null;
-        overviewTranslations: string[] | null;
-        aliases: { language: string; name: string }[];
-        country: string | null;
-        primaryCompanyType: number | null;
-        activeDate: string | null;
-        inactiveDate: string | null;
-        companyType: {
-            companyTypeId: number | null;
-            companyTypeName: string | null;
-        } | null;
-        parentCompany: {
-            id: number | null;
-            name: string | null;
-            relation: {
-                id: number | null;
-                typeName: string | null;
-            } | null;
-        } | null;
-        tagOptions: unknown[] | null;
-    } | null;
-    latestNetwork: {
-        id: number | null;
-        name: string | null;
-        slug: string | null;
-        nameTranslations: string[] | null;
-        overviewTranslations: string[] | null;
-        aliases: { language: string; name: string }[];
-        country: string | null;
-        primaryCompanyType: number | null;
-        activeDate: string | null;
-        inactiveDate: string | null;
-        companyType: {
-            companyTypeId: number | null;
-            companyTypeName: string | null;
-        } | null;
-        parentCompany: {
-            id: number | null;
-            name: string | null;
-            relation: {
-                id: number | null;
-                typeName: string | null;
-            } | null;
-        } | null;
-        tagOptions: unknown[] | null;
-    } | null;
-    genres: { id: number; name: string; slug: string }[] | null;
-    trailers: { id: number; name: string; url: string; language: string; runtime: number }[] | null; // runtime is given 0, not trustworthy
-    lists: TVDBCollectionItem[] | null;
-    remoteIds: { id: string; type: number; sourceName: string }[] | null;
-    characters: TVDBCharacterItem[] | null;
-    airsDays: {
-        sunday: boolean;
-        monday: boolean;
-        tuesday: boolean;
-        wednesday: boolean;
-        thursday: boolean;
-        friday: boolean;
-        saturday: boolean;
-    } | null;
-    airsTime: string | null; // "21:00"
-    seasons: TVDBSeasonItem[] | null;
-    tags:
-        | { id: number; tag: number; tagName: string; name: string; helpText: string | null }[]
-        | null;
-    contentRatings:
-        | {
-              id: number;
-              name: string;
-              country: string | null;
-              description: string;
-              contentType: string;
-              order: number;
-              fullName: unknown | null;
-          }[]
-        | null;
-    seasonTypes: { id: number; name: string; type: string; alternateName: string | null }[] | null;
-    translations: {
-        nameTranslations:
-            | {
-                  name: string;
-                  language: string;
-                  isPrimary?: boolean;
-                  isAlias?: boolean;
-              }[]
-            | null;
-        overviewTranslations: { overview: string; language: string; isPrimary?: boolean }[] | null;
-        aliases: string[] | null;
-    };
-}
-
-interface TVDBEpisodeItem {
-    id: number;
-    seriesId: number;
-    name: string;
-    aired: string | null; // 2008-01-20
-    runtime: number | null; // in minutes
-    nameTranslations: string[] | null;
-    overview: string | null;
-    overviewTranslations: string[] | null;
-    image: string | null; // /banners/episodes/81189/3859781.jpg
-    imageType: number;
-    isMovie: number; // 0 or 1
-    seasons: unknown | null; // Not used
-    number: number | null; // Episode number
-    absoluteNumber: number | null; // Absolute episode number
-    seasonNumber: number | null; // Season number
-    lastUpdated: string | null; // 2023-03-28 19:46:53
-    finaleType: string | null; // "series"
-    year: string | null; // "2008"
-}
-
-interface TVDBArtworkItem {
-    id: number;
-    image: string; // https://artworks.thetvdb.com/banners/posters/81189-10.jpg
-    thumbnail: string; // https://artworks.thetvdb.com/banners/posters/81189-10_t.jpg
-    language: string | null; // "eng"
-    type: number;
-    score: number | null;
-    width: number | null;
-    height: number | null;
-    includesText: boolean | null;
-    thumbnailWidth: number | null;
-    thumbnailHeight: number | null;
-    updatedAt: number | null; // timestamp
-    status: {
-        id: number | null;
-        name: string | null;
-    } | null;
-    tagOptions: unknown[] | null;
-}
-
-interface TVDBCompanyItem {
-    id: number;
-    name: string;
-    slug: string;
-    nameTranslations: string[] | null;
-    overviewTranslations: string[] | null;
-    aliases: { language: string; name: string }[];
-    country: string | null; // "usa"
-    primaryCompanyType: number | null;
-    activeDate: string | null; // "1990-06-01"
-    inactiveDate: string | null; // "2002-05-31"
-    companyType: {
-        companyTypeId: number | null;
-        companyTypeName: string | null;
-    } | null;
-    parentCompany: {
-        id: number | null;
-        name: string | null;
-        relation: {
-            id: number | null;
-            typeName: string | null;
-        } | null;
-    } | null;
-    tagOptions: unknown[] | null;
-}
-
-interface TVDBCollectionItem {
-    id: number;
-    name: string;
-    overview: string | null;
-    url: string;
-    isOfficial: boolean | null;
-    nameTranslations: string[] | null;
-    overviewTranslations: string[] | null;
-    aliases: { language: string; name: string }[];
-    score: number | null;
-    image: string | null;
-    imageIsFallback: boolean | null;
-    remoteIds: unknown | null;
-    tags: unknown[] | null;
-}
-
-interface TVDBCharacterItem {
-    id: number;
-    name: string;
-    peopleId: number;
-    seriesId: number;
-    series: unknown | null;
-    movie: unknown | null;
-    movieId: number | null;
-    episodeId: number | null;
-    type: number; // 3 = Actor
-    image: string | null; // https://artworks.thetvdb.com/banners/actors/75476.jpg
-    sort: number | null;
-    isFeatured: boolean | null;
-    url: string; // https://thetvdb.com/people/269404-anna-gunn
-    nameTranslations: string[] | null;
-    overviewTranslations: string[] | null;
-    aliases: { language: string; name: string }[] | null;
-    peopleType: string | null; // "Actor"
-    personName: string | null; // "Anna Gunn"
-    tagOptions: unknown[] | null;
-    personImgURL: string | null; // https://artworks.thetvdb.com/banners/v4/actor/269404/photo/61138b8f549b0.jpg
-}
-
-interface TVDBSeasonItem {
-    id: number;
-    seriesId: number;
-    type: {
-        id: number;
-        name: string;
-        type: string;
-        alternateName: string | null;
-    } | null;
-    number: number | null;
-    nameTranslations: string[] | null;
-    overviewTranslations: string[] | null;
-    image: string | null; // https://artworks.thetvdb.com/banners/seasons/81189-1-3.jpg
-    imageType: number | null;
-    companies: {
-        studio: string | null;
-        network: string | null;
-        production: string | null;
-        distributor: string | null;
-        special_effects: string | null;
-    } | null;
-    lastUpdated: string | null; // 2025-05-29 07:57:48
-}
-
-type TVDBAirsDays = {
-    sunday: boolean;
-    monday: boolean;
-    tuesday: boolean;
-    wednesday: boolean;
-    thursday: boolean;
-    friday: boolean;
-    saturday: boolean;
-};
-
-/*
-interface ParsedShowSeason {
-    id: number;
-    number: number | null;
-    name: string | null;
-    image: string | null;
-    type: string | null;
-}
-*/
-
-// interface ParsedShowEpisode {
-//     id: number;
-//     season_number: number | null;
-//     episode_number: number | null;
-//     absolute_number: number | null;
-//     name: string;
-//     aired: string | null;
-//     runtime: number | null;
-//     image: string | null;
-// }
-
-interface ParsedNetwork {
-    id: number | null;
-    name: string | null;
-    country: string | null;
-}
-
-export interface ParsedShowDetails extends ParsedMediaDetailsBase {
-    type: "show";
-    score: number | null;
-    imdb_id: string | null;
-    external_ids: Record<string, string>;
-    airing: {
-        time: string | null;
-        days: string[];
-    };
-    episode_count: number;
-    season_count: number;
-    seasons: TVDBSeasonItem[];
-    episodes: TVDBEpisodeItem[];
-    networks: ParsedNetwork[];
-    content_ratings: {
-        id: number;
-        name: string;
-        country: string | null;
-        description: string | null;
-    }[];
-}
 
 function getAirDaysList(airsDays: TVDBAirsDays | null | undefined) {
     if (!airsDays) return [] as string[];
@@ -952,7 +427,7 @@ function selectArtwork(
 export function parseTVDBShowDetails(
     data: TVDBBaseItem | null,
     traktRecs: unknown[] | null = null
-): ParsedShowDetails | null {
+) {
     if (!data) return null;
 
     const runtime = data.averageRuntime ?? null;
@@ -1062,7 +537,7 @@ export function parseTVDBShowDetails(
             name: character.personName || character.name,
             character: character.name,
             profile_path: buildTVDBImage(character.personImgURL || character.image),
-            external_source: "tvdb"
+            external_source: "tvdb" as const
         }));
 
     // Map TVDB sourceName to normalized keys
@@ -1130,7 +605,7 @@ export function parseTVDBShowDetails(
 
     return {
         id: data.id ?? null,
-        type: "show",
+        type: "show" as const,
         title: title ?? null,
         original_title: originalTitle ?? null,
         original_language: data.originalLanguage ?? null,
@@ -1181,62 +656,8 @@ export function parseTVDBShowDetails(
 }
 
 // ---------------------------------------------------------------------------------
-// Person Parser
+// Person parser
 // ---------------------------------------------------------------------------------
-
-export interface PersonCreditCast {
-    id: number;
-    title: string;
-    original_title: string;
-    character: string | null;
-    poster_path: string | null;
-    backdrop_path: string | null;
-    release_date: string | null;
-    year: number | null;
-    media_type: "movie" | "tv";
-    vote_average: number | null;
-    vote_count: number | null;
-    popularity: number | null;
-    indexer?: "tmdb" | "tvdb";
-}
-
-export interface PersonCreditCrew {
-    id: number;
-    title: string;
-    original_title: string;
-    job: string | null;
-    department: string | null;
-    poster_path: string | null;
-    backdrop_path: string | null;
-    release_date: string | null;
-    year: number | null;
-    media_type: "movie" | "tv";
-    vote_average: number | null;
-    vote_count: number | null;
-    popularity: number | null;
-    indexer?: "tmdb" | "tvdb";
-}
-
-export interface PersonDetails {
-    id: number;
-    indexer?: "tmdb" | "tvdb";
-    name: string;
-    biography: string | null;
-    birthday: string | null;
-    deathday: string | null;
-    place_of_birth: string | null;
-    profile_path: string | null;
-    known_for_department: string | null;
-    gender: string | null;
-    popularity: number | null;
-    homepage: string | null;
-    imdb_id: string | null;
-    tvdb_url?: string | null;
-    external_ids?: Record<string, string>;
-    also_known_as: string[];
-    cast_credits: PersonCreditCast[];
-    crew_credits: PersonCreditCrew[];
-}
 
 function pickString(...values: unknown[]): string | null {
     for (const value of values) {
@@ -1284,8 +705,8 @@ function normalizeTvdbGender(value: unknown): string | null {
     return null;
 }
 
-function tvdbRemoteIds(data: Record<string, any>) {
-    const ids = Array.isArray(data.remoteIds) ? data.remoteIds : [];
+function tvdbRemoteIds(data: Record<string, unknown>) {
+    const ids = Array.isArray(data.remoteIds) ? (data.remoteIds as Record<string, unknown>[]) : [];
     const normalized: Record<string, string> = {};
 
     for (const remote of ids) {
@@ -1298,28 +719,33 @@ function tvdbRemoteIds(data: Record<string, any>) {
     return normalized;
 }
 
-function asRecord(value: unknown): Record<string, any> | null {
-    return value && typeof value === "object" ? (value as Record<string, any>) : null;
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
-function tvdbAliases(data: Record<string, any>) {
+function tvdbAliases(data: Record<string, unknown>) {
+    const d = data as {
+        aliases?: unknown[];
+        translations?: { nameTranslations?: Array<{ name?: string }> };
+        nameTranslations?: Array<{ name?: string }>;
+        name?: string;
+    };
     const aliases = new Set<string>();
 
-    for (const alias of data.aliases ?? []) {
-        const name = pickString(alias?.name, alias);
+    for (const alias of d.aliases ?? []) {
+        const name = pickString((alias as Record<string, unknown>)?.name, alias);
         if (name) aliases.add(name);
     }
 
-    const translations = data.translations?.nameTranslations ?? data.nameTranslations ?? [];
+    const translations = d.translations?.nameTranslations ?? d.nameTranslations ?? [];
     for (const translation of translations) {
         const name = pickString(translation?.name);
-        if (name && name !== data.name) aliases.add(name);
+        if (name && name !== d.name) aliases.add(name);
     }
 
     return [...aliases];
 }
 
-// Sort by release date (newest first), items with dates come before those without
 function sortByReleaseDateDesc<T extends { release_date: string | null }>(a: T, b: T): number {
     if (a.release_date && b.release_date) {
         return -dateUtils.compareDateStrings(a.release_date, b.release_date);
@@ -1327,26 +753,41 @@ function sortByReleaseDateDesc<T extends { release_date: string | null }>(a: T, 
     return a.release_date ? -1 : b.release_date ? 1 : 0;
 }
 
-function transformPersonCredit(credit: Record<string, any>) {
-    const releaseDate = credit.release_date || credit.first_air_date || null;
+function transformPersonCredit(credit: Record<string, unknown>) {
+    const c = credit as {
+        release_date?: string | null;
+        first_air_date?: string | null;
+        id?: number | null;
+        title?: string;
+        name?: string;
+        original_title?: string;
+        original_name?: string;
+        poster_path?: string | null;
+        backdrop_path?: string | null;
+        media_type?: string;
+        vote_average?: number | null;
+        vote_count?: number | null;
+        popularity?: number | null;
+    };
+    const releaseDate = c.release_date || c.first_air_date || null;
     return {
-        id: credit.id ?? 0,
-        title: credit.title || credit.name || credit.original_title || credit.original_name || "",
-        original_title: credit.original_title || credit.original_name || "",
-        poster_path: buildTMDBImage(credit.poster_path, "w500"),
-        backdrop_path: buildTMDBImage(credit.backdrop_path, "w1920"),
+        id: c.id ?? 0,
+        title: c.title || c.name || c.original_title || c.original_name || "",
+        original_title: c.original_title || c.original_name || "",
+        poster_path: buildTMDBImage(c.poster_path ?? null, "w500"),
+        backdrop_path: buildTMDBImage(c.backdrop_path ?? null, "w1920"),
         release_date: releaseDate,
         year: dateUtils.getYearFromISO(releaseDate),
-        media_type: (credit.media_type === "tv" ? "tv" : "movie") as any,
-        vote_average: credit.vote_average ?? null,
-        vote_count: credit.vote_count ?? null,
-        popularity: credit.popularity ?? null,
+        media_type: (c.media_type === "tv" ? "tv" : "movie") as "movie" | "tv",
+        vote_average: c.vote_average ?? null,
+        vote_count: c.vote_count ?? null,
+        popularity: c.popularity ?? null,
         indexer: "tmdb" as const
     };
 }
 
 function transformTVDBPersonCharacterCredit(
-    character: Record<string, any>
+    character: Record<string, unknown>
 ): PersonCreditCast | null {
     const series = asRecord(character.series);
     const movie = asRecord(character.movie);
@@ -1375,7 +816,7 @@ function transformTVDBPersonCharacterCredit(
 
     const releaseDate = pickString(
         movie?.releaseDate,
-        movie?.firstRelease?.date,
+        asRecord(movie?.firstRelease)?.date,
         movie?.year,
         series?.firstAired,
         series?.year
@@ -1406,50 +847,97 @@ function transformTVDBPersonCharacterCredit(
     };
 }
 
-export function parsePersonDetails(personData: any): PersonDetails {
-    const castCredits: PersonCreditCast[] = (personData.combined_credits?.cast ?? []).map(
-        (credit: any) => ({
-            ...transformPersonCredit(credit),
-            character: credit.character ?? null
-        })
-    );
+export function parsePersonDetails(personData: Record<string, unknown>): PersonDetails {
+    const p = personData as {
+        id?: number;
+        name?: string;
+        biography?: string | null;
+        birthday?: string | null;
+        deathday?: string | null;
+        place_of_birth?: string | null;
+        profile_path?: string | null;
+        known_for_department?: string | null;
+        gender?: number | null;
+        popularity?: number | null;
+        homepage?: string | null;
+        external_ids?: Record<string, string> & { imdb_id?: string };
+        also_known_as?: string[];
+        combined_credits?: {
+            cast?: Record<string, unknown>[];
+            crew?: Record<string, unknown>[];
+        };
+    };
+    const castCredits: PersonCreditCast[] = (p.combined_credits?.cast ?? []).map((credit) => ({
+        ...transformPersonCredit(credit),
+        character: (credit.character ?? null) as string | null
+    }));
 
-    const crewCredits: PersonCreditCrew[] = (personData.combined_credits?.crew ?? []).map(
-        (credit: any) => ({
-            ...transformPersonCredit(credit),
-            job: credit.job ?? null,
-            department: credit.department ?? null
-        })
-    );
+    const crewCredits: PersonCreditCrew[] = (p.combined_credits?.crew ?? []).map((credit) => ({
+        ...transformPersonCredit(credit),
+        job: (credit.job ?? null) as string | null,
+        department: (credit.department ?? null) as string | null
+    }));
 
     castCredits.sort(sortByReleaseDateDesc);
     crewCredits.sort(sortByReleaseDateDesc);
 
     return {
-        id: personData.id ?? 0,
+        id: p.id ?? 0,
         indexer: "tmdb",
-        name: personData.name ?? "",
-        biography: personData.biography ?? null,
-        birthday: personData.birthday ?? null,
-        deathday: personData.deathday ?? null,
-        place_of_birth: personData.place_of_birth ?? null,
-        profile_path: buildTMDBImage(personData.profile_path, "h632"),
-        known_for_department: personData.known_for_department ?? null,
-        gender: getGenderString(personData.gender ?? null),
-        popularity: personData.popularity ?? null,
-        homepage: personData.homepage ?? null,
-        imdb_id: personData.external_ids?.imdb_id ?? null,
+        name: p.name ?? "",
+        biography: p.biography ?? null,
+        birthday: p.birthday ?? null,
+        deathday: p.deathday ?? null,
+        place_of_birth: p.place_of_birth ?? null,
+        profile_path: buildTMDBImage(p.profile_path ?? null, "h632"),
+        known_for_department: p.known_for_department ?? null,
+        gender: getGenderString(p.gender ?? null),
+        popularity: p.popularity ?? null,
+        homepage: p.homepage ?? null,
+        imdb_id: p.external_ids?.imdb_id ?? null,
         tvdb_url: null,
-        external_ids: personData.external_ids ?? {},
-        also_known_as: personData.also_known_as ?? [],
+        external_ids: p.external_ids ?? {},
+        also_known_as: p.also_known_as ?? [],
         cast_credits: castCredits,
         crew_credits: crewCredits
     };
 }
 
-export function parseTVDBPersonDetails(response: any): PersonDetails {
-    const data = response?.data ?? response ?? {};
-    const remoteIds = tvdbRemoteIds(data);
+export function parseTVDBPersonDetails(response: Record<string, unknown>): PersonDetails {
+    const rawData = asRecord(response.data) ?? response;
+    const data = rawData as {
+        id?: number;
+        name?: string;
+        biography?: string;
+        overview?: string;
+        bio?: string;
+        biographies?: Array<{ language?: string; biography?: string }>;
+        translations?: {
+            overviewTranslations?: Array<{ language?: string; overview?: string }>;
+            biographies?: Array<{ language?: string; biography?: string }>;
+        };
+        image?: string;
+        personImgURL?: string;
+        photo?: string;
+        thumbnail?: string;
+        birth?: string;
+        birthday?: string;
+        birthDate?: string;
+        death?: string;
+        deathday?: string;
+        deathDate?: string;
+        birthPlace?: string;
+        placeOfBirth?: string;
+        birthplace?: string;
+        peopleType?: string;
+        type?: string;
+        knownForDepartment?: string;
+        gender?: unknown;
+        score?: number;
+        url?: string;
+        characters?: Record<string, unknown>[];
+    };
+    const remoteIds = tvdbRemoteIds(rawData);
     const characterCredits: PersonCreditCast[] = (
         Array.isArray(data.characters) ? data.characters : []
     )
@@ -1461,9 +949,9 @@ export function parseTVDBPersonDetails(response: any): PersonDetails {
         data.biography,
         data.overview,
         data.bio,
-        data.biographies?.find((t: any) => t?.language === "eng")?.biography,
-        data.translations?.overviewTranslations?.find((t: any) => t?.language === "eng")?.overview,
-        data.translations?.biographies?.find((t: any) => t?.language === "eng")?.biography
+        data.biographies?.find((t) => t?.language === "eng")?.biography,
+        data.translations?.overviewTranslations?.find((t) => t?.language === "eng")?.overview,
+        data.translations?.biographies?.find((t) => t?.language === "eng")?.biography
     );
     const image = pickString(data.image, data.personImgURL, data.photo, data.thumbnail);
 
@@ -1483,17 +971,26 @@ export function parseTVDBPersonDetails(response: any): PersonDetails {
         imdb_id: remoteIds.imdb ?? null,
         tvdb_url: data.url ? `https://thetvdb.com${data.url}` : null,
         external_ids: remoteIds,
-        also_known_as: tvdbAliases(data),
+        also_known_as: tvdbAliases(rawData),
         cast_credits: characterCredits,
         crew_credits: []
     };
 }
 
 export function parseCompanyDetails(
-    companyData: any,
+    companyData: Record<string, unknown>,
     movies: TMDBTransformedListItem[],
     shows: TMDBTransformedListItem[]
 ): PersonDetails {
+    const c = companyData as {
+        id?: number;
+        name?: string;
+        description?: string;
+        headquarters?: string;
+        origin_country?: string;
+        logo_path?: string | null;
+        homepage?: string | null;
+    };
     const castCredits: PersonCreditCast[] = [
         ...movies.map((m) => {
             const rawYear = m.year;
@@ -1534,19 +1031,18 @@ export function parseCompanyDetails(
     ].sort(sortByReleaseDateDesc);
 
     return {
-        id: companyData.id ?? 0,
+        id: c.id ?? 0,
         indexer: "tmdb",
-        name: companyData.name ?? "",
-        biography:
-            companyData.description || `Headquarters: ${companyData.headquarters || "Unknown"}`,
+        name: c.name ?? "",
+        biography: c.description || `Headquarters: ${c.headquarters || "Unknown"}`,
         birthday: null,
         deathday: null,
-        place_of_birth: companyData.origin_country ?? null,
-        profile_path: buildTMDBImage(companyData.logo_path, "w500"),
+        place_of_birth: c.origin_country ?? null,
+        profile_path: buildTMDBImage(c.logo_path ?? null, "w500"),
         known_for_department: "Production",
         gender: null,
         popularity: null,
-        homepage: companyData.homepage ?? null,
+        homepage: c.homepage ?? null,
         imdb_id: null,
         tvdb_url: null,
         external_ids: {},
