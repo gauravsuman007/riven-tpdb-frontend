@@ -11,6 +11,8 @@ export type LogEntry = {
     target?: string | null;
 };
 
+export type LiveLogLine = string;
+
 const HISTORICAL_LOGS_QUERY = `
     query GetLogs($limit: Int, $level: String) {
         logs(limit: $limit, level: $level) {
@@ -27,7 +29,7 @@ const LOG_LINES_SUBSCRIPTION = `subscription {
 }`;
 
 export class LogStore {
-    #logs = $state<LogEntry[]>([]);
+    #logs = $state<LiveLogLine[]>([]);
     #historicalLogs = $state<LogEntry[]>([]);
     #isLoadingHistorical = $state<boolean>(false);
     #activeTab = $state<"live" | "historical">("live");
@@ -54,7 +56,7 @@ export class LogStore {
         return this.#hasConnected;
     }
 
-    get logs() {
+    get logs(): LiveLogLine[] {
         return this.#logs;
     }
 
@@ -124,19 +126,17 @@ export class LogStore {
 
                     const raw = payload.logLines;
                     if (!raw?.trim()) return;
-
-                    try {
-                        const entry = JSON.parse(raw) as LogEntry;
-                        this.#logs.push(entry);
-                    } catch {
-                        logger.warn("Failed to parse log entry:", raw);
-                    }
+                    this.#logs.push(raw);
                 },
                 onError: (error) => {
-                    logger.error("Log subscription error:", error);
-                    this.#reconnectAttempts += 1;
+                    const streamEnded = error.message === "Stream ended";
 
-                    if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
+                    if (!streamEnded) {
+                        logger.error("Log subscription error:", error);
+                        this.#reconnectAttempts += 1;
+                    }
+
+                    if (!streamEnded && this.#reconnectAttempts >= this.#maxReconnectAttempts) {
                         this.#connectionStatus = "error";
                         this.#error = "Log stream disconnected";
                         return;
@@ -144,7 +144,7 @@ export class LogStore {
 
                     this.#connectionStatus = "connecting";
                     this.disconnect();
-                    setTimeout(() => this.connect(), 1000);
+                    setTimeout(() => this.connect(), streamEnded ? 500 : 1000);
                 }
             }
         );

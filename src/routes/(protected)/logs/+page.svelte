@@ -2,7 +2,7 @@
     import { onMount, onDestroy } from "svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import { toast } from "svelte-sonner";
-    import { logStore, type LogEntry } from "$lib/stores/logs.svelte";
+    import { logStore, type LogEntry, type LiveLogLine } from "$lib/stores/logs.svelte";
     import { createScopedLogger } from "$lib/logger";
     import PageShell from "$lib/components/page-shell.svelte";
 
@@ -85,10 +85,31 @@
     <title>Logs - Riven</title>
 </svelte:head>
 
-{#snippet logEntry(log: LogEntry)}
+{#snippet liveLine(line: LiveLogLine)}
     <div class="border-border/50 hover:bg-muted/20 border-b transition-colors last:border-b-0">
-        <div class="text-foreground/90 p-4 font-mono text-xs wrap-break-word whitespace-pre-wrap">
-            {log.message || log}
+        <div class="text-foreground/90 p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap">
+            {line}
+        </div>
+    </div>
+{/snippet}
+
+{#snippet logEntry(log: LogEntry)}
+    {@const levelColors: Record<string, string> = {
+        error: "text-red-400",
+        warn: "text-yellow-400",
+        info: "text-green-400",
+        debug: "text-blue-400",
+        trace: "text-muted-foreground"
+    }}
+    {@const level = (log.level ?? "info").toLowerCase()}
+    <div class="border-border/50 hover:bg-muted/20 border-b transition-colors last:border-b-0">
+        <div
+            class="text-foreground/90 grid grid-cols-[auto_auto_auto_1fr] gap-x-3 p-2 font-mono text-xs">
+            <span class="text-muted-foreground shrink-0">{log.timestamp ?? ""}</span>
+            <span class="shrink-0 font-semibold uppercase {levelColors[level] ?? 'text-foreground'}"
+                >{level}</span>
+            <span class="text-muted-foreground/70 shrink-0">{log.target ?? ""}</span>
+            <span class="wrap-break-word whitespace-pre-wrap">{log.message ?? ""}</span>
         </div>
     </div>
 {/snippet}
@@ -183,7 +204,7 @@
 
             <div class="bg-card flex min-h-0 flex-1 flex-col rounded-lg border shadow-sm">
                 <div
-                    class="bg-muted/30 flex flex-shrink-0 flex-col items-center justify-between gap-4 border-b px-6 py-3 md:flex-row">
+                    class="bg-muted/30 flex shrink-0 flex-col items-center justify-between gap-4 border-b px-6 py-3 md:flex-row">
                     <div class="flex items-center gap-2">
                         {@render tabButton("Live Logs", activeTab === "live", () =>
                             logStore.setActiveTab("live")
@@ -216,8 +237,8 @@
                 <div class="min-h-0 flex-1 overflow-y-auto">
                     {#if activeTab === "live"}
                         {#if logs.length > 0}
-                            {#each logs.slice().reverse() as log, i (i)}
-                                {@render logEntry(log)}
+                            {#each logs.slice().reverse() as line, i (i)}
+                                {@render liveLine(line)}
                             {/each}
                         {:else if connectionStatus === "connecting"}
                             {@render loadingSpinner(getStatusText())}

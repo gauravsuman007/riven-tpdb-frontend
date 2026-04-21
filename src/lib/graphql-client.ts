@@ -225,6 +225,10 @@ export function gqlSubscribeClient<T>(
                 },
                 controller.signal
             );
+
+            if (active && !controller.signal.aborted) {
+                handlers.onError?.(new Error("Stream ended"));
+            }
         } catch (error) {
             if (!active || controller.signal.aborted) return;
             handlers.onError?.(error instanceof Error ? error : new Error("Subscription failed"));
