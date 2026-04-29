@@ -1,7 +1,6 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { toast } from "svelte-sonner";
-    import { gqlClient } from "$lib/graphql-client";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
@@ -11,7 +10,6 @@
     import type { CustomProfile, QualityProfile } from "./types";
 
     type CustomRank = { fetch: boolean; rank?: number | null; default?: number };
-    const UPDATE_RANK_SETTINGS = `mutation UpdateRankSettings($settings: JSON!) { updateRankSettings(settings: $settings) }`;
 
     let {
         rank = $bindable(),
@@ -67,7 +65,7 @@
     );
     const rankJson = $derived(JSON.stringify(rank));
     const hasUnsavedChanges = $derived(savedRankJson !== "" && rankJson !== savedRankJson);
-    const saveLabel = $derived(activeProfileName ? "Save profile" : "Save global ranking");
+    const saveLabel = $derived(activeProfileName ? "Save profile" : "Save");
 
     $effect(() => {
         void activeProfileName;
@@ -113,13 +111,7 @@
 
         savingRanking = true;
         try {
-            if (activeProfileName) {
-                await saveActiveProfileSettings();
-            } else {
-                await gqlClient<{ updateRankSettings: unknown }>(UPDATE_RANK_SETTINGS, {
-                    settings: rank
-                });
-            }
+            await saveActiveProfileSettings();
             savedRankJson = JSON.stringify(rank);
             toast.success("Changes saved");
         } catch {

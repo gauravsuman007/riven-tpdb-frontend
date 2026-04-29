@@ -12,7 +12,6 @@ import type {
 } from "$lib/components/settings/types";
 
 const RANK_SETTINGS_QUERY = `query { rankSettings qualityProfiles customProfiles }`;
-const UPDATE_RANK_SETTINGS = `mutation UpdateRankSettings($settings: JSON!) { updateRankSettings(settings: $settings) }`;
 const SAVE_CUSTOM_PROFILE = `mutation SaveCustomProfile($id: Int, $name: String!, $settings: JSON!, $enabled: Boolean) { saveCustomProfile(id: $id, name: $name, settings: $settings, enabled: $enabled) }`;
 const DELETE_CUSTOM_PROFILE = `mutation DeleteCustomProfile($id: Int!) { deleteCustomProfile(id: $id) }`;
 const SET_PROFILE_ENABLED = `mutation SetProfileEnabled($name: String!, $enabled: Boolean!) { setProfileEnabled(name: $name, enabled: $enabled) }`;
@@ -105,19 +104,36 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
             } satisfies SetupPluginStatus;
         });
 
+        const qualityProfiles = rankData.qualityProfiles ?? [];
+        const customProfiles = rankData.customProfiles ?? [];
+
+        const initialProfile =
+            qualityProfiles.find((qp) =>
+                customProfiles.some((cp) => cp.name === qp.id && cp.enabled)
+            ) ??
+            customProfiles.find((p) => !p.is_builtin && p.enabled) ??
+            null;
+        const initialProfileName = initialProfile
+            ? "name" in initialProfile
+                ? initialProfile.name
+                : initialProfile.id
+            : null;
+        const initialRankSettings = initialProfile?.settings ?? rankData.rankSettings ?? {};
+
         const setupSummary: SetupSummary = {
             pluginStatuses,
             totalPlugins: pluginStatuses.length,
             enabledPlugins: pluginStatuses.filter((plugin) => plugin.enabled).length,
             validPlugins: pluginStatuses.filter((plugin) => plugin.enabled && plugin.valid).length,
             pluginsMissingRequiredConfig: 0,
-            hasEnabledProfiles: (rankData.customProfiles ?? []).some((profile) => profile.enabled)
+            hasEnabledProfiles: customProfiles.some((profile) => profile.enabled)
         };
 
         return {
-            rankSettings: rankData.rankSettings,
-            qualityProfiles: rankData.qualityProfiles ?? [],
-            customProfiles: rankData.customProfiles ?? [],
+            rankSettings: initialRankSettings,
+            initialProfileName,
+            qualityProfiles,
+            customProfiles,
             generalSettings: generalData.generalSettings,
             generalSettingsSchema: generalSchemaData.generalSettingsSchema,
             plugins: pluginData.pluginInfo,
@@ -129,34 +145,6 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 };
 
 export const actions = {
-    updateRanking: async ({ request, fetch, locals }) => {
-        requireSettingsAccess(locals.user);
-        const formData = await request.formData();
-        const rawSettings = formData.get("settings");
-        if (!rawSettings || typeof rawSettings !== "string") {
-            return fail(400, { error: "Settings data is required" });
-        }
-        let settings: unknown;
-        try {
-            settings = JSON.parse(rawSettings);
-        } catch {
-            return fail(400, { error: "Invalid JSON settings" });
-        }
-        try {
-            await gql(
-                locals.backendUrl,
-                locals.apiKey,
-                UPDATE_RANK_SETTINGS,
-                { settings },
-                fetch,
-                buildBackendRoleHeaders(locals.user, locals.backendAuthSigningSecret)
-            );
-            return { success: true };
-        } catch {
-            return fail(500, { error: "Failed to save ranking settings" });
-        }
-    },
-
     updateGeneral: async ({ request, fetch, locals }) => {
         requireSettingsAccess(locals.user);
         const formData = await request.formData();

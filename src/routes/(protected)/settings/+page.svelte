@@ -38,7 +38,7 @@
     );
     const qualityProfiles: QualityProfile[] = untrack(() => data.qualityProfiles ?? []);
     let customProfiles = $state<CustomProfile[]>(untrack(() => data.customProfiles ?? []));
-    let activeProfileName = $state<string | null>(null);
+    let activeProfileName = $state<string | null>(untrack(() => data.initialProfileName ?? null));
     let newProfileName = $state("");
     let savingProfile = $state(false);
 
