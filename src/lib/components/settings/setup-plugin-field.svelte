@@ -35,13 +35,7 @@
                 : "text"
     );
 
-    const options = $derived.by(() => {
-        if (field.options?.length) return field.options;
-        if (pluginName === "logs" && field.key === "log_level") {
-            return ["error", "warn", "info", "debug", "trace"];
-        }
-        return [];
-    });
+    const options = $derived(field.options ?? []);
 </script>
 
 <div class="rounded-xl border p-4">

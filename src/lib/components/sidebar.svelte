@@ -46,7 +46,7 @@
         { href: "/calendar", icon: CalendarDays, label: "Calendar" },
         { href: "/auth", icon: User, label: "Profile" },
         { href: "/settings", icon: Settings, label: "Settings", adminOnly: true },
-        { href: "/logs", icon: FileClock, label: "Logs" }
+        { href: "/logs", icon: FileClock, label: "Logs", adminOnly: true }
     ];
 
     let { user } = $props();

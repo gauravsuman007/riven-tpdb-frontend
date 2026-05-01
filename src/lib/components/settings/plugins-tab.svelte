@@ -33,12 +33,8 @@
         onPluginSaved: (name: string, enabled: boolean, valid: boolean) => void;
     } = $props();
 
-    function fieldOptions(pluginName: string, field: SettingFieldDef): string[] {
-        if (field.options?.length) return field.options;
-        if (pluginName === "logs" && field.key === "log_level") {
-            return ["error", "warn", "info", "debug", "trace"];
-        }
-        return [];
+    function fieldOptions(_pluginName: string, field: SettingFieldDef): string[] {
+        return field.options ?? [];
     }
 </script>
 

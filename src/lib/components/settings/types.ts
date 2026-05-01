@@ -28,6 +28,7 @@ export type SettingFieldDef = {
     item_fields?: SettingFieldDef[];
     key_placeholder?: string;
     add_label?: string;
+    section?: string;
 };
 
 export type PluginInfo = {
