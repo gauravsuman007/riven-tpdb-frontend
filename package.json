@@ -8,6 +8,7 @@
         "dev": "vite dev",
         "build": "vite build",
         "preview": "vite preview",
+        "start": "node server.js",
         "prepare": "svelte-kit sync || echo ''",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -85,6 +86,7 @@
         "d3-shape": "^3.2.0",
         "drizzle-orm": "^0.45.2",
         "embla-carousel-autoplay": "^8.6.0",
+        "http-proxy": "^1.18.1",
         "mode-watcher": "^1.1.0",
         "nprogress": "^0.2.0",
         "zod": "^4.3.6"
