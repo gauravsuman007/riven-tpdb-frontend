@@ -18,6 +18,7 @@ WORKDIR /riven
 COPY --from=frontend  /app/build /riven/build
 COPY --from=frontend  /app/node_modules /riven/node_modules
 COPY --from=frontend  /app/package.json /riven/package.json
+COPY --from=frontend  /app/server.js /riven/server.js
 COPY drizzle /riven/drizzle
 
 # Ensure data directory exists for SQLite database
@@ -28,4 +29,4 @@ COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["node", "/riven/build"]
+CMD ["node", "/riven/server.js"]
