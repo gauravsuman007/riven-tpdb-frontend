@@ -6,6 +6,7 @@
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
+    import { settingsSwitchClass } from "./helpers";
     import type { SettingFieldDef } from "./types";
 
     let {
@@ -53,6 +54,7 @@
     {#if field.type === "boolean"}
         <Switch
             id={inputId}
+            class={settingsSwitchClass}
             checked={value === "true"}
             onCheckedChange={(next) => setField(pluginName, field.key, String(next))} />
     {:else if field.type === "textarea"}
