@@ -1,18 +1,29 @@
 import { gqlSubscribeClient } from "$lib/graphql-client";
+import {
+    MOVIE_REQUESTED_SUBSCRIPTION,
+    SHOW_INDEXED_SUBSCRIPTION,
+    SHOW_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUEST_UPDATED_SUBSCRIPTION
+} from "$lib/services/riven-media";
 
-/// Unified backend subscription that fans every relevant media-state event
-/// (movie/show requested, show indexed, item scraped/downloaded/failed,
-/// items deleted) onto a single multipart stream. One connection replaces
-/// eight individual subscriptions, which keeps the home/library/dashboard
-/// pages under the per-origin connection cap on HTTP/1.1 deployments and
-/// cuts subscription-side server work by ~8x on every transport.
-const MEDIA_EVENTS_SUBSCRIPTION = `subscription RivenMediaEvents {
-    mediaEvents { kind itemId }
-}`;
-
-type MediaEventPayload = {
-    mediaEvents: { kind: string; itemId: number | null };
-};
+const MEDIA_EVENT_SUBSCRIPTIONS = [
+    MOVIE_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUESTED_SUBSCRIPTION,
+    SHOW_REQUEST_UPDATED_SUBSCRIPTION,
+    SHOW_INDEXED_SUBSCRIPTION,
+    `subscription RivenItemScraped {
+        itemScraped
+    }`,
+    `subscription RivenItemDownloaded {
+        itemDownloaded
+    }`,
+    `subscription RivenItemFailed {
+        itemFailed
+    }`,
+    `subscription RivenItemsDeleted {
+        itemsDeleted
+    }`
+];
 
 export function subscribeToRivenMediaEvents(
     refresh: () => void | Promise<void>,
@@ -29,21 +40,21 @@ export function subscribeToRivenMediaEvents(
         }, debounceMs);
     }
 
-    const unsubscribe = gqlSubscribeClient<MediaEventPayload>(
-        MEDIA_EVENTS_SUBSCRIPTION,
-        undefined,
-        {
+    const unsubscribers = MEDIA_EVENT_SUBSCRIPTIONS.map((subscription) =>
+        gqlSubscribeClient<Record<string, unknown>>(subscription, undefined, {
             onData: refreshSoon,
             onError: () => {
                 // Callers keep their last successful data snapshot. The shared GraphQL
                 // subscription client owns transport-level retry behaviour where needed.
             }
-        }
+        })
     );
 
     return () => {
         active = false;
         clearTimeout(refreshTimer);
-        unsubscribe();
+        for (const unsubscribe of unsubscribers) {
+            unsubscribe();
+        }
     };
 }

@@ -8,7 +8,17 @@
  * Client-side usage (in Svelte components):
  *   import { gqlClient } from '$lib/graphql-client';
  *   const data = await gqlClient<{ removeItems: number }>(MUTATION, vars);
+ *
+ *   import { gqlSubscribeClient } from '$lib/graphql-client';
+ *   const unsubscribe = gqlSubscribeClient<...>(SUBSCRIPTION, vars, { onData, onError });
+ *
+ * Subscriptions go over a single shared WebSocket via the `graphql-ws`
+ * transport, so any number of concurrent subscriptions multiplex onto one
+ * TCP connection regardless of HTTP version. This avoids exhausting the
+ * per-origin HTTP/1.1 connection cap on bare-HTTP deployments.
  */
+
+import { createClient, type Client as GraphQLWSClient } from "graphql-ws";
 
 interface GraphQLResponse<T> {
     data?: T;
@@ -22,8 +32,6 @@ interface GraphQLSubscribeHandlers<T> {
 
 const GRAPHQL_PROXY_URL = "/graphql";
 const JSON_CONTENT_TYPE = "application/json";
-const SUBSCRIPTION_ACCEPT_HEADER =
-    'multipart/mixed; boundary="graphql"; subscriptionSpec="1.0", application/graphql-response+json';
 
 function getGraphQLData<T>(result: GraphQLResponse<T>): T {
     if (result.errors && result.errors.length > 0) {
@@ -37,98 +45,35 @@ function getGraphQLData<T>(result: GraphQLResponse<T>): T {
     return result.data;
 }
 
-function getMultipartBoundary(contentType: string | null): string {
-    const match = contentType?.match(/boundary="?([^";]+)"?/i);
-    return match?.[1] ?? "graphql";
-}
+/// Lazily-constructed singleton `graphql-ws` client. All client-side
+/// subscriptions share this one WebSocket, so concurrent subscription
+/// count no longer pressures the per-origin HTTP connection cap.
+///
+/// Constructed on first use because module evaluation runs during SSR
+/// where `window` is undefined.
+let wsClient: GraphQLWSClient | null = null;
 
-function extractMultipartPayloads<T>(
-    buffer: string,
-    boundary: string
-): { payloads: GraphQLResponse<T>[]; remainder: string } {
-    const payloads: GraphQLResponse<T>[] = [];
-    let cursor = 0;
-
-    while (true) {
-        const boundaryIndex = buffer.indexOf(boundary, cursor);
-
-        if (boundaryIndex === -1) {
-            return { payloads, remainder: buffer.slice(cursor) };
-        }
-
-        const afterBoundary = boundaryIndex + boundary.length;
-        const nextChar = buffer.slice(afterBoundary, afterBoundary + 2);
-
-        if (nextChar === "--") {
-            return { payloads, remainder: "" };
-        }
-
-        const headerStart = buffer.startsWith("\r\n", afterBoundary)
-            ? afterBoundary + 2
-            : afterBoundary;
-        const bodyStart = buffer.indexOf("\r\n\r\n", headerStart);
-
-        if (bodyStart === -1) {
-            return { payloads, remainder: buffer.slice(boundaryIndex) };
-        }
-
-        const payloadStart = bodyStart + 4;
-        const payloadEnd = buffer.indexOf("\r\n", payloadStart);
-
-        if (payloadEnd === -1) {
-            return { payloads, remainder: buffer.slice(boundaryIndex) };
-        }
-
-        const body = buffer.slice(payloadStart, payloadEnd).trim();
-
-        if (body && body !== "{}") {
-            payloads.push(JSON.parse(body) as GraphQLResponse<T>);
-        }
-
-        cursor = payloadEnd + 2;
+function getWsClient(): GraphQLWSClient {
+    if (wsClient) return wsClient;
+    if (typeof window === "undefined") {
+        throw new Error("gqlSubscribeClient called during SSR (WebSocket unavailable)");
     }
-}
-
-async function consumeMultipartStream<T>(
-    response: Response,
-    onMessage: (payload: GraphQLResponse<T>) => void,
-    signal?: AbortSignal
-) {
-    if (!response.body) {
-        throw new Error("GraphQL subscription response had no body");
-    }
-
-    const boundary = `--${getMultipartBoundary(response.headers.get("content-type"))}`;
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-        if (signal?.aborted) {
-            await reader.cancel();
-            return;
-        }
-
-        const { done, value } = await reader.read();
-
-        if (done) {
-            buffer += decoder.decode();
-            const { payloads } = extractMultipartPayloads<T>(buffer, boundary);
-            for (const payload of payloads) {
-                onMessage(payload);
-            }
-            return;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const result = extractMultipartPayloads<T>(buffer, boundary);
-
-        for (const payload of result.payloads) {
-            onMessage(payload);
-        }
-
-        buffer = result.remainder;
-    }
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    wsClient = createClient({
+        url: `${wsProtocol}//${window.location.host}${GRAPHQL_PROXY_URL}`,
+        // Allow the browser to send the better-auth session cookie on the
+        // upgrade request. SvelteKit's `/graphql` proxy gates the upgrade
+        // on a valid session and injects the backend API key server-side.
+        lazy: true,
+        // Reconnect with exponential backoff up to ~20s on transient
+        // network failures. graphql-ws handles this automatically once
+        // `shouldRetry` is truthy.
+        shouldRetry: () => true,
+        retryAttempts: Infinity,
+        retryWait: (retries) =>
+            new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** retries, 20000)))
+    });
+    return wsClient;
 }
 
 /**
@@ -188,55 +133,49 @@ export async function gqlClient<T>(
 }
 
 /**
- * Execute a client-side GraphQL subscription via multipart HTTP streaming.
- * Auth is handled transparently by the /graphql SvelteKit proxy route.
+ * Execute a client-side GraphQL subscription over the shared WebSocket
+ * connection (graphql-ws / graphql-transport-ws protocol). Any number of
+ * concurrent subscriptions multiplex onto one TCP connection.
+ *
+ * Auth is established at WebSocket upgrade time: the browser sends the
+ * better-auth session cookie, SvelteKit's `/graphql` upgrade handler
+ * validates it and the proxy injects the backend API key. The backend
+ * then authorises the connection as the trusted-API-key principal for
+ * the duration of the WebSocket.
  */
 export function gqlSubscribeClient<T>(
     query: string,
     variables: Record<string, unknown> | undefined,
     handlers: GraphQLSubscribeHandlers<T>
 ): () => void {
-    const controller = new AbortController();
     let active = true;
-
-    void (async () => {
-        try {
-            const response = await fetch(GRAPHQL_PROXY_URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": JSON_CONTENT_TYPE,
-                    Accept: SUBSCRIPTION_ACCEPT_HEADER
-                },
-                body: JSON.stringify({ query, variables: variables ?? {} }),
-                signal: controller.signal
-            });
-
-            if (!response.ok) {
-                throw new Error(
-                    `GraphQL subscription failed: ${response.status} ${response.statusText}`
-                );
+    const unsubscribe = getWsClient().subscribe<T>(
+        { query, variables: variables ?? {} },
+        {
+            next: (result) => {
+                if (!active) return;
+                if (result.errors && result.errors.length > 0) {
+                    handlers.onError?.(
+                        new Error(result.errors.map((e) => e.message).join("; "))
+                    );
+                    return;
+                }
+                if (result.data !== undefined && result.data !== null) {
+                    handlers.onData(result.data as T);
+                }
+            },
+            error: (err) => {
+                if (!active) return;
+                handlers.onError?.(err instanceof Error ? err : new Error(String(err)));
+            },
+            complete: () => {
+                if (active) handlers.onError?.(new Error("Stream ended"));
             }
-
-            await consumeMultipartStream<T>(
-                response,
-                (payload) => {
-                    if (!active) return;
-                    handlers.onData(getGraphQLData(payload));
-                },
-                controller.signal
-            );
-
-            if (active && !controller.signal.aborted) {
-                handlers.onError?.(new Error("Stream ended"));
-            }
-        } catch (error) {
-            if (!active || controller.signal.aborted) return;
-            handlers.onError?.(error instanceof Error ? error : new Error("Subscription failed"));
         }
-    })();
+    );
 
     return () => {
         active = false;
-        controller.abort();
+        unsubscribe();
     };
 }
