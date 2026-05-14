@@ -10,8 +10,26 @@
     import { Label } from "$lib/components/ui/label/index.js";
     import { Separator } from "$lib/components/ui/separator/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
+    import SettingFieldEditor from "./setting-field-editor.svelte";
     import { pluginStatus, settingsSwitchClass } from "./helpers";
     import type { PluginInfo, SettingFieldDef } from "./types";
+
+    /**
+     * Plugin settings are stored as a flat `Record<string, string>` (the
+     * server flattens everything to strings), but complex field types
+     * like `dictionary` / `object` need to round-trip a structured
+     * value. We park the parsed-object form for each complex field in
+     * this map; whenever it changes the string form is re-serialized
+     * into `pluginFields` so the form's hidden input picks it up.
+     */
+    function readStructured(raw: string | undefined): unknown {
+        if (!raw || raw.trim() === "") return {};
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return {};
+        }
+    }
 
     let {
         plugins,
@@ -105,13 +123,22 @@
                             <div class="space-y-4">
                                 {#each selectedPlugin.schema as field (field.key)}
                                     {@const f = field as SettingFieldDef}
+                                    {@const isStructured =
+                                        f.type === "dictionary" ||
+                                        f.type === "object" ||
+                                        f.type === "string_array"}
                                     <div class="space-y-1.5">
-                                        <Label for="plg-{f.key}">
-                                            {f.label}
-                                            {#if f.required}
-                                                <span class="text-destructive ml-0.5">*</span>
-                                            {/if}
-                                        </Label>
+                                        <!-- Structured types render their own label + description
+                                             via SettingFieldEditor; skip the outer label so they
+                                             don't appear twice. -->
+                                        {#if !isStructured}
+                                            <Label for="plg-{f.key}">
+                                                {f.label}
+                                                {#if f.required}
+                                                    <span class="text-destructive ml-0.5">*</span>
+                                                {/if}
+                                            </Label>
+                                        {/if}
                                         {#if f.type === "boolean"}
                                             <Switch
                                                 id="plg-{f.key}"
@@ -119,6 +146,24 @@
                                                 checked={pluginFields[f.key] === "true"}
                                                 onCheckedChange={(v) =>
                                                     (pluginFields[f.key] = String(v))} />
+                                        {:else if f.type === "dictionary" || f.type === "object" || f.type === "string_array"}
+                                            <!-- Delegate complex field types to the shared
+                                                 SettingFieldEditor used by core settings.
+                                                 Bridges between the plugin tab's flat string-
+                                                 record value model and the editor's structured
+                                                 object value via JSON round-trip. -->
+                                            <SettingFieldEditor
+                                                field={f}
+                                                bind:value={
+                                                    () => readStructured(pluginFields[f.key]),
+                                                    (next) => {
+                                                        pluginFields[f.key] = JSON.stringify(
+                                                            next ?? (f.type === "string_array" ? [] : {})
+                                                        );
+                                                    }
+                                                }
+                                                path={`plg.${f.key}`}
+                                                nested />
                                         {:else if f.type === "textarea"}
                                             <textarea
                                                 id="plg-{f.key}"
@@ -201,7 +246,7 @@
                                                 {/if}
                                             </div>
                                         {/if}
-                                        {#if f.description}
+                                        {#if f.description && !isStructured}
                                             <p class="text-muted-foreground text-xs">
                                                 {f.description}
                                             </p>

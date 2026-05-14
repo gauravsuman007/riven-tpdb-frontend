@@ -1,4 +1,8 @@
 <script lang="ts">
+    import Eye from "@lucide/svelte/icons/eye";
+    import EyeOff from "@lucide/svelte/icons/eye-off";
+    import * as ButtonGroup from "$lib/components/ui/button-group/index.js";
+    import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import * as Select from "$lib/components/ui/select/index.js";
@@ -6,6 +10,11 @@
     import { settingsSwitchClass } from "./helpers";
     import SettingFieldEditor from "./setting-field-editor.svelte";
     import type { SettingFieldDef } from "./types";
+
+    /** Per-instance state for masking password inputs. Sub-fields each
+     *  get their own SettingFieldEditor instance, so this is naturally
+     *  scoped to one input. */
+    let passwordRevealed = $state(false);
 
     let {
         field,
@@ -366,6 +375,38 @@
                     {/each}
                 </Select.Content>
             </Select.Root>
+        </div>
+    {:else if field.type === "password"}
+        <div class="space-y-2">
+            <Label for={idFor(path)}>{field.label}</Label>
+            {#if field.description}
+                <p class="text-muted-foreground text-sm">{field.description}</p>
+            {/if}
+            <div class="flex max-w-xl items-center gap-2">
+                <Input
+                    id={idFor(path)}
+                    type={passwordRevealed ? "text" : "password"}
+                    placeholder={field.placeholder ?? ""}
+                    value={value != null ? String(value) : ""}
+                    autocomplete="new-password"
+                    oninput={(event) =>
+                        (value = (event.currentTarget as HTMLInputElement).value)}
+                    class="flex-1" />
+                <ButtonGroup.Root class="shrink-0">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={passwordRevealed ? "Hide password" : "Show password"}
+                        onclick={() => (passwordRevealed = !passwordRevealed)}>
+                        {#if passwordRevealed}
+                            <EyeOff />
+                        {:else}
+                            <Eye />
+                        {/if}
+                    </Button>
+                </ButtonGroup.Root>
+            </div>
         </div>
     {:else}
         <div class="space-y-2">
