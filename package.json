@@ -26,7 +26,7 @@
         "@fontsource/jetbrains-mono": "^5.2.8",
         "@fontsource/merriweather": "^5.2.11",
         "@fontsource/oxanium": "^5.2.8",
-        "@lucide/svelte": "^1.8.0",
+        "@lucide/svelte": "^1.14.0",
         "@sveltejs/adapter-node": "^5.5.4",
         "@sveltejs/kit": "^2.57.1",
         "@sveltejs/vite-plugin-svelte": "^7.0.0",
