@@ -38,3 +38,72 @@ export type ActivePlaybackSession = {
     clientName: string | null;
     imageUrl: string | null;
 };
+
+export type NntpProviderHealth = {
+    host: string;
+    port: number;
+    priority: number;
+    isBackup: boolean;
+    maxConnections: number;
+    openConnections: number;
+    idleConnections: number;
+    activeConnections: number;
+    breakerTripped: boolean;
+    cooldownSecondsRemaining: number;
+    consecutiveFailures: number;
+};
+
+export type UsenetStreamingHealth = {
+    cacheBytesUsed: number;
+    cacheBytesMax: number;
+    cacheEntries: number;
+    cacheHits: number;
+    cacheMisses: number;
+    cacheHitRate: number;
+    fetchesOk: number;
+    fetchesFailed: number;
+    fetchSuccessRate: number;
+    bytesDecoded: number;
+    inFlight: number;
+    deadSegments: number;
+    activeStreams: number;
+};
+
+export type UsenetTitleHealth = {
+    infoHash: string;
+    fileIndex: number;
+    mediaItemId: number | null;
+    status: string;
+    totalSegments: number;
+    sampledSegments: number;
+    missingSegments: number;
+    errorSegments: number;
+    missingPct: number;
+    checkedAt: number | null;
+    repairAttempts: number;
+    nextRepairAt: number | null;
+    title: string | null;
+    subtitle: string | null;
+    posterPath: string | null;
+    mediaType: string | null;
+};
+
+export type UsenetProviderTraffic = {
+    host: string;
+    bytesDownloaded: number;
+    articlesDownloaded: number;
+};
+
+export type UsenetDailyTraffic = {
+    day: string;
+    host: string;
+    bytesDownloaded: number;
+    articlesDownloaded: number;
+};
+
+export type UsenetTraffic = {
+    providers: UsenetProviderTraffic[];
+    daily: UsenetDailyTraffic[];
+    totalBytesDownloaded: number;
+    totalArticlesDownloaded: number;
+};

@@ -1,7 +1,14 @@
 import type { PageServerLoad } from "./$types";
 import { gql } from "$lib/graphql-client";
 import { createScopedLogger } from "$lib/logger";
-import type { ActivePlaybackSession, DownloaderService } from "$lib/components/dashboard/types";
+import type {
+    ActivePlaybackSession,
+    DownloaderService,
+    NntpProviderHealth,
+    UsenetStreamingHealth,
+    UsenetTitleHealth,
+    UsenetTraffic
+} from "$lib/components/dashboard/types";
 
 const logger = createScopedLogger("dashboard");
 const DASHBOARD_STATS_DEPENDENCY = "riven:dashboard-stats";
@@ -47,6 +54,72 @@ const ACTIVE_PLAYBACK_QUERY = `
             deviceName
             clientName
             imageUrl
+        }
+    }
+`;
+
+const USENET_HEALTH_QUERY = `
+    query {
+        nntpProviders {
+            host
+            port
+            priority
+            isBackup
+            maxConnections
+            openConnections
+            idleConnections
+            activeConnections
+            breakerTripped
+            cooldownSecondsRemaining
+            consecutiveFailures
+        }
+        usenetStreamingHealth {
+            cacheBytesUsed
+            cacheBytesMax
+            cacheEntries
+            cacheHits
+            cacheMisses
+            cacheHitRate
+            fetchesOk
+            fetchesFailed
+            fetchSuccessRate
+            bytesDecoded
+            inFlight
+            deadSegments
+            activeStreams
+        }
+        usenetTitleHealth {
+            infoHash
+            fileIndex
+            mediaItemId
+            status
+            totalSegments
+            sampledSegments
+            missingSegments
+            errorSegments
+            missingPct
+            checkedAt
+            repairAttempts
+            nextRepairAt
+            title
+            subtitle
+            posterPath
+            mediaType
+        }
+        usenetTraffic {
+            totalBytesDownloaded
+            totalArticlesDownloaded
+            providers {
+                host
+                bytesDownloaded
+                articlesDownloaded
+            }
+            daily {
+                day
+                host
+                bytesDownloaded
+                articlesDownloaded
+            }
         }
     }
 `;
@@ -172,9 +245,36 @@ export const load = (async ({ depends, fetch, locals }) => {
         .then((data) => (data.debridAccountInfo ?? []).map(mapDebridService))
         .catch((): DownloaderService[] => []);
 
+    const usenetHealth = gql<{
+        nntpProviders: NntpProviderHealth[];
+        usenetStreamingHealth: UsenetStreamingHealth;
+        usenetTitleHealth: UsenetTitleHealth[];
+        usenetTraffic: UsenetTraffic;
+    }>(locals.backendUrl, locals.apiKey, USENET_HEALTH_QUERY, {}, fetch)
+        .then((data) => ({
+            providers: data.nntpProviders ?? [],
+            streaming: data.usenetStreamingHealth ?? null,
+            titles: data.usenetTitleHealth ?? [],
+            traffic: data.usenetTraffic ?? null
+        }))
+        .catch(
+            (): {
+                providers: NntpProviderHealth[];
+                streaming: UsenetStreamingHealth | null;
+                titles: UsenetTitleHealth[];
+                traffic: UsenetTraffic | null;
+            } => ({
+                providers: [],
+                streaming: null,
+                titles: [],
+                traffic: null
+            })
+        );
+
     return {
         statistics,
         activePlaybackSessions,
-        downloaderServices
+        downloaderServices,
+        usenetHealth
     };
 }) satisfies PageServerLoad;

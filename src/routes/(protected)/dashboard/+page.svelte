@@ -9,10 +9,17 @@
     import ServiceStatusCard from "$lib/components/dashboard/service-status-card.svelte";
     import DownloaderServicesGrid from "$lib/components/dashboard/downloader-services-grid.svelte";
     import WatchingNowCard from "$lib/components/dashboard/watching-now-card.svelte";
+    import UsenetProvidersCard from "$lib/components/dashboard/usenet-providers-card.svelte";
+    import UsenetActivityCard from "$lib/components/dashboard/usenet-activity-card.svelte";
+    import UsenetHealthCard from "$lib/components/dashboard/usenet-health-card.svelte";
     import type {
         ActivePlaybackSession,
         DownloaderService,
-        DashboardStatistics
+        DashboardStatistics,
+        NntpProviderHealth,
+        UsenetStreamingHealth,
+        UsenetTitleHealth,
+        UsenetTraffic
     } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
     import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
@@ -22,6 +29,10 @@
     let activePlaybackSessions = $state<ActivePlaybackSession[]>([]);
     let downloaderServices = $state<DownloaderService[]>([]);
     let statistics = $state<DashboardStatistics | undefined>(undefined);
+    let usenetProviders = $state<NntpProviderHealth[]>([]);
+    let usenetStreaming = $state<UsenetStreamingHealth | null>(null);
+    let usenetTitles = $state<UsenetTitleHealth[]>([]);
+    let usenetTraffic = $state<UsenetTraffic | null>(null);
 
     const serviceStatuses = $derived(
         (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
@@ -74,6 +85,72 @@
                 deviceName
                 clientName
                 imageUrl
+            }
+        }
+    `;
+
+    const USENET_HEALTH_QUERY = `
+        query {
+            nntpProviders {
+                host
+                port
+                priority
+                isBackup
+                maxConnections
+                openConnections
+                idleConnections
+                activeConnections
+                breakerTripped
+                cooldownSecondsRemaining
+                consecutiveFailures
+            }
+            usenetStreamingHealth {
+                cacheBytesUsed
+                cacheBytesMax
+                cacheEntries
+                cacheHits
+                cacheMisses
+                cacheHitRate
+                fetchesOk
+                fetchesFailed
+                fetchSuccessRate
+                bytesDecoded
+                inFlight
+                deadSegments
+                activeStreams
+            }
+            usenetTitleHealth {
+                infoHash
+                fileIndex
+                mediaItemId
+                status
+                totalSegments
+                sampledSegments
+                missingSegments
+                errorSegments
+                missingPct
+                checkedAt
+                repairAttempts
+                nextRepairAt
+                title
+                subtitle
+                posterPath
+                mediaType
+            }
+            usenetTraffic {
+                totalBytesDownloaded
+                totalArticlesDownloaded
+                providers {
+                    host
+                    bytesDownloaded
+                    articlesDownloaded
+                }
+                daily {
+                    day
+                    host
+                    bytesDownloaded
+                    articlesDownloaded
+                }
             }
         }
     `;
@@ -168,6 +245,14 @@
         Promise.resolve(data.downloaderServices).then((services) => {
             if (!cancelled) downloaderServices = services ?? [];
         });
+        Promise.resolve(data.usenetHealth).then((health) => {
+            if (!cancelled && health) {
+                usenetProviders = health.providers ?? [];
+                usenetStreaming = health.streaming ?? null;
+                usenetTitles = health.titles ?? [];
+                usenetTraffic = health.traffic ?? null;
+            }
+        });
 
         return () => {
             cancelled = true;
@@ -191,6 +276,22 @@
                 }
             } catch {
                 // Keep the last successful snapshot on transient dashboard polling failures.
+            }
+            try {
+                const health = await gqlClient<{
+                    nntpProviders: NntpProviderHealth[];
+                    usenetStreamingHealth: UsenetStreamingHealth;
+                    usenetTitleHealth: UsenetTitleHealth[];
+                    usenetTraffic: UsenetTraffic;
+                }>(USENET_HEALTH_QUERY);
+                if (!cancelled) {
+                    usenetProviders = health.nntpProviders ?? [];
+                    usenetStreaming = health.usenetStreamingHealth ?? null;
+                    usenetTitles = health.usenetTitleHealth ?? [];
+                    usenetTraffic = health.usenetTraffic ?? null;
+                }
+            } catch {
+                // Keep the last successful usenet-health snapshot on transient failures.
             }
         };
 
@@ -244,4 +345,9 @@
     <ServiceStatusCard statuses={serviceStatuses} />
     <DownloaderServicesGrid services={downloaderServices} />
     <WatchingNowCard sessions={activePlaybackSessions} />
+    {#if usenetProviders.length > 0}
+        <UsenetProvidersCard providers={usenetProviders} />
+        <UsenetActivityCard health={usenetStreaming} traffic={usenetTraffic} />
+        <UsenetHealthCard titles={usenetTitles} />
+    {/if}
 </PageShell>
