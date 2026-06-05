@@ -12,6 +12,8 @@
     import WandSparkles from "@lucide/svelte/icons/wand-sparkles";
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
     import HardDrive from "@lucide/svelte/icons/hard-drive";
+    import Newspaper from "@lucide/svelte/icons/newspaper";
+    import Magnet from "@lucide/svelte/icons/magnet";
     import SeasonSelector, { type SeasonInfo } from "./season-selector.svelte";
     import { page } from "$app/state";
 
@@ -37,12 +39,21 @@
             quality?: string;
             audio?: string[];
             languages?: string[];
+            seasons?: number[];
         } | null;
         rank?: number | null;
         fileSizeBytes?: number | null;
         isCached: boolean;
         itemType: "MOVIE" | "SEASON";
         seasonNumber?: number | null;
+    }
+
+    /**
+     * Usenet releases carry a synthetic `nzb-` info hash (the same marker the
+     * backend uses to route them); everything else is a torrent/debrid hash.
+     */
+    function isUsenet(infoHash: string) {
+        return infoHash.startsWith("nzb-");
     }
 
     const DISCOVER_STREAMS_MUTATION = `mutation($itemType: MediaItemType!, $title: String!, $imdbId: String, $tmdbId: String, $tvdbId: String, $seasons: [Int!], $cachedOnly: Boolean) {
@@ -60,8 +71,8 @@
         }
     }`;
 
-    const DOWNLOAD_DISCOVERED_STREAM_MUTATION = `mutation($itemType: MediaItemType!, $title: String!, $imdbId: String, $tmdbId: String, $tvdbId: String, $seasonNumber: Int, $infoHash: String!, $magnet: String!, $parsedData: JSON, $rank: Int) {
-        downloadDiscoveredStream(itemType: $itemType, title: $title, imdbId: $imdbId, tmdbId: $tmdbId, tvdbId: $tvdbId, seasonNumber: $seasonNumber, infoHash: $infoHash, magnet: $magnet, parsedData: $parsedData, rank: $rank)
+    const DOWNLOAD_DISCOVERED_STREAM_MUTATION = `mutation($itemType: MediaItemType!, $title: String!, $imdbId: String, $tmdbId: String, $tvdbId: String, $seasonNumber: Int, $seasons: [Int!], $infoHash: String!, $magnet: String!, $parsedData: JSON, $rank: Int) {
+        downloadDiscoveredStream(itemType: $itemType, title: $title, imdbId: $imdbId, tmdbId: $tmdbId, tvdbId: $tvdbId, seasonNumber: $seasonNumber, seasons: $seasons, infoHash: $infoHash, magnet: $magnet, parsedData: $parsedData, rank: $rank)
     }`;
 
     let {
@@ -155,6 +166,7 @@
         vars: {
             itemType: "MOVIE" | "SEASON";
             seasonNumber: number | null;
+            seasons?: number[] | null;
             infoHash: string;
             magnet: string;
             parsedData?: StreamCandidate["parsedData"];
@@ -174,6 +186,7 @@
                     tmdbId: resolvedTmdbId,
                     tvdbId: resolvedTvdbId,
                     seasonNumber: vars.seasonNumber,
+                    seasons: vars.seasons ?? null,
                     infoHash: vars.infoHash,
                     magnet: vars.magnet,
                     parsedData: vars.parsedData ?? null,
@@ -225,9 +238,13 @@
     }
 
     function downloadStream(stream: StreamCandidate) {
+        // A pack that parses to multiple seasons fills every one it contains;
+        // the backend links it to the show rather than a single season.
+        const packSeasons = stream.parsedData?.seasons?.filter((n) => n > 0) ?? [];
         return submitDownload(stream.key, {
             itemType: stream.itemType,
             seasonNumber: stream.seasonNumber ?? null,
+            seasons: packSeasons.length ? packSeasons : null,
             infoHash: stream.infoHash,
             magnet: stream.magnet,
             parsedData: stream.parsedData,
@@ -241,8 +258,8 @@
             return;
         }
 
-        if (mediaType === "tv" && selectedSeasons.length !== 1) {
-            error = "Pick exactly one season before downloading an explicit hash";
+        if (mediaType === "tv" && selectedSeasons.length === 0) {
+            error = "Select at least one season before downloading an explicit hash";
             toast.error(error);
             return;
         }
@@ -250,6 +267,7 @@
         return submitDownload(`manual:${cleanedHash}`, {
             itemType: mediaType === "movie" ? "MOVIE" : "SEASON",
             seasonNumber: mediaType === "tv" ? selectedSeasons[0] : null,
+            seasons: mediaType === "tv" ? selectedSeasons : null,
             infoHash: cleanedHash,
             magnet: `magnet:?xt=urn:btih:${cleanedHash}`,
             parsedData: null
@@ -417,6 +435,19 @@
                                                 class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                                 <div class="min-w-0 space-y-2">
                                                     <div class="flex flex-wrap gap-2">
+                                                        {#if isUsenet(stream.infoHash)}
+                                                            <Badge
+                                                                class="border-transparent bg-sky-500/15 text-sky-300">
+                                                                <Newspaper class="mr-1 h-3 w-3" />
+                                                                Usenet
+                                                            </Badge>
+                                                        {:else}
+                                                            <Badge
+                                                                class="border-transparent bg-amber-500/15 text-amber-300">
+                                                                <Magnet class="mr-1 h-3 w-3" />
+                                                                Torrent
+                                                            </Badge>
+                                                        {/if}
                                                         {#if stream.seasonNumber != null}
                                                             <Badge variant="outline"
                                                                 >Season {stream.seasonNumber}</Badge>
