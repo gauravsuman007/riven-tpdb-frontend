@@ -363,7 +363,7 @@
 
         {#if episode.image}
             <div
-                class="relative w-full max-w-160 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
+                class="relative w-full max-w-160 shrink-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
                 <img
                     alt={episode.name}
                     class="aspect-video w-full object-cover"

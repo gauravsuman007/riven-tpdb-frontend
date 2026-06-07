@@ -89,7 +89,7 @@
     let liveRivenItemId = $state<number | undefined>(untrack(() => data.riven?.id));
     let rivenPending = $state(untrack(() => Boolean(data.rivenPending)));
     let completedDetailsHydrating = false;
-    let completedDetailsHydrated = false;
+    let lastHydratedCompletedKey = "";
     let rawDataOpen = $state(false);
     let rawRivenLoading = $state(false);
     let rawRivenError = $state<string | undefined>(undefined);
@@ -251,7 +251,7 @@
         hydratedRiven = undefined;
         liveRivenItemId = data.riven?.id;
         rivenPending = Boolean(data.rivenPending);
-        completedDetailsHydrated = false;
+        lastHydratedCompletedKey = "";
         completedDetailsHydrating = false;
         rawDataOpen = false;
         rawRivenLoading = false;
@@ -481,24 +481,46 @@
         return null;
     }
 
-    function needsCompletedDetailsHydration(item: RivenMediaItem | undefined) {
-        if (!item || item.state !== "Completed" || hydratedRiven) {
-            return false;
+    // A signature of the currently-completed content. Episode file details
+    // (filesystem entries, media metadata) aren't carried by the live state
+    // subscription, so they must be fetched separately. We key the fetch on the
+    // set of completed episodes so partially-completed shows hydrate the episodes
+    // that ARE done, and re-hydrate as more episodes complete — without looping
+    // forever when a completed item has no filesystem entry yet.
+    function completedDetailsSignature(item: RivenMediaItem | undefined) {
+        if (!item) {
+            return "";
         }
 
         if (data.mediaDetails?.type === "movie") {
-            return !item.filesystem_entry && !item.filesystem_entries?.length;
+            return item.state === "Completed" ? `m:${item.id}` : "";
         }
 
-        return !item.seasons?.some((season) =>
-            season.episodes?.some(
-                (episode) => episode.filesystem_entry || episode.filesystem_entries?.length
-            )
-        );
+        const keys: string[] = [];
+        for (const season of item.seasons ?? []) {
+            for (const episode of season.episodes ?? []) {
+                if (episode.state === "Completed") {
+                    keys.push(`${season.season_number}.${episode.episode_number}`);
+                }
+            }
+        }
+
+        return keys.length ? `t:${item.id}:${keys.join(",")}` : "";
+    }
+
+    function needsCompletedDetailsHydration(item: RivenMediaItem | undefined) {
+        const signature = completedDetailsSignature(item);
+        return signature !== "" && signature !== lastHydratedCompletedKey;
     }
 
     async function hydrateCompletedDetails() {
-        if (completedDetailsHydrating || completedDetailsHydrated) {
+        if (completedDetailsHydrating) {
+            return;
+        }
+
+        const signature = completedDetailsSignature(riven);
+
+        if (!signature || signature === lastHydratedCompletedKey) {
             return;
         }
 
@@ -521,7 +543,7 @@
                 hydratedRiven = full;
             }
 
-            completedDetailsHydrated = true;
+            lastHydratedCompletedKey = signature;
         } catch {
             // non-critical, ignore
         } finally {
@@ -575,7 +597,7 @@
         liveRiven = undefined;
         hydratedRiven = undefined;
         liveRivenItemId = undefined;
-        completedDetailsHydrated = false;
+        lastHydratedCompletedKey = "";
     }
 
     async function hydrateInitialState() {
