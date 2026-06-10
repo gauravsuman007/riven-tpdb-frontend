@@ -355,7 +355,16 @@
 
                         {#if hasSeasonSelector}
                             <div class="mt-4 space-y-2">
-                                <Label>Seasons</Label>
+                                <div class="flex items-center justify-between">
+                                    <Label>Seasons</Label>
+                                    <button
+                                        type="button"
+                                        class="text-xs text-zinc-400 transition hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                        onclick={() => (selectedSeasons = [])}
+                                        disabled={selectedSeasons.length === 0}>
+                                        Deselect all
+                                    </button>
+                                </div>
                                 <div
                                     class="max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-2">
                                     <SeasonSelector

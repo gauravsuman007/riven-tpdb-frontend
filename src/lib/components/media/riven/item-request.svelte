@@ -163,11 +163,23 @@
             </AlertDialog.Header>
 
             {#if mediaType === "tv" && seasons.length > 0}
-                <SeasonSelector
-                    {seasons}
-                    selectedSeasons={selectedSeasonNums}
-                    onToggle={toggleSeason}
-                    class="my-4" />
+                <div class="my-4 space-y-2">
+                    <div class="flex items-center justify-end">
+                        <button
+                            type="button"
+                            class="text-xs text-zinc-400 transition hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            onclick={() =>
+                                (selectedSeasonNums =
+                                    selectedSeasonNums.length > 0 ? [] : [...requestableSeasons])}
+                            disabled={requestableSeasons.length === 0}>
+                            {selectedSeasonNums.length > 0 ? "Deselect all" : "Select all"}
+                        </button>
+                    </div>
+                    <SeasonSelector
+                        {seasons}
+                        selectedSeasons={selectedSeasonNums}
+                        onToggle={toggleSeason} />
+                </div>
             {:else}
                 <div class="text-muted-foreground py-4 text-sm">
                     This request will be approved automatically.
