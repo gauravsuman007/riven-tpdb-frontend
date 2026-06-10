@@ -317,13 +317,13 @@
                 </div>
             {/if}
 
-            {#if fs?.download_url}
+            {#if fs?.id}
                 <div class="flex flex-wrap gap-2">
                     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
                     <a
-                        href={fs.download_url}
-                        target="_blank"
-                        rel="external noopener noreferrer"
+                        href={`/media/${fs.id}`}
+                        download={fs.original_filename ?? ""}
+                        rel="external"
                         class="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10">
                         Download
                     </a>
