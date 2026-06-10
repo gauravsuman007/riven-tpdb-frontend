@@ -7,6 +7,7 @@ import type {
     NntpProviderHealth,
     UsenetStreamingHealth,
     UsenetTitleHealth,
+    UsenetTitleHealthSummary,
     UsenetTraffic
 } from "$lib/components/dashboard/types";
 
@@ -20,6 +21,9 @@ const STATS_QUERY = `
             totalShows
             totalSeasons
             totalEpisodes
+            totalItems
+            incompleteItems
+            completionRate
             completed
             scraped
             indexed
@@ -106,6 +110,13 @@ const USENET_HEALTH_QUERY = `
             posterPath
             mediaType
         }
+        usenetTitleHealthSummary {
+            healthy
+            unhealthy
+            notIngested
+            unknown
+            total
+        }
         usenetTraffic {
             totalBytesDownloaded
             totalArticlesDownloaded
@@ -145,6 +156,9 @@ type GqlStatsResult = {
         totalShows: number;
         totalSeasons: number;
         totalEpisodes: number;
+        totalItems: number;
+        incompleteItems: number;
+        completionRate: number;
         completed: number;
         scraped: number;
         indexed: number;
@@ -198,14 +212,14 @@ export const load = (async ({ depends, fetch, locals }) => {
     const statistics = gql<GqlStatsResult>(locals.backendUrl, locals.apiKey, STATS_QUERY, {}, fetch)
         .then((data) => {
             const s = data.stats;
-            const total_items = s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
             return {
                 total_movies: s.totalMovies,
                 total_shows: s.totalShows,
                 total_seasons: s.totalSeasons,
                 total_episodes: s.totalEpisodes,
-                total_items,
-                incomplete_items: total_items - s.completed,
+                total_items: s.totalItems,
+                incomplete_items: s.incompleteItems,
+                completion_rate: s.completionRate,
                 states: {
                     Completed: s.completed,
                     Scraped: s.scraped,
@@ -245,16 +259,25 @@ export const load = (async ({ depends, fetch, locals }) => {
         .then((data) => (data.debridAccountInfo ?? []).map(mapDebridService))
         .catch((): DownloaderService[] => []);
 
+    const EMPTY_TITLE_SUMMARY: UsenetTitleHealthSummary = {
+        healthy: 0,
+        unhealthy: 0,
+        notIngested: 0,
+        unknown: 0,
+        total: 0
+    };
     const usenetHealth = gql<{
         nntpProviders: NntpProviderHealth[];
         usenetStreamingHealth: UsenetStreamingHealth;
         usenetTitleHealth: UsenetTitleHealth[];
+        usenetTitleHealthSummary: UsenetTitleHealthSummary;
         usenetTraffic: UsenetTraffic;
     }>(locals.backendUrl, locals.apiKey, USENET_HEALTH_QUERY, {}, fetch)
         .then((data) => ({
             providers: data.nntpProviders ?? [],
             streaming: data.usenetStreamingHealth ?? null,
             titles: data.usenetTitleHealth ?? [],
+            titleSummary: data.usenetTitleHealthSummary ?? EMPTY_TITLE_SUMMARY,
             traffic: data.usenetTraffic ?? null
         }))
         .catch(
@@ -262,11 +285,13 @@ export const load = (async ({ depends, fetch, locals }) => {
                 providers: NntpProviderHealth[];
                 streaming: UsenetStreamingHealth | null;
                 titles: UsenetTitleHealth[];
+                titleSummary: UsenetTitleHealthSummary;
                 traffic: UsenetTraffic | null;
             } => ({
                 providers: [],
                 streaming: null,
                 titles: [],
+                titleSummary: EMPTY_TITLE_SUMMARY,
                 traffic: null
             })
         );

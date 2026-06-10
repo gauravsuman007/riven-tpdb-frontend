@@ -5,6 +5,7 @@ export type DashboardStatistics = {
     total_episodes: number;
     total_items: number;
     incomplete_items: number;
+    completion_rate: number;
     states: Record<string, number>;
     activity: Record<string, number>;
     media_year_releases: { year: number; count: number }[];
@@ -86,6 +87,14 @@ export type UsenetTitleHealth = {
     subtitle: string | null;
     posterPath: string | null;
     mediaType: string | null;
+};
+
+export type UsenetTitleHealthSummary = {
+    healthy: number;
+    unhealthy: number;
+    notIngested: number;
+    unknown: number;
+    total: number;
 };
 
 export type UsenetProviderTraffic = {

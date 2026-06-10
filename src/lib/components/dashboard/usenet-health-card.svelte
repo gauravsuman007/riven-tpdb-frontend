@@ -2,9 +2,12 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { gqlClient } from "$lib/graphql-client";
     import { TMDB_IMAGE_BASE_URL } from "$lib/indexer-constants";
-    import type { UsenetTitleHealth } from "./types";
+    import type { UsenetTitleHealth, UsenetTitleHealthSummary } from "./types";
 
-    let { titles }: { titles: UsenetTitleHealth[] } = $props();
+    let {
+        titles,
+        summary
+    }: { titles: UsenetTitleHealth[]; summary: UsenetTitleHealthSummary } = $props();
 
     // "Missing data" / "Not ingested" → re-acquire: removes the broken media
     // entry (so the item truly un-completes) and re-processes. The ingest
@@ -25,20 +28,6 @@
     // Per-row action state, keyed by "infoHash:fileIndex".
     let action = $state<Record<string, "working" | "done" | "error">>({});
     const rowKey = (t: UsenetTitleHealth) => `${t.infoHash}:${t.fileIndex}`;
-
-    const counts = $derived.by(() => {
-        let healthy = 0;
-        let unhealthy = 0;
-        let notIngested = 0;
-        let unknown = 0;
-        for (const t of titles) {
-            if (t.status === "healthy") healthy++;
-            else if (t.status === "unhealthy") unhealthy++;
-            else if (t.status === "not_ingested") notIngested++;
-            else unknown++;
-        }
-        return { healthy, unhealthy, notIngested, unknown, total: titles.length };
-    });
 
     // Items needing a re-grab (re-scrape): confirmed-broken or never-ingested.
     const needsRegrab = (status: string) => status === "unhealthy" || status === "not_ingested";
@@ -113,27 +102,27 @@
 <section class="border-border/60 border-b py-8">
     <div class="mb-5 flex items-center gap-3">
         <h2 class="text-base font-semibold">Usenet Health</h2>
-        {#if counts.total > 0}
+        {#if summary.total > 0}
             <span class="text-[11px] text-neutral-500">
-                {counts.healthy} healthy
-                {#if counts.unhealthy > 0}
-                    · <span class="text-red-400">{counts.unhealthy} missing data</span>
+                {summary.healthy} healthy
+                {#if summary.unhealthy > 0}
+                    · <span class="text-red-400">{summary.unhealthy} missing data</span>
                 {/if}
-                {#if counts.notIngested > 0}
-                    · <span class="text-red-400">{counts.notIngested} not ingested</span>
+                {#if summary.notIngested > 0}
+                    · <span class="text-red-400">{summary.notIngested} not ingested</span>
                 {/if}
-                {#if counts.unknown > 0}
-                    · {counts.unknown} unverified
+                {#if summary.unknown > 0}
+                    · {summary.unknown} unverified
                 {/if}
             </span>
         {/if}
     </div>
 
-    {#if counts.total === 0}
+    {#if summary.total === 0}
         <p class="text-sm text-neutral-400">No usenet titles checked yet.</p>
     {:else if problems.length === 0}
         <p class="text-sm text-neutral-400">
-            All {counts.healthy} checked usenet {counts.healthy === 1 ? "title is" : "titles are"} healthy.
+            All {summary.healthy} checked usenet {summary.healthy === 1 ? "title is" : "titles are"} healthy.
         </p>
     {:else}
         <div class="flex flex-col">

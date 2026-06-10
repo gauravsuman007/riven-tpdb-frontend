@@ -19,6 +19,7 @@
         NntpProviderHealth,
         UsenetStreamingHealth,
         UsenetTitleHealth,
+        UsenetTitleHealthSummary,
         UsenetTraffic
     } from "$lib/components/dashboard/types";
     import { onMount } from "svelte";
@@ -32,22 +33,22 @@
     let usenetProviders = $state<NntpProviderHealth[]>([]);
     let usenetStreaming = $state<UsenetStreamingHealth | null>(null);
     let usenetTitles = $state<UsenetTitleHealth[]>([]);
+    const EMPTY_HEALTH_SUMMARY: UsenetTitleHealthSummary = {
+        healthy: 0,
+        unhealthy: 0,
+        notIngested: 0,
+        unknown: 0,
+        total: 0
+    };
+    let usenetTitleSummary = $state<UsenetTitleHealthSummary>(EMPTY_HEALTH_SUMMARY);
     let usenetTraffic = $state<UsenetTraffic | null>(null);
 
     const serviceStatuses = $derived(
         (data as PageData & { services?: Record<string, boolean | null> }).services ?? null
     );
-    const completionRate = $derived.by(() => {
-        if (
-            !statistics ||
-            statistics.total_items === 0 ||
-            statistics.states.Completed === undefined
-        ) {
-            return "0%";
-        }
-
-        return `${((statistics.states.Completed / statistics.total_items) * 100).toFixed(2)}%`;
-    });
+    const completionRate = $derived(
+        statistics ? `${statistics.completion_rate.toFixed(2)}%` : "0%"
+    );
     const kpiCards = $derived.by(() => [
         {
             title: "Total Items",
@@ -137,6 +138,13 @@
                 posterPath
                 mediaType
             }
+            usenetTitleHealthSummary {
+                healthy
+                unhealthy
+                notIngested
+                unknown
+                total
+            }
             usenetTraffic {
                 totalBytesDownloaded
                 totalArticlesDownloaded
@@ -162,6 +170,9 @@
                 totalShows
                 totalSeasons
                 totalEpisodes
+                totalItems
+                incompleteItems
+                completionRate
                 completed
                 scraped
                 indexed
@@ -185,6 +196,9 @@
             totalShows: number;
             totalSeasons: number;
             totalEpisodes: number;
+            totalItems: number;
+            incompleteItems: number;
+            completionRate: number;
             completed: number;
             scraped: number;
             indexed: number;
@@ -200,15 +214,15 @@
 
     function mapDashboardStats(result: GqlDashboardStats): DashboardStatistics {
         const s = result.stats;
-        const total_items = s.totalMovies + s.totalShows + s.totalSeasons + s.totalEpisodes;
 
         return {
             total_movies: s.totalMovies,
             total_shows: s.totalShows,
             total_seasons: s.totalSeasons,
             total_episodes: s.totalEpisodes,
-            total_items,
-            incomplete_items: total_items - s.completed,
+            total_items: s.totalItems,
+            incomplete_items: s.incompleteItems,
+            completion_rate: s.completionRate,
             states: {
                 Completed: s.completed,
                 Scraped: s.scraped,
@@ -250,6 +264,7 @@
                 usenetProviders = health.providers ?? [];
                 usenetStreaming = health.streaming ?? null;
                 usenetTitles = health.titles ?? [];
+                usenetTitleSummary = health.titleSummary ?? EMPTY_HEALTH_SUMMARY;
                 usenetTraffic = health.traffic ?? null;
             }
         });
@@ -282,12 +297,14 @@
                     nntpProviders: NntpProviderHealth[];
                     usenetStreamingHealth: UsenetStreamingHealth;
                     usenetTitleHealth: UsenetTitleHealth[];
+                    usenetTitleHealthSummary: UsenetTitleHealthSummary;
                     usenetTraffic: UsenetTraffic;
                 }>(USENET_HEALTH_QUERY);
                 if (!cancelled) {
                     usenetProviders = health.nntpProviders ?? [];
                     usenetStreaming = health.usenetStreamingHealth ?? null;
                     usenetTitles = health.usenetTitleHealth ?? [];
+                    usenetTitleSummary = health.usenetTitleHealthSummary ?? EMPTY_HEALTH_SUMMARY;
                     usenetTraffic = health.usenetTraffic ?? null;
                 }
             } catch {
@@ -348,6 +365,6 @@
     {#if usenetProviders.length > 0}
         <UsenetProvidersCard providers={usenetProviders} />
         <UsenetActivityCard health={usenetStreaming} traffic={usenetTraffic} />
-        <UsenetHealthCard titles={usenetTitles} />
+        <UsenetHealthCard titles={usenetTitles} summary={usenetTitleSummary} />
     {/if}
 </PageShell>
