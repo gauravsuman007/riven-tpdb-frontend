@@ -285,41 +285,43 @@
                 </div>
             {/if}
 
-            {#if items.length > 0}
-                <div class="flex flex-wrap gap-2">
-                    {#each items as item, index (`${item}-${index}`)}
-                        <span
-                            class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
-                            {item}
-                            <button
-                                type="button"
-                                class="leading-none"
-                                onclick={() => removeArrayValue(index)}>
-                                ×
-                            </button>
-                        </span>
-                    {/each}
+            {#if !field.options?.length}
+                {#if items.length > 0}
+                    <div class="flex flex-wrap gap-2">
+                        {#each items as item, index (`${item}-${index}`)}
+                            <span
+                                class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                                {item}
+                                <button
+                                    type="button"
+                                    class="leading-none"
+                                    onclick={() => removeArrayValue(index)}>
+                                    ×
+                                </button>
+                            </span>
+                        {/each}
+                    </div>
+                {/if}
+
+                <div class="flex max-w-xl gap-2">
+                    <Input
+                        id={idFor(path)}
+                        bind:value={arrayDraft}
+                        placeholder={field.placeholder ?? "Add value"}
+                        onkeydown={(event) => {
+                            if (event.key === "Enter" || event.key === ",") {
+                                event.preventDefault();
+                                addArrayValue();
+                            }
+                        }} />
+                    <button
+                        type="button"
+                        class="rounded-md border px-3 py-2 text-sm"
+                        onclick={addArrayValue}>
+                        Add
+                    </button>
                 </div>
             {/if}
-
-            <div class="flex max-w-xl gap-2">
-                <Input
-                    id={idFor(path)}
-                    bind:value={arrayDraft}
-                    placeholder={field.placeholder ?? "Add value"}
-                    onkeydown={(event) => {
-                        if (event.key === "Enter" || event.key === ",") {
-                            event.preventDefault();
-                            addArrayValue();
-                        }
-                    }} />
-                <button
-                    type="button"
-                    class="rounded-md border px-3 py-2 text-sm"
-                    onclick={addArrayValue}>
-                    Add
-                </button>
-            </div>
         </div>
     {:else if field.type === "boolean"}
         <div class="flex items-center justify-between gap-4">
