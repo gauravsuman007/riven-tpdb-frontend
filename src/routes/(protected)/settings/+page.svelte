@@ -7,6 +7,8 @@
     import GeneralTab from "$lib/components/settings/general-tab.svelte";
     import PluginsTab from "$lib/components/settings/plugins-tab.svelte";
     import RankingTab from "$lib/components/settings/ranking-tab.svelte";
+    import SystemTab from "$lib/components/settings/system-tab.svelte";
+    import { page } from "$app/state";
     import { stringifyPluginFields } from "$lib/components/settings/helpers";
     import type { PageData } from "./$types";
     import type { CustomProfile, PluginInfo, QualityProfile } from "$lib/components/settings/types";
@@ -19,6 +21,8 @@
     const CUSTOM_PROFILES_QUERY = `query { customProfiles }`;
 
     let { data }: { data: PageData } = $props();
+
+    const canManageSettings = $derived(page.data.permissions?.canManageSettings ?? false);
 
     let activeTab = $state("general");
 
@@ -206,6 +210,9 @@
                 <Tabs.Trigger value="general">General</Tabs.Trigger>
                 <Tabs.Trigger value="plugins">Plugins</Tabs.Trigger>
                 <Tabs.Trigger value="ranking">Ranking</Tabs.Trigger>
+                {#if canManageSettings}
+                    <Tabs.Trigger value="system">System</Tabs.Trigger>
+                {/if}
             </Tabs.List>
 
             <Tabs.Content value="general">
@@ -240,6 +247,12 @@
                     {removeTag}
                     {addTagOnEnter} />
             </Tabs.Content>
+
+            {#if canManageSettings}
+                <Tabs.Content value="system">
+                    <SystemTab />
+                </Tabs.Content>
+            {/if}
         </Tabs.Root>
     </div>
 </PageShell>
