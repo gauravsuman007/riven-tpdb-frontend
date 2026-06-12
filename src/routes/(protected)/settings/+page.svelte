@@ -210,13 +210,15 @@
                 <Tabs.Trigger value="general">General</Tabs.Trigger>
                 <Tabs.Trigger value="plugins">Plugins</Tabs.Trigger>
                 <Tabs.Trigger value="ranking">Ranking</Tabs.Trigger>
-                {#if canManageSettings}
-                    <Tabs.Trigger value="system">System</Tabs.Trigger>
-                {/if}
             </Tabs.List>
 
             <Tabs.Content value="general">
                 <GeneralTab {general} schema={data.generalSettingsSchema} />
+                {#if canManageSettings}
+                    <div class="mt-8">
+                        <SystemTab />
+                    </div>
+                {/if}
             </Tabs.Content>
 
             <Tabs.Content value="plugins">
@@ -247,12 +249,6 @@
                     {removeTag}
                     {addTagOnEnter} />
             </Tabs.Content>
-
-            {#if canManageSettings}
-                <Tabs.Content value="system">
-                    <SystemTab />
-                </Tabs.Content>
-            {/if}
         </Tabs.Root>
     </div>
 </PageShell>
