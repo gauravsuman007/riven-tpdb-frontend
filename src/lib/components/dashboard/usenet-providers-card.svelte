@@ -67,10 +67,12 @@
                                 max
                             </span>
                         </div>
-                        <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                        <div
+                            class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                             <div
                                 class="h-full rounded-full bg-emerald-500/70"
-                                style="width: {p.usage}%"></div>
+                                style="width: {p.usage}%">
+                            </div>
                         </div>
                     </div>
                 </div>

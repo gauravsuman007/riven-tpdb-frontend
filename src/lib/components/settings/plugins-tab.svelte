@@ -158,7 +158,10 @@
                                                     () => readStructured(pluginFields[f.key]),
                                                     (next) => {
                                                         pluginFields[f.key] = JSON.stringify(
-                                                            next ?? (f.type === "string_array" ? [] : {})
+                                                            next ??
+                                                                (f.type === "string_array"
+                                                                    ? []
+                                                                    : {})
                                                         );
                                                     }
                                                 }

@@ -391,8 +391,7 @@
                     placeholder={field.placeholder ?? ""}
                     value={value != null ? String(value) : ""}
                     autocomplete="new-password"
-                    oninput={(event) =>
-                        (value = (event.currentTarget as HTMLInputElement).value)}
+                    oninput={(event) => (value = (event.currentTarget as HTMLInputElement).value)}
                     class="flex-1" />
                 <ButtonGroup.Root class="shrink-0">
                     <Button

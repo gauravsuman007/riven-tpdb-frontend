@@ -33,7 +33,8 @@
             if (!current) return;
             const now = Date.now();
             if (prev && now > prev.t && current.bytesDecoded >= prev.bytes) {
-                throughputBytesPerSec = (current.bytesDecoded - prev.bytes) / ((now - prev.t) / 1000);
+                throughputBytesPerSec =
+                    (current.bytesDecoded - prev.bytes) / ((now - prev.t) / 1000);
             }
             prev = { bytes: current.bytesDecoded, t: now };
         });
@@ -82,7 +83,10 @@
 
         // Provider order: busiest-first totals, then any host only in the series.
         const hosts: string[] = [];
-        for (const h of [...(traffic?.providers ?? []).map((p) => p.host), ...rows.map((r) => r.host)]) {
+        for (const h of [
+            ...(traffic?.providers ?? []).map((p) => p.host),
+            ...rows.map((r) => r.host)
+        ]) {
             if (!hosts.includes(h)) hosts.push(h);
         }
 
@@ -162,7 +166,8 @@
                     </span>
                 </div>
                 <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                    <div class="h-full rounded-full bg-sky-500/70" style="width: {cacheFill}%"></div>
+                    <div class="h-full rounded-full bg-sky-500/70" style="width: {cacheFill}%">
+                    </div>
                 </div>
             </div>
         {/if}
@@ -186,8 +191,7 @@
                                 xAxis: {
                                     ticks: daily.ticks,
                                     tickSpacing: 44,
-                                    format: (i: number) =>
-                                        (daily.data[i]?.label as string) ?? ""
+                                    format: (i: number) => (daily.data[i]?.label as string) ?? ""
                                 }
                             }}>
                             {#snippet tooltip()}
@@ -209,8 +213,9 @@
                         <span class="min-w-0 flex-1 truncate text-[13px] text-neutral-200">
                             {p.host}
                         </span>
-                        <span class="shrink-0 text-[12px] tabular-nums text-neutral-400">
-                            {formatBytes(p.bytesDownloaded)} · {p.articlesDownloaded.toLocaleString()} articles
+                        <span class="shrink-0 text-[12px] text-neutral-400 tabular-nums">
+                            {formatBytes(p.bytesDownloaded)} · {p.articlesDownloaded.toLocaleString()}
+                            articles
                         </span>
                     </div>
                 {/each}

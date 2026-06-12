@@ -155,9 +155,7 @@ export function gqlSubscribeClient<T>(
             next: (result) => {
                 if (!active) return;
                 if (result.errors && result.errors.length > 0) {
-                    handlers.onError?.(
-                        new Error(result.errors.map((e) => e.message).join("; "))
-                    );
+                    handlers.onError?.(new Error(result.errors.map((e) => e.message).join("; ")));
                     return;
                 }
                 if (result.data !== undefined && result.data !== null) {

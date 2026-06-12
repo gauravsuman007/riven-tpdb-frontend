@@ -18,7 +18,7 @@
     // emitted on first encounter.
     const groupedSchema = $derived.by(() => {
         const groups: { section: string | null; fields: SettingFieldDef[] }[] = [];
-        const indexBySection = new Map<string, number>();
+        const indexBySection: Record<string, number> = {};
         let defaultGroupIndex: number | null = null;
 
         for (const field of schema) {
@@ -30,10 +30,10 @@
                 }
                 groups[defaultGroupIndex].fields.push(field);
             } else {
-                let idx = indexBySection.get(section);
+                let idx = indexBySection[section];
                 if (idx === undefined) {
                     idx = groups.length;
-                    indexBySection.set(section, idx);
+                    indexBySection[section] = idx;
                     groups.push({ section, fields: [] });
                 }
                 groups[idx].fields.push(field);

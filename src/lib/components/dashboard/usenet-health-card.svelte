@@ -4,10 +4,8 @@
     import { TMDB_IMAGE_BASE_URL } from "$lib/indexer-constants";
     import type { UsenetTitleHealth, UsenetTitleHealthSummary } from "./types";
 
-    let {
-        titles,
-        summary
-    }: { titles: UsenetTitleHealth[]; summary: UsenetTitleHealthSummary } = $props();
+    let { titles, summary }: { titles: UsenetTitleHealth[]; summary: UsenetTitleHealthSummary } =
+        $props();
 
     // "Missing data" / "Not ingested" → re-acquire: removes the broken media
     // entry (so the item truly un-completes) and re-processes. The ingest
@@ -61,7 +59,8 @@
     }
 
     function statusBadge(status: string) {
-        if (status === "unhealthy") return { label: "Missing data", variant: "destructive" as const };
+        if (status === "unhealthy")
+            return { label: "Missing data", variant: "destructive" as const };
         if (status === "not_ingested")
             return { label: "Not ingested", variant: "destructive" as const };
         if (status === "unknown") return { label: "Unverified", variant: "secondary" as const };
@@ -158,12 +157,14 @@
                                 · couldn't verify ({t.errorSegments}/{t.sampledSegments} probes errored)
                             {/if}
                             {#if t.repairAttempts > 0}
-                                · auto-repair {t.repairAttempts}×{#if untilTime(t.nextRepairAt)}, next in {untilTime(t.nextRepairAt)}{/if}
+                                · auto-repair {t.repairAttempts}×{#if untilTime(t.nextRepairAt)},
+                                    next in {untilTime(t.nextRepairAt)}{/if}
                             {/if}
                         </p>
                     </div>
 
-                    <Badge variant={badge.variant} class="shrink-0 text-[10px]">{badge.label}</Badge>
+                    <Badge variant={badge.variant} class="shrink-0 text-[10px]"
+                        >{badge.label}</Badge>
 
                     {#if needsRegrab(t.status) && t.mediaItemId !== null}
                         <button
