@@ -19,7 +19,7 @@ import { generateSecret } from "$lib/helpers";
 
 export const auth = betterAuth({
     secret: env.AUTH_SECRET || generateSecret(),
-    baseURL: env.ORIGIN,
+    baseURL: env.ORIGIN || "http://localhost:5173",
     database: drizzleAdapter(db, {
         provider: "sqlite"
     }),
