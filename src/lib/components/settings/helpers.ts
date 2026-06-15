@@ -1,68 +1,26 @@
 import type {
     CustomProfile,
-    PluginGroup,
-    PluginInfo,
     SettingFieldDef,
+    SettingsSection,
     SetupData,
     SetupGeneralSection,
+    SetupGroup,
     SetupPluginCardView,
     SetupPluginSection,
     Step
 } from "./types";
 
-export type Shape =
-    | "boolean"
-    | "number"
-    | "string"
-    | "string_array"
-    | "bool_object"
-    | "number_object"
-    | "custom_rank_object"
-    | "settings_section"
-    | "unknown";
-
-export function stringifyPluginFields(settings: Record<string, unknown>): Record<string, string> {
-    return Object.fromEntries(
-        Object.entries(settings).map(([key, value]) => [key, value == null ? "" : String(value)])
-    );
-}
-
-export function pluginStatus(plugin: PluginInfo): {
+export function pluginStatus(section: { enabled?: boolean | null; valid?: boolean | null }): {
     label: string;
     variant: "default" | "secondary";
 } {
-    if (!plugin.enabled) return { label: "Inactive", variant: "secondary" };
-    if (plugin.valid) return { label: "Active", variant: "default" };
+    if (!section.enabled) return { label: "Inactive", variant: "secondary" };
+    if (section.valid) return { label: "Active", variant: "default" };
     return { label: "Invalid", variant: "secondary" };
 }
 
 export const settingsSwitchClass =
     "data-[state=checked]:bg-primary data-[state=unchecked]:bg-input dark:data-[state=unchecked]:bg-input/80 [&_[data-slot=switch-thumb]]:translate-x-0 [&_[data-state=checked][data-slot=switch-thumb]]:translate-x-[calc(100%-2px)] rtl:[&_[data-state=checked][data-slot=switch-thumb]]:-translate-x-[calc(100%-2px)] dark:[&_[data-state=unchecked][data-slot=switch-thumb]]:bg-foreground dark:[&_[data-state=checked][data-slot=switch-thumb]]:bg-primary-foreground";
-
-export function detectShape(v: unknown): Shape {
-    if (typeof v === "boolean") return "boolean";
-    if (typeof v === "number") return "number";
-    if (typeof v === "string") return "string";
-    if (Array.isArray(v)) {
-        if (v.every((x) => typeof x === "string")) return "string_array";
-        return "unknown";
-    }
-    if (v !== null && typeof v === "object") {
-        const entries = Object.entries(v as object);
-        if (entries.every(([, val]) => typeof val === "boolean")) return "bool_object";
-        if (entries.every(([, val]) => typeof val === "number")) return "number_object";
-        if (
-            entries.length > 0 &&
-            entries.every(
-                ([, val]) => val !== null && typeof val === "object" && "fetch" in (val as object)
-            )
-        ) {
-            return "custom_rank_object";
-        }
-        return "settings_section";
-    }
-    return "unknown";
-}
 
 export function toLabel(key: string): string {
     return key
@@ -71,27 +29,8 @@ export function toLabel(key: string): string {
         .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const pluginGroups: PluginGroup[] = [
-    {
-        id: "media",
-        title: "Media Servers",
-        description: "Pick the server Riven should update after downloads finish.",
-        emptyMessage: "No media-server style plugins were detected."
-    },
-    {
-        id: "sources",
-        title: "Content Sources",
-        description: "Pick the sources Riven should scrape from.",
-        emptyMessage: "No source-provider plugins were detected."
-    },
-    {
-        id: "services",
-        title: "Metadata and Requests",
-        description: "Connect metadata, lists, calendars, and request services.",
-        emptyMessage: "No metadata or request-service plugins were detected."
-    }
-];
-
+// Presentational chrome for the non-plugin setup steps; the plugin-group steps
+// are driven entirely by the backend `setupGroups` query.
 const setupStepMeta = {
     welcome: {
         label: "Welcome",
@@ -108,170 +47,85 @@ const setupStepMeta = {
 } satisfies Record<"welcome" | "quality" | "finish", Omit<Step, "id">>;
 
 type SetupState = {
-    general: Record<string, unknown>;
+    general: SettingsSection | null;
+    plugins: SettingsSection[];
     customProfiles: CustomProfile[];
-    pluginStates: Record<string, PluginInfo>;
 };
 
-type PluginUiState = {
-    pluginFieldMap: Record<string, Record<string, string>>;
-    pluginLoadingMap: Record<string, boolean>;
-    pluginSavingMap: Record<string, boolean>;
-    revealedFields: Record<string, Set<string>>;
-};
-
+/** Split the backend sections into the general section + plugin sections, deep-copying values for local editing. */
 export function createSetupState(data: SetupData): SetupState {
+    const sections = (data.sections ?? []).map((section) => ({
+        ...section,
+        values: { ...(section.values as Record<string, unknown>) }
+    }));
     return {
-        general: { ...(data.generalSettings as Record<string, unknown>) },
-        customProfiles: (data.customProfiles ?? []).map((profile) => ({ ...profile })),
-        pluginStates: Object.fromEntries(
-            (data.plugins ?? []).map((plugin) => [plugin.name, { ...plugin }])
-        )
+        general: sections.find((section) => section.kind === "general") ?? null,
+        plugins: sections.filter((section) => section.kind === "plugin"),
+        customProfiles: (data.customProfiles ?? []).map((profile) => ({ ...profile }))
     };
 }
 
-function pluginText(plugin: PluginInfo) {
-    return [
-        plugin.name,
-        ...plugin.schema.flatMap((field) => [
-            field.key,
-            field.label,
-            field.description ?? "",
-            field.placeholder ?? ""
-        ])
-    ]
-        .join(" ")
-        .toLowerCase();
-}
-
-function hasAny(text: string, patterns: RegExp[]) {
-    return patterns.some((pattern) => pattern.test(text));
-}
-
-export function inferPluginGroup(plugin: PluginInfo): PluginGroup["id"] {
-    const text = pluginText(plugin);
-    const name = plugin.name.trim().toLowerCase();
-
-    if (["torrentio", "comet", "stremthru"].includes(name)) return "sources";
-    if (["plex", "emby", "jellyfin", "emby-jellyfin"].includes(name)) return "media";
-    if (["tmdb", "tvdb", "trakt", "seerr", "mdblist", "listrr", "calendar"].includes(name)) {
-        return "services";
-    }
-
-    if (
-        hasAny(text, [
-            /\bplex\b/,
-            /\bemby\b/,
-            /\bjellyfin\b/,
-            /\blibrary\b/,
-            /\bmedia server\b/,
-            /\bserver url\b/
-        ])
-    ) {
-        return "media";
-    }
-
-    if (
-        hasAny(text, [
-            /\bscrape\b/,
-            /\bstream\b/,
-            /\bprovider\b/,
-            /\bfilter\b/,
-            /\bdebrid\b/,
-            /\btorrent\b/,
-            /\bstrem/i
-        ])
-    ) {
-        return "sources";
-    }
-
-    return "services";
-}
-
+/**
+ * Group plugin sections into setup sections using the backend `setupGroups`
+ * (order + labels) and each section's own `category`. Sections whose category
+ * isn't a known group fall into a trailing "Other" group.
+ */
 export function buildPluginSections(
-    pluginStates: Record<string, PluginInfo>,
-    uiState: PluginUiState
+    plugins: SettingsSection[],
+    savingMap: Record<string, boolean>,
+    groups: SetupGroup[]
 ): SetupPluginSection[] {
-    const grouped = new Map<PluginGroup["id"], SetupPluginCardView[]>(
-        pluginGroups.map((group) => [group.id, []])
-    );
+    const cardFor = (section: SettingsSection): SetupPluginCardView => ({
+        section,
+        badge: pluginStatus(section),
+        saving: savingMap[section.id] ?? false
+    });
 
-    for (const plugin of Object.values(pluginStates)) {
-        const groupId = inferPluginGroup(plugin);
-        grouped.get(groupId)?.push({
-            plugin,
-            badge: pluginStatus(plugin),
-            fields: uiState.pluginFieldMap[plugin.name] ?? {},
-            loading: uiState.pluginLoadingMap[plugin.name] ?? false,
-            saving: uiState.pluginSavingMap[plugin.name] ?? false,
-            reveals: uiState.revealedFields[plugin.name] ?? new Set<string>()
+    const knownIds = new Set(groups.map((group) => group.id));
+    const byCategory = new Map<string, SetupPluginCardView[]>();
+    for (const section of plugins) {
+        const category =
+            section.category && knownIds.has(section.category) ? section.category : "other";
+        const bucket = byCategory.get(category) ?? [];
+        bucket.push(cardFor(section));
+        byCategory.set(category, bucket);
+    }
+
+    const byName = (a: SetupPluginCardView, b: SetupPluginCardView) =>
+        a.section.id.localeCompare(b.section.id);
+
+    const sections: SetupPluginSection[] = groups.map((group) => ({
+        ...group,
+        plugins: (byCategory.get(group.id) ?? []).sort(byName)
+    }));
+
+    const leftovers = byCategory.get("other") ?? [];
+    if (leftovers.length > 0) {
+        sections.push({
+            id: "other",
+            title: "Other",
+            description: "Additional plugins.",
+            plugins: leftovers.sort(byName)
         });
     }
 
-    return pluginGroups
-        .map((group) => ({
-            ...group,
-            plugins: (grouped.get(group.id) ?? []).sort((a, b) =>
-                a.plugin.name.localeCompare(b.plugin.name)
-            )
-        }))
-        .filter((group) => group.plugins.length > 0);
+    return sections.filter((section) => section.plugins.length > 0);
 }
 
-function inferGeneralSection(field: SettingFieldDef) {
-    const text = [field.key, field.label, field.description ?? ""].join(" ").toLowerCase();
-
-    if (/\bbitrate\b/.test(text)) {
-        return {
-            title: "Bitrate Limits",
-            description:
-                "Optional bitrate guards to reject streams that are too small or too large."
-        };
-    }
-
-    if (/\bretry\b|\bre-index\b|\bdelay\b|\bschedule\b|\bair date\b/.test(text)) {
-        return {
-            title: "Scheduling",
-            description: "How often Riven retries work and how it revisits unreleased content."
-        };
-    }
-
-    if (/\blanguage\b|\bdubbed\b|\baudio\b|\bsubtitle\b/.test(text)) {
-        return {
-            title: "Language",
-            description: "Language defaults that influence which releases Riven will accept."
-        };
-    }
-
-    if (/\bfilesystem\b|\bmount\b|\blibrary profile\b|\blibrary profiles\b/.test(text)) {
-        return {
-            title: "Filesystem",
-            description: "Mount configuration and filtered virtual library views."
-        };
-    }
-
-    return {
-        title: "General Preferences",
-        description: "Instance-wide defaults that shape Riven's runtime behaviour."
-    };
-}
-
+/** Group general-settings fields by their backend-provided `section` label. */
 export function buildGeneralSections(schema: SettingFieldDef[]): SetupGeneralSection[] {
     const sections = new Map<string, SetupGeneralSection>();
 
     for (const field of schema) {
-        const meta = inferGeneralSection(field);
-        const existing = sections.get(meta.title);
+        const title = field.section ?? "General";
+        const existing = sections.get(title);
 
         if (existing) {
             existing.fields.push(field);
             continue;
         }
 
-        sections.set(meta.title, {
-            ...meta,
-            fields: [field]
-        });
+        sections.set(title, { title, description: "", fields: [field] });
     }
 
     return [...sections.values()];

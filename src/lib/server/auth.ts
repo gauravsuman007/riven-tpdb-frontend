@@ -63,7 +63,6 @@ export const auth = betterAuth({
             adminRoles: ["admin"]
         }),
         openAPI(),
-        sveltekitCookies(getRequestEvent),
         passkey({
             rpID: env.PASSKEY_RP_ID || "riven",
             rpName: env.PASSKEY_RP_NAME || "Riven Media",
@@ -89,7 +88,10 @@ export const auth = betterAuth({
                     : []),
                 ...getGenericOAuthProviders(env)
             ]
-        })
+        }),
+        // Must be placed last so its `hooks.after` runs after all other plugins
+        // and forwards their Set-Cookie headers to SvelteKit's cookie store.
+        sveltekitCookies(getRequestEvent)
     ],
     advanced: {
         cookiePrefix: "riven"

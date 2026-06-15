@@ -29,9 +29,22 @@
     } = $props();
 
     let arrayDraft = $state("");
+    let activeTab = $state<string | null>(null);
 
     function isRecord(input: unknown): input is Record<string, unknown> {
         return input !== null && typeof input === "object" && !Array.isArray(input);
+    }
+
+    /** For a `tabs` object whose children are `custom_rank` rows, "N/M fetch". */
+    function fetchSummary(tabValue: unknown, tab: SettingFieldDef): string | null {
+        const rankFields = (tab.fields ?? []).filter((f) => f.type === "custom_rank");
+        if (rankFields.length === 0) return null;
+        const obj = isRecord(tabValue) ? tabValue : {};
+        const fetched = rankFields.filter((f) => {
+            const entry = obj[f.key];
+            return isRecord(entry) && entry.fetch === true;
+        }).length;
+        return `${fetched}/${rankFields.length} fetch`;
     }
 
     function idFor(pathValue: string): string {
@@ -181,8 +194,10 @@
 </script>
 
 <div class:rounded-lg={!nested} class:border={!nested} class:p-4={!nested} class="space-y-3">
-    {#if field.type === "object"}
+    {#if field.type === "object" && field.display === "tabs"}
         {@const objectValue = ensureObject(field.fields ?? [])}
+        {@const tabs = field.fields ?? []}
+        {@const current = tabs.find((t) => t.key === activeTab)?.key ?? tabs[0]?.key ?? ""}
         <div class="space-y-1">
             <Label class="text-base">{field.label}</Label>
             {#if field.description}
@@ -190,7 +205,61 @@
             {/if}
         </div>
 
-        <div class="space-y-3 rounded-lg border p-3">
+        <div class="rounded-lg border">
+            <div class="flex gap-1 overflow-x-auto border-b p-1">
+                {#each tabs as tab (tab.key)}
+                    {@const summary = fetchSummary(objectValue[tab.key], tab)}
+                    <button
+                        type="button"
+                        class="shrink-0 rounded-md px-3 py-2 text-left text-xs transition-colors {current ===
+                        tab.key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                        onclick={() => (activeTab = tab.key)}>
+                        <span class="block font-medium">{tab.label}</span>
+                        {#if summary}
+                            <span class="block opacity-75">{summary}</span>
+                        {/if}
+                    </button>
+                {/each}
+            </div>
+
+            {#each tabs as tab (tab.key)}
+                {#if tab.key === current}
+                    {@const tabValue = ensurePlainObject(objectValue[tab.key], tab.fields ?? [])}
+                    <div class="grid gap-3 p-3 sm:grid-cols-2">
+                        {#each tab.fields ?? [] as subfield (subfield.key)}
+                            <SettingFieldEditor
+                                field={subfield}
+                                bind:value={
+                                    () => tabValue[subfield.key],
+                                    (nextValue) =>
+                                        updateObjectField(field.fields ?? [], tab.key, {
+                                            ...tabValue,
+                                            [subfield.key]: nextValue
+                                        })
+                                }
+                                path={`${path}.${tab.key}.${subfield.key}`}
+                                nested={true} />
+                        {/each}
+                    </div>
+                {/if}
+            {/each}
+        </div>
+    {:else if field.type === "object"}
+        {@const objectValue = ensureObject(field.fields ?? [])}
+        {@const grid = field.display === "grid"}
+        <div class="space-y-1">
+            <Label class="text-base">{field.label}</Label>
+            {#if field.description}
+                <p class="text-muted-foreground text-sm">{field.description}</p>
+            {/if}
+        </div>
+
+        <div
+            class={grid
+                ? "grid gap-3 rounded-lg border p-3 sm:grid-cols-2"
+                : "space-y-3 rounded-lg border p-3"}>
             {#each field.fields ?? [] as subfield (subfield.key)}
                 <SettingFieldEditor
                     field={subfield}
@@ -349,14 +418,37 @@
                     value = next === "any" ? null : next === "true";
                 }}>
                 <Select.Trigger class="max-w-xs">
-                    {value == null ? "Any" : value === true ? "Anime only" : "Non-anime only"}
+                    {value == null
+                        ? "Any"
+                        : value === true
+                          ? (field.true_label ?? "Yes")
+                          : (field.false_label ?? "No")}
                 </Select.Trigger>
                 <Select.Content>
                     <Select.Item value="any" label="Any" />
-                    <Select.Item value="true" label="Anime only" />
-                    <Select.Item value="false" label="Non-anime only" />
+                    <Select.Item value="true" label={field.true_label ?? "Yes"} />
+                    <Select.Item value="false" label={field.false_label ?? "No"} />
                 </Select.Content>
             </Select.Root>
+        </div>
+    {:else if field.type === "custom_rank"}
+        {@const cr = isRecord(value) ? value : {}}
+        <div class="bg-muted/30 flex items-center justify-between gap-3 rounded-lg px-3 py-2">
+            <Label class="min-w-0 truncate">{field.label}</Label>
+            <div class="flex items-center gap-3">
+                <Switch
+                    class={settingsSwitchClass}
+                    checked={!!cr.fetch}
+                    onCheckedChange={(next) => (value = { ...cr, fetch: next })} />
+                <Input
+                    type="number"
+                    value={(cr.rank ?? cr.default ?? 0) as number}
+                    oninput={(event) => {
+                        const raw = (event.currentTarget as HTMLInputElement).value;
+                        value = { ...cr, rank: raw === "" ? null : Number(raw) };
+                    }}
+                    class="h-8 w-24 text-sm" />
+            </div>
         </div>
     {:else if field.options?.length}
         <div class="space-y-2">

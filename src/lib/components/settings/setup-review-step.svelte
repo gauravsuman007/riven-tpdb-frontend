@@ -4,12 +4,14 @@
     let {
         validPluginCount,
         enabledProfileCount,
-        setupReady,
+        readyToComplete,
+        blockers,
         finishSetup
     }: {
         validPluginCount: number;
         enabledProfileCount: number;
-        setupReady: boolean;
+        readyToComplete: boolean;
+        blockers: string[];
         finishSetup: () => void;
     } = $props();
 </script>
@@ -38,20 +40,28 @@
         </div>
         <div class="rounded-2xl border p-5">
             <p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Status</p>
-            <p class="mt-2 text-3xl font-semibold">{setupReady ? "Ready" : "Review"}</p>
+            <p class="mt-2 text-3xl font-semibold">{readyToComplete ? "Ready" : "Review"}</p>
         </div>
     </div>
 
     <div class="rounded-2xl border p-5">
-        <p class="font-medium">Before finishing</p>
-        <ul class="text-muted-foreground mt-3 space-y-2 text-sm">
-            <li>At least one plugin should be enabled and valid.</li>
-            <li>At least one quality profile should be enabled.</li>
-            <li>Media-server and source plugins should be saved after editing.</li>
-        </ul>
+        {#if readyToComplete}
+            <p class="font-medium">Everything looks ready.</p>
+            <p class="text-muted-foreground mt-2 text-sm">
+                Your instance has the minimum configuration needed to start.
+            </p>
+        {:else}
+            <p class="font-medium">Before finishing</p>
+            <ul class="text-muted-foreground mt-3 space-y-2 text-sm">
+                {#each blockers as blocker (blocker)}
+                    <li>{blocker}</li>
+                {/each}
+            </ul>
+        {/if}
     </div>
 
     <div class="flex justify-end">
-        <Button type="button" disabled={!setupReady} onclick={finishSetup}>Finish setup</Button>
+        <Button type="button" disabled={!readyToComplete} onclick={finishSetup}
+            >Finish setup</Button>
     </div>
 </div>

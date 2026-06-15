@@ -29,65 +29,74 @@ export type SettingFieldDef = {
     key_placeholder?: string;
     add_label?: string;
     section?: string;
+    /** Layout hint for `object` fields: "grid" | "tabs". Absent = stacked. */
+    display?: string;
+    true_label?: string;
+    false_label?: string;
 };
 
-export type PluginInfo = {
-    name: string;
-    version: string;
-    enabled: boolean;
-    valid: boolean;
+/**
+ * One configurable settings surface, mirroring the GraphQL `SettingsSection`:
+ * the instance-wide "general" settings or a single plugin. The frontend renders
+ * `schema` + `values` generically; plugin-only fields are null for "general".
+ */
+export type SettingsSection = {
+    id: string;
+    title: string;
+    kind: "general" | "plugin" | string;
     schema: SettingFieldDef[];
+    values: Record<string, unknown>;
+    category?: string | null;
+    enabled?: boolean | null;
+    valid?: boolean | null;
+    configured?: boolean | null;
+    missingRequiredFields: string[];
+    version?: string | null;
+};
+
+/** Backend-owned setup section that plugins are grouped under (by `SettingsSection.category`). */
+export type SetupGroup = {
+    id: string;
+    title: string;
+    description: string;
+};
+
+/** Backend-owned setup readiness, mirrors the GraphQL `instanceStatus`. */
+export type InstanceStatus = {
+    setupCompleted: boolean;
+    readyToComplete: boolean;
+    enabledValidPluginCount: number;
+    enabledProfileCount: number;
+    blockers: string[];
 };
 
 export type SetupData = {
-    generalSettings: Record<string, unknown>;
-    generalSettingsSchema: SettingFieldDef[];
-    plugins: PluginInfo[];
+    sections: SettingsSection[];
     rankSettings: Record<string, unknown>;
+    rankSettingsSchema: SettingFieldDef[];
     qualityProfiles: QualityProfile[];
     customProfiles: CustomProfile[];
-    setupSummary: SetupSummary;
-};
-
-export type SetupPluginStatus = {
-    name: string;
-    version: string;
-    enabled: boolean;
-    valid: boolean;
-    requiredFields: string[];
-    missingRequiredFields: string[];
-    configuredFieldCount: number;
-};
-
-export type SetupSummary = {
-    pluginStatuses: SetupPluginStatus[];
-    totalPlugins: number;
-    enabledPlugins: number;
-    validPlugins: number;
-    pluginsMissingRequiredConfig: number;
-    hasEnabledProfiles: boolean;
+    setupGroups: SetupGroup[];
+    instanceStatus: InstanceStatus;
 };
 
 export type Step = {
-    id: "welcome" | "media" | "sources" | "services" | "quality" | "finish";
+    id: string;
     label: string;
     description: string;
 };
 
 export type PluginGroup = {
-    id: "media" | "sources" | "services";
+    id: string;
     title: string;
     description: string;
-    emptyMessage: string;
+    emptyMessage?: string;
 };
 
 export type SetupPluginCardView = {
-    plugin: PluginInfo;
+    section: SettingsSection;
     badge: { label: string; variant: "default" | "secondary" };
-    fields: Record<string, string>;
-    loading: boolean;
     saving: boolean;
-    reveals: Set<string>;
 };
 
 export type SetupPluginSection = PluginGroup & {
