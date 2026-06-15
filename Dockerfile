@@ -10,7 +10,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
 COPY . .
-RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build && pnpm prune --prod
+RUN pnpm run build && pnpm prune --prod
 
 # Final Image
 FROM node:26-alpine
