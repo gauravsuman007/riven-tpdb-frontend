@@ -20,10 +20,7 @@
     import { cn } from "$lib/utils";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
     import ItemRequest from "$lib/components/media/riven/item-request.svelte";
-    import ItemDelete from "$lib/components/media/riven/item-delete.svelte";
-    import ItemPause from "$lib/components/media/riven/item-pause.svelte";
-    import ItemReset from "$lib/components/media/riven/item-reset.svelte";
-    import ItemRetry from "$lib/components/media/riven/item-retry.svelte";
+    import ItemAction from "$lib/components/media/riven/item-action.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import CollectionSheet from "$lib/components/media/collection-sheet.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
@@ -897,7 +894,8 @@
                                 </ItemManualScrape>
                             {/if}
                             {#if riven?.id != null}
-                                <ItemReset
+                                <ItemAction
+                                    kind="reset"
                                     size="default"
                                     variant="secondary"
                                     class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
@@ -906,8 +904,9 @@
                                     onSuccess={hydrateInitialState}>
                                     <RotateCcw class="mr-1.5 h-4 w-4" />
                                     Reset
-                                </ItemReset>
-                                <ItemRetry
+                                </ItemAction>
+                                <ItemAction
+                                    kind="retry"
                                     size="default"
                                     variant="secondary"
                                     class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
@@ -916,7 +915,7 @@
                                     onSuccess={hydrateInitialState}>
                                     <RefreshCw class="mr-1.5 h-4 w-4" />
                                     Retry
-                                </ItemRetry>
+                                </ItemAction>
 
                                 {#if data.mediaDetails?.type === "tv"}
                                     <ItemRequest
@@ -949,7 +948,8 @@
                                 </ItemManualScrape>
 
                                 {#if riven.state !== "Completed"}
-                                    <ItemPause
+                                    <ItemAction
+                                        kind="pause"
                                         size="default"
                                         variant="secondary"
                                         class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
@@ -961,10 +961,11 @@
                                         {:else}
                                             <Pause class="mr-1.5 h-4 w-4" /> Pause
                                         {/if}
-                                    </ItemPause>
+                                    </ItemAction>
                                 {/if}
 
-                                <ItemDelete
+                                <ItemAction
+                                    kind="delete"
                                     size="default"
                                     variant="secondary"
                                     class="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive border bg-transparent px-4"
@@ -972,7 +973,7 @@
                                     ids={rivenId ? [rivenId.toString()] : []}>
                                     <Trash2 class="mr-1.5 h-4 w-4" />
                                     Delete
-                                </ItemDelete>
+                                </ItemAction>
 
                                 <Dialog.Root bind:open={rawDataOpen}>
                                     <Dialog.Trigger>
