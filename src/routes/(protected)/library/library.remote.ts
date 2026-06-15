@@ -3,28 +3,16 @@ import { z } from "zod";
 import { gql } from "$lib/graphql-client";
 import { getRequestEvent } from "$app/server";
 import { buildBackendRoleHeaders, requireLibraryAccess } from "$lib/server/rbac";
+import {
+    REMOVE_ITEMS_MUTATION,
+    RESET_ITEMS_MUTATION,
+    RETRY_ITEMS_MUTATION,
+    toNumericIds
+} from "$lib/services/library-mutations";
 
 const itemIdsSchema = z.object({
     ids: z.array(z.string())
 });
-
-const RESET_MUTATION = `
-    mutation ResetItems($ids: [Int!]!) {
-        resetItems(ids: $ids)
-    }
-`;
-
-const RETRY_MUTATION = `
-    mutation RetryItems($ids: [Int!]!) {
-        retryItems(ids: $ids)
-    }
-`;
-
-const REMOVE_MUTATION = `
-    mutation RemoveItems($ids: [Int!]!) {
-        removeItems(ids: $ids)
-    }
-`;
 
 export const reset_items = command(itemIdsSchema, async ({ ids }) => {
     const event = getRequestEvent();
@@ -34,11 +22,11 @@ export const reset_items = command(itemIdsSchema, async ({ ids }) => {
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const numericIds = toNumericIds(ids);
     const data = await gql<{ resetItems: number }>(
         backendUrl,
         apiKey,
-        RESET_MUTATION,
+        RESET_ITEMS_MUTATION,
         { ids: numericIds },
         undefined,
         buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)
@@ -55,11 +43,11 @@ export const retry_items = command(itemIdsSchema, async ({ ids }) => {
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const numericIds = toNumericIds(ids);
     const data = await gql<{ retryItems: number }>(
         backendUrl,
         apiKey,
-        RETRY_MUTATION,
+        RETRY_ITEMS_MUTATION,
         { ids: numericIds },
         undefined,
         buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)
@@ -76,11 +64,11 @@ export const remove_items = command(itemIdsSchema, async ({ ids }) => {
     const { backendUrl, apiKey } = event.locals;
     if (!backendUrl || !apiKey) throw new Error("Backend URL or API key missing");
 
-    const numericIds = ids.map(Number).filter((n) => !isNaN(n));
+    const numericIds = toNumericIds(ids);
     const data = await gql<{ removeItems: number }>(
         backendUrl,
         apiKey,
-        REMOVE_MUTATION,
+        REMOVE_ITEMS_MUTATION,
         { ids: numericIds },
         undefined,
         buildBackendRoleHeaders(event.locals.user, event.locals.backendAuthSigningSecret)

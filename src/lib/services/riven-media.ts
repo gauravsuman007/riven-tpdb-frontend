@@ -1,3 +1,14 @@
+/**
+ * Riven media GraphQL operations and response mappers.
+ *
+ * Unlike `backend-metadata.ts` (whose operations are server-only and thus
+ * wrapped in `ctx`-based fetch helpers), the operations here are exported as
+ * raw, transport-agnostic strings on purpose: the same constant is consumed
+ * across all three transports — `gql` (server load), `gqlClient` (client proxy)
+ * and `gqlSubscribeClient` (WebSocket). Do not "consolidate" these into fetch
+ * wrappers; a single wrapper cannot serve all three transports.
+ */
+
 import type { RivenMediaItem } from "$lib/types/riven";
 
 export interface GqlFilesystemEntry {

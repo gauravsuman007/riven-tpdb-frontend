@@ -10,7 +10,11 @@
     import { cubicOut } from "svelte/easing";
     import type { TMDBTransformedListItem } from "$lib/metadata/parser";
     import { gqlClient } from "$lib/graphql-client";
-    import { mapGqlTmdbList, type GqlTmdbListItem } from "$lib/services/backend-metadata";
+    import {
+        mapGqlTmdbList,
+        SEARCH_TMDB_PAGE_QUERY,
+        type GqlTmdbListItem
+    } from "$lib/services/backend-metadata";
 
     interface Props {
         open: boolean;
@@ -110,25 +114,15 @@
         }
 
         try {
-            const searchQuery = `query SearchTmdb($type: String!, $params: JSON, $searchMode: String) {
-                searchTmdb(type: $type, params: $params, searchMode: $searchMode) {
-                    results {
-                        id title posterPath mediaType year voteAverage voteCount
-                        popularity overview backdropPath genreIds releaseDate
-                        firstAirDate originalTitle originalLanguage indexer
-                    }
-                    page totalPages totalResults
-                }
-            }`;
             const searchParams = { query: q, page: String(currentPage) };
             const [movieData, tvData] = await Promise.all([
                 gqlClient<SearchTmdbResponse>(
-                    searchQuery,
+                    SEARCH_TMDB_PAGE_QUERY,
                     { type: "movie", params: searchParams, searchMode: "search" },
                     signal
                 ).catch(() => null),
                 gqlClient<SearchTmdbResponse>(
-                    searchQuery,
+                    SEARCH_TMDB_PAGE_QUERY,
                     { type: "tv", params: searchParams, searchMode: "search" },
                     signal
                 ).catch(() => null)

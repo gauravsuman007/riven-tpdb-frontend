@@ -74,6 +74,17 @@ const SEARCH_TMDB_QUERY = `query($type: String!, $params: JSON, $searchMode: Str
     }
 }`;
 
+/**
+ * Paginated TMDB search query for client-side use (search modal + search store).
+ * Mirrors `SEARCH_TMDB_QUERY` but also selects pagination metadata.
+ */
+export const SEARCH_TMDB_PAGE_QUERY = `query SearchTmdb($type: String!, $params: JSON, $searchMode: String) {
+    searchTmdb(type: $type, params: $params, searchMode: $searchMode) {
+        results { ${TMDB_LIST_FIELDS} }
+        page totalPages totalResults
+    }
+}`;
+
 const TVDB_SERIES_EXTENDED_QUERY = `query($id: Int!, $meta: String) {
     tvdbSeriesExtended(id: $id, meta: $meta)
 }`;

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { gqlClient } from "$lib/graphql-client";
+    import { resetItems, toNumericIds } from "$lib/services/library-mutations";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -38,10 +38,7 @@
     }: Props = $props();
 
     async function resetMediaItem(ids: (string | null | undefined)[]): Promise<boolean> {
-        const validIds = ids
-            .filter((id): id is string => id !== null && id !== undefined)
-            .map(Number)
-            .filter((n) => !isNaN(n));
+        const validIds = toNumericIds(ids);
 
         if (validIds.length === 0) {
             toast.error("No media item ID found to reset.");
@@ -49,11 +46,8 @@
         }
 
         try {
-            const result = await gqlClient<{ resetItems: number }>(
-                `mutation ResetItems($ids: [Int!]!) { resetItems(ids: $ids) }`,
-                { ids: validIds }
-            );
-            if (result.resetItems > 0) {
+            const resetCount = await resetItems(validIds);
+            if (resetCount > 0) {
                 toast.success("Media item reset successfully.");
                 await onSuccess?.();
                 return true;

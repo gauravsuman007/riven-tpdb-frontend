@@ -1,5 +1,6 @@
 <script lang="ts">
     import { gqlClient } from "$lib/graphql-client";
+    import { retryItems, toNumericIds } from "$lib/services/library-mutations";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -76,10 +77,7 @@
     async function handleConfirm() {
         loading = true;
         let requestedItemId: number | undefined;
-        const validNumericIds = ids
-            .filter((id): id is string => id !== null && id !== undefined)
-            .map(Number)
-            .filter((n) => !isNaN(n));
+        const validNumericIds = toNumericIds(ids);
 
         try {
             if (mediaType === "tv") {
@@ -104,10 +102,7 @@
                 }
             } else if (validNumericIds.length > 0) {
                 // Item already exists in Riven — clear failed attempts and retry.
-                await gqlClient<{ retryItems: number }>(
-                    `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
-                    { ids: validNumericIds }
-                );
+                await retryItems(validNumericIds);
                 requestedItemId = validNumericIds[0];
             } else {
                 const result = await gqlClient<{

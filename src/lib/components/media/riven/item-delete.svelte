@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { gqlClient } from "$lib/graphql-client";
+    import { removeItems, toNumericIds } from "$lib/services/library-mutations";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -30,17 +30,11 @@
     let { title, ids, variant = "ghost", size = "sm", children, ...restProps }: Props = $props();
 
     async function removeMediaItem(ids: (string | null | undefined)[]) {
-        const validIds = ids
-            .filter((id): id is string => id !== null && id !== undefined)
-            .map(Number)
-            .filter((n) => !isNaN(n));
+        const validIds = toNumericIds(ids);
         logger.info("Removing media items with IDs:", validIds);
 
         try {
-            await gqlClient<{ removeItems: number }>(
-                `mutation RemoveItems($ids: [Int!]!) { removeItems(ids: $ids) }`,
-                { ids: validIds }
-            );
+            await removeItems(validIds);
             invalidateAll();
             toast.success("Media item deleted successfully!");
         } catch (e) {

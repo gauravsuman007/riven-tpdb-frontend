@@ -5,7 +5,11 @@ import { SvelteSet } from "svelte/reactivity";
 import { createScopedLogger } from "$lib/logger";
 import { gqlClient } from "$lib/graphql-client";
 import type { TMDBTransformedListItem } from "$lib/metadata/parser";
-import { mapGqlTmdbList, type GqlTmdbListItem } from "$lib/services/backend-metadata";
+import {
+    mapGqlTmdbList,
+    SEARCH_TMDB_PAGE_QUERY,
+    type GqlTmdbListItem
+} from "$lib/services/backend-metadata";
 
 const logger = createScopedLogger("search");
 
@@ -398,16 +402,7 @@ export class SearchStore {
     ): Promise<SearchResult> {
         const { searchMode, params } = this.buildSearchParams(type, page);
         const data = await gqlClient<{ searchTmdb: GqlTmdbPage }>(
-            `query SearchTmdb($type: String!, $params: JSON, $searchMode: String) {
-                searchTmdb(type: $type, params: $params, searchMode: $searchMode) {
-                    results {
-                        id title posterPath mediaType year voteAverage voteCount
-                        popularity overview backdropPath genreIds releaseDate
-                        firstAirDate originalTitle originalLanguage indexer
-                    }
-                    page totalPages totalResults
-                }
-            }`,
+            SEARCH_TMDB_PAGE_QUERY,
             { type, params, searchMode },
             signal
         );

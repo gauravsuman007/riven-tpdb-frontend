@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { gqlClient } from "$lib/graphql-client";
+    import { retryItems, toNumericIds } from "$lib/services/library-mutations";
     import { toast } from "svelte-sonner";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -38,10 +38,7 @@
     }: Props = $props();
 
     async function retryMediaItem(ids: (string | null | undefined)[]): Promise<boolean> {
-        const validIds = ids
-            .filter((id): id is string => id !== null && id !== undefined)
-            .map(Number)
-            .filter((n) => !isNaN(n));
+        const validIds = toNumericIds(ids);
 
         if (validIds.length === 0) {
             toast.error("No media item ID found to retry.");
@@ -49,11 +46,8 @@
         }
 
         try {
-            const result = await gqlClient<{ retryItems: number }>(
-                `mutation RetryItems($ids: [Int!]!) { retryItems(ids: $ids) }`,
-                { ids: validIds }
-            );
-            if (result.retryItems > 0) {
+            const retryCount = await retryItems(validIds);
+            if (retryCount > 0) {
                 toast.success("Media item marked for retry.");
                 await onSuccess?.();
                 return true;
