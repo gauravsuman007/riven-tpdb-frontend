@@ -42,6 +42,16 @@
         episodes.filter((episode) => episode.seasonNumber?.toString() === selectedSeason)
     );
 
+    let selectedVersionIdxByEpisode = $state<Record<number, number>>({});
+
+    function getEpisodeEntries(rivenEpisode: RivenEpisode | undefined): FilesystemEntry[] {
+        return rivenEpisode?.filesystem_entries?.length
+            ? rivenEpisode.filesystem_entries
+            : rivenEpisode?.filesystem_entry
+              ? [rivenEpisode.filesystem_entry]
+              : [];
+    }
+
     function setEpisodeOpen(episodeNumber: number | null | undefined, open: boolean) {
         if (episodeNumber == null) return;
         openEpisodeOverride = open ? episodeNumber : null;
@@ -131,17 +141,34 @@
 {/snippet}
 
 {#snippet fileDetails(
-    meta: MediaMetadata | undefined,
-    fs: FilesystemEntry | undefined,
-    episodeNumber: number | null | undefined
+    allEntries: FilesystemEntry[],
+    selectedIdx: number,
+    fallbackMeta: MediaMetadata | undefined,
+    episodeNumber: number | null | undefined,
+    onSelectIdx: (idx: number) => void
 )}
+    {@const fs = allEntries[selectedIdx] ?? allEntries[0]}
+    {@const meta = fs?.media_metadata ?? fallbackMeta}
     <div class="flex flex-col gap-6">
-        <div class="mb-4 flex items-center gap-3">
-            <div class="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]">
+        <div class="mb-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div
+                    class="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]">
+                </div>
+                <h2 class="text-foreground text-xl font-bold tracking-tight drop-shadow-md">
+                    File Details
+                </h2>
             </div>
-            <h2 class="text-foreground text-xl font-bold tracking-tight drop-shadow-md">
-                File Details
-            </h2>
+            {#if allEntries.length > 1}
+                <select
+                    value={selectedIdx}
+                    onchange={(e) => onSelectIdx(Number(e.currentTarget.value))}
+                    class="bg-background border-border text-foreground rounded-md border px-2 py-1 font-mono text-xs">
+                    {#each allEntries as entry, i (i)}
+                        <option value={i}>{getFsLabel(entry, episodeNumber)}</option>
+                    {/each}
+                </select>
+            {/if}
         </div>
         <div class="flex flex-col gap-4 text-sm">
             {#if meta?.filename || fs?.original_filename}
@@ -344,7 +371,10 @@
                 <button
                     type="button"
                     class="text-destructive/70 hover:text-destructive border-destructive/30 hover:border-destructive/70 mt-2 rounded-md border px-3 py-1.5 text-xs transition-colors"
-                    onclick={() => onDeleteFilesystemEntry(fs.id!, getFsLabel(fs, episodeNumber))}>
+                    onclick={() => {
+                        if (episodeNumber != null) selectedVersionIdxByEpisode[episodeNumber] = 0;
+                        onDeleteFilesystemEntry(fs.id!, getFsLabel(fs, episodeNumber));
+                    }}>
                     Remove this version
                 </button>
             {/if}
@@ -372,11 +402,20 @@
             </div>
         {/if}
 
-        {#if rivenEpisode?.filesystem_entry || rivenEpisode?.media_metadata}
+        {#if getEpisodeEntries(rivenEpisode).length > 0 || rivenEpisode?.media_metadata}
+            {@const allEntries = getEpisodeEntries(rivenEpisode)}
+            {@const selectedIdx = Math.min(
+                selectedVersionIdxByEpisode[episode.number ?? -1] ?? 0,
+                Math.max(allEntries.length - 1, 0)
+            )}
             {@render fileDetails(
+                allEntries,
+                selectedIdx,
                 rivenEpisode?.media_metadata,
-                rivenEpisode?.filesystem_entry,
-                episode.number
+                episode.number,
+                (idx) => {
+                    if (episode.number != null) selectedVersionIdxByEpisode[episode.number] = idx;
+                }
             )}
         {/if}
     </div>
