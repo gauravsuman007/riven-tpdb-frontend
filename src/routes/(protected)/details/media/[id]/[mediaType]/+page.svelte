@@ -341,26 +341,6 @@
         });
     });
 
-    const episodesBySeason = $derived.by(() => {
-        if (data.mediaDetails?.type !== "tv" || !data.mediaDetails?.details?.episodes) return {};
-        const details = data.mediaDetails.details as ParsedShowDetails;
-        const bySeason: Record<number, { number: number; name: string }[]> = {};
-
-        for (const episode of details.episodes ?? []) {
-            if (episode.seasonNumber == null || episode.number == null) continue;
-            (bySeason[episode.seasonNumber] ??= []).push({
-                number: episode.number,
-                name: episode.name || `Episode ${episode.number}`
-            });
-        }
-
-        for (const list of Object.values(bySeason)) {
-            list.sort((a, b) => a.number - b.number);
-        }
-
-        return bySeason;
-    });
-
     const rivenSeasonsByNumber = $derived.by(
         () =>
             new SvelteMap(
@@ -908,8 +888,7 @@
                                     itemId={null}
                                     externalId={data.mediaDetails?.details?.id?.toString() ?? ""}
                                     mediaType={data.mediaDetails?.type ?? "movie"}
-                                    seasons={seasonData}
-                                    {episodesBySeason}>
+                                    seasons={seasonData}>
                                     <Search class="mr-1.5 h-4 w-4" />
                                     Manual Scrape
                                 </ItemManualScrape>
@@ -963,8 +942,7 @@
                                     itemId={rivenId?.toString() ?? null}
                                     externalId={data.mediaDetails?.details?.id?.toString() ?? ""}
                                     mediaType={data.mediaDetails?.type ?? "movie"}
-                                    seasons={seasonData}
-                                    {episodesBySeason}>
+                                    seasons={seasonData}>
                                     <Search class="mr-1.5 h-4 w-4" />
                                     Manual Scrape
                                 </ItemManualScrape>
