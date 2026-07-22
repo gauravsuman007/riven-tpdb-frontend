@@ -24,6 +24,7 @@ export type SettingFieldDef = {
     placeholder?: string;
     description?: string;
     options?: string[];
+    allow_custom_options?: boolean;
     fields?: SettingFieldDef[];
     item_fields?: SettingFieldDef[];
     key_placeholder?: string;

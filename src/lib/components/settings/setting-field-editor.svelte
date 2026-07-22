@@ -29,6 +29,7 @@
     } = $props();
 
     let arrayDraft = $state("");
+    let arrayPickerOpen = $state(false);
     let activeTab = $state<string | null>(null);
 
     function isRecord(input: unknown): input is Record<string, unknown> {
@@ -54,6 +55,7 @@
     function parseDefaultValue(fieldDef: SettingFieldDef): unknown {
         if (fieldDef.default_value == null) {
             if (fieldDef.type === "string_array") return [];
+            if (fieldDef.type === "filter_array") return { include: [], exclude: [] };
             if (fieldDef.type === "object") return createDefaultObject(fieldDef.fields ?? []);
             if (fieldDef.type === "dictionary") return {};
             if (fieldDef.type === "nullable_boolean") return null;
@@ -101,6 +103,41 @@
             : [];
     }
 
+    function ensureFilterSelection(): { include: string[]; exclude: string[] } {
+        if (!isRecord(value)) return { include: [], exclude: [] };
+        const include = Array.isArray(value.include)
+            ? value.include.filter((entry): entry is string => typeof entry === "string")
+            : [];
+        const exclude = Array.isArray(value.exclude)
+            ? value.exclude.filter((entry): entry is string => typeof entry === "string")
+            : [];
+        return { include, exclude };
+    }
+
+    function selectedFilterItems(): Array<{ value: string; excluded: boolean }> {
+        const selection = ensureFilterSelection();
+        return [
+            ...selection.include.map((item) => ({ value: item, excluded: false })),
+            ...selection.exclude.map((item) => ({ value: item, excluded: true }))
+        ];
+    }
+
+    function addPickerValue(nextValueRaw: string) {
+        const nextValue = nextValueRaw.trim();
+        if (!nextValue) return;
+
+        if (field.type === "filter_array") {
+            const selection = ensureFilterSelection();
+            if (![...selection.include, ...selection.exclude].includes(nextValue)) {
+                value = { ...selection, include: [...selection.include, nextValue] };
+            }
+            return;
+        }
+
+        const items = ensureStringArray();
+        if (!items.includes(nextValue)) value = [...items, nextValue];
+    }
+
     function ensureDictionaryEntry(
         dictionary: Record<string, unknown>,
         entryKey: string,
@@ -110,22 +147,51 @@
     }
 
     function addArrayValue() {
-        const nextValue = arrayDraft.trim();
-        if (!nextValue) return;
-
-        const items = ensureStringArray();
-        if (!items.includes(nextValue)) {
-            items.push(nextValue);
-            value = [...items];
-        }
-
+        addPickerValue(arrayDraft);
         arrayDraft = "";
     }
 
-    function removeArrayValue(index: number) {
-        const items = ensureStringArray();
-        items.splice(index, 1);
-        value = [...items];
+    function removeArrayValue(itemToRemove: string) {
+        if (field.type === "filter_array") {
+            const selection = ensureFilterSelection();
+            value = {
+                include: selection.include.filter((item) => item !== itemToRemove),
+                exclude: selection.exclude.filter((item) => item !== itemToRemove)
+            };
+            return;
+        }
+        value = ensureStringArray().filter((item) => item !== itemToRemove);
+    }
+
+    function toggleArrayExclusion(itemToToggle: string, currentlyExcluded: boolean) {
+        const selection = ensureFilterSelection();
+        value = currentlyExcluded
+            ? {
+                  include: [...selection.include, itemToToggle],
+                  exclude: selection.exclude.filter((item) => item !== itemToToggle)
+              }
+            : {
+                  include: selection.include.filter((item) => item !== itemToToggle),
+                  exclude: [...selection.exclude, itemToToggle]
+              };
+    }
+
+    function filteredArrayOptions(): string[] {
+        const query = arrayDraft.trim().toLocaleLowerCase();
+        const selected = new Set(
+            field.type === "filter_array"
+                ? selectedFilterItems().map((item) => item.value)
+                : ensureStringArray()
+        );
+        return (field.options ?? [])
+            .filter((option) => !selected.has(option))
+            .filter((option) => !query || option.toLocaleLowerCase().includes(query))
+            .slice(0, 20);
+    }
+
+    function selectArrayOption(option: string) {
+        addPickerValue(option);
+        arrayDraft = "";
     }
 
     function toggleOption(option: string) {
@@ -333,15 +399,17 @@
                 {field.add_label ?? "Add entry"}
             </button>
         </div>
-    {:else if field.type === "string_array"}
+    {:else if field.type === "string_array" || field.type === "filter_array"}
         {@const items = ensureStringArray()}
+        {@const filterItems = selectedFilterItems()}
+        {@const filteredOptions = filteredArrayOptions()}
         <div class="space-y-2">
             <Label for={idFor(path)}>{field.label}</Label>
             {#if field.description}
                 <p class="text-muted-foreground text-sm">{field.description}</p>
             {/if}
 
-            {#if field.options?.length}
+            {#if field.type === "string_array" && field.options?.length}
                 <div class="flex flex-wrap gap-2">
                     {#each field.options as option (option)}
                         <button
@@ -354,42 +422,81 @@
                 </div>
             {/if}
 
-            {#if !field.options?.length}
-                {#if items.length > 0}
-                    <div class="flex flex-wrap gap-2">
-                        {#each items as item, index (`${item}-${index}`)}
-                            <span
-                                class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
-                                {item}
-                                <button
-                                    type="button"
-                                    class="leading-none"
-                                    onclick={() => removeArrayValue(index)}>
-                                    ×
-                                </button>
-                            </span>
-                        {/each}
-                    </div>
-                {/if}
+            {#if filterItems.length > 0 && field.type === "filter_array"}
+                <div class="flex flex-wrap gap-2">
+                    {#each filterItems as item (`${item.excluded}-${item.value}`)}
+                        <span
+                            class={`inline-flex items-center overflow-hidden rounded-full border text-xs ${item.excluded ? "border-destructive/40 bg-destructive/10 text-destructive" : "bg-secondary text-secondary-foreground"}`}>
+                            <button
+                                type="button"
+                                class="border-r px-2 py-1 font-medium"
+                                title={`Change to ${item.excluded ? "include" : "exclude"}`}
+                                onclick={() => toggleArrayExclusion(item.value, item.excluded)}>
+                                {item.excluded ? "Exclude" : "Include"}
+                            </button>
+                            <span class="px-2 py-1">{item.value}</span>
+                            <button
+                                type="button"
+                                class="px-2 py-1 leading-none"
+                                aria-label={`Remove ${item.value}`}
+                                onclick={() => removeArrayValue(item.value)}>
+                                ×
+                            </button>
+                        </span>
+                    {/each}
+                </div>
+            {/if}
 
-                <div class="flex max-w-xl gap-2">
+            {#if items.length > 0 && field.type === "string_array" && (!field.options?.length || field.allow_custom_options)}
+                <div class="flex flex-wrap gap-2">
+                    {#each items as item (item)}
+                        <span
+                            class="bg-secondary text-secondary-foreground inline-flex items-center overflow-hidden rounded-full border text-xs">
+                            <span class="px-2 py-1">{item}</span>
+                            <button
+                                type="button"
+                                class="px-2 py-1 leading-none"
+                                aria-label={`Remove ${item}`}
+                                onclick={() => removeArrayValue(item)}>
+                                ×
+                            </button>
+                        </span>
+                    {/each}
+                </div>
+            {/if}
+
+            {#if field.type === "filter_array" || !field.options?.length || field.allow_custom_options}
+                <div class="relative max-w-xl">
                     <Input
                         id={idFor(path)}
                         bind:value={arrayDraft}
-                        placeholder={field.placeholder ?? "Add value"}
+                        placeholder={field.placeholder ?? "Search or type a value"}
+                        onfocus={() => (arrayPickerOpen = true)}
+                        onblur={() => (arrayPickerOpen = false)}
                         onkeydown={(event) => {
                             if (event.key === "Enter" || event.key === ",") {
                                 event.preventDefault();
                                 addArrayValue();
                             }
+                            if (event.key === "Escape") arrayPickerOpen = false;
                         }} />
-                    <button
-                        type="button"
-                        class="rounded-md border px-3 py-2 text-sm"
-                        onclick={addArrayValue}>
-                        Add
-                    </button>
+
+                    {#if arrayPickerOpen && filteredOptions.length > 0}
+                        <div
+                            class="bg-popover absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border p-1 shadow-md">
+                            {#each filteredOptions as option (option)}
+                                <button
+                                    type="button"
+                                    class="hover:bg-accent block w-full rounded-sm px-3 py-2 text-left text-sm"
+                                    onmousedown={(event) => event.preventDefault()}
+                                    onclick={() => selectArrayOption(option)}>
+                                    {option}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
                 </div>
+                <p class="text-muted-foreground text-xs">Press Enter to add a custom value.</p>
             {/if}
         </div>
     {:else if field.type === "boolean"}
