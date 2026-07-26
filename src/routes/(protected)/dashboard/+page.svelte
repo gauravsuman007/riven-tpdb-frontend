@@ -101,9 +101,8 @@
                 openConnections
                 idleConnections
                 activeConnections
-                breakerTripped
-                cooldownSecondsRemaining
-                consecutiveFailures
+                demoted
+                consecutiveNotFound
             }
             usenetStreamingHealth {
                 cacheBytesUsed

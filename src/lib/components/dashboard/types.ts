@@ -49,9 +49,8 @@ export type NntpProviderHealth = {
     openConnections: number;
     idleConnections: number;
     activeConnections: number;
-    breakerTripped: boolean;
-    cooldownSecondsRemaining: number;
-    consecutiveFailures: number;
+    demoted: boolean;
+    consecutiveNotFound: number;
 };
 
 export type UsenetStreamingHealth = {

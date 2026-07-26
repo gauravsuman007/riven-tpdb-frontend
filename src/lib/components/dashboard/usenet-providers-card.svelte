@@ -10,14 +10,14 @@
                 p.maxConnections > 0
                     ? Math.max(0, Math.min(100, (p.openConnections / p.maxConnections) * 100))
                     : 0;
-            const status = p.breakerTripped
+            const status = p.demoted
                 ? {
-                      label: `Cooldown ${p.cooldownSecondsRemaining}s`,
+                      label: "Demoted — missing articles",
                       variant: "destructive" as const
                   }
-                : p.consecutiveFailures > 0
+                : p.consecutiveNotFound > 0
                   ? {
-                        label: `${p.consecutiveFailures} recent ${p.consecutiveFailures === 1 ? "failure" : "failures"}`,
+                        label: `${p.consecutiveNotFound} recent ${p.consecutiveNotFound === 1 ? "miss" : "misses"}`,
                         variant: "secondary" as const
                     }
                   : { label: "Healthy", variant: "default" as const };

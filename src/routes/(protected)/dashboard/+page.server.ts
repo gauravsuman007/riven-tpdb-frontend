@@ -73,9 +73,8 @@ const USENET_HEALTH_QUERY = `
             openConnections
             idleConnections
             activeConnections
-            breakerTripped
-            cooldownSecondsRemaining
-            consecutiveFailures
+            demoted
+            consecutiveNotFound
         }
         usenetStreamingHealth {
             cacheBytesUsed
