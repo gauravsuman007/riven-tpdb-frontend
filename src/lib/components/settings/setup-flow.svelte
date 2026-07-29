@@ -82,8 +82,8 @@
             plugins = plugins.map((plugin) => (plugin.id === updated.id ? updated : plugin));
             toast.success(`${section.title} saved`);
             void refreshStatus();
-        } catch {
-            toast.error(`Failed to save ${section.title}`);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : `Failed to save ${section.title}`);
         } finally {
             savingMap = { ...savingMap, [section.id]: false };
         }
@@ -97,8 +97,8 @@
                 values: generalSection.values
             });
             toast.success("General settings saved");
-        } catch {
-            toast.error("Failed to save general settings");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to save general settings");
         }
     }
 

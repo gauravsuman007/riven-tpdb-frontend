@@ -50,8 +50,8 @@
             toast.success(
                 section.kind === "general" ? "General settings saved" : "Plugin settings saved"
             );
-        } catch {
-            toast.error("Failed to save settings");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to save settings");
         }
     }
 

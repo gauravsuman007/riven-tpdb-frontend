@@ -105,11 +105,15 @@
                 consecutiveNotFound
             }
             usenetStreamingHealth {
-                cacheBytesUsed
-                cacheBytesMax
-                cacheEntries
-                cacheHits
-                cacheMisses
+                caches {
+                    name
+                    bytesUsed
+                    bytesMax
+                    entries
+                    hits
+                    misses
+                    hitRate
+                }
                 cacheHitRate
                 fetchesOk
                 fetchesFailed

@@ -69,10 +69,21 @@
         return out;
     });
 
-    const cacheFill = $derived(
-        health && health.cacheBytesMax > 0
-            ? Math.max(0, Math.min(100, (health.cacheBytesUsed / health.cacheBytesMax) * 100))
-            : 0
+
+    const CACHE_LABELS: Record<string, { title: string; unit: string }> = {
+        "read-ahead": { title: "Read-ahead cache", unit: "units" },
+        "nzb-meta": { title: "NZB metadata", unit: "releases" },
+        segment: { title: "Segment staging", unit: "segments" }
+    };
+    const caches = $derived(
+        (health?.caches ?? []).map((c) => ({
+            title: CACHE_LABELS[c.name]?.title ?? c.name,
+            unit: CACHE_LABELS[c.name]?.unit ?? "entries",
+            entries: c.entries,
+            bytesUsed: c.bytesUsed,
+            bytesMax: c.bytesMax,
+            fill: c.bytesMax > 0 ? Math.max(0, Math.min(100, (c.bytesUsed / c.bytesMax) * 100)) : 0
+        }))
     );
 
     // Build the multi-line daily-volume chart (one series per provider). Bytes
@@ -156,19 +167,27 @@
             {/each}
         </div>
 
-        {#if health}
-            <div class="mt-6 w-full">
-                <div class="flex items-center justify-between text-[11px] text-neutral-400">
-                    <span>Segment cache</span>
-                    <span class="tabular-nums">
-                        {formatBytes(health.cacheBytesUsed)} / {formatBytes(health.cacheBytesMax)}
-                        · {health.cacheEntries.toLocaleString()} segments
-                    </span>
-                </div>
-                <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                    <div class="h-full rounded-full bg-sky-500/70" style="width: {cacheFill}%">
+        {#if caches.length}
+            <div class="mt-6 w-full space-y-3">
+                {#each caches as cache (cache.title)}
+                    <div>
+                        <div class="flex items-center justify-between text-[11px] text-neutral-400">
+                            <span>{cache.title}</span>
+                            <span class="tabular-nums">
+                                {formatBytes(cache.bytesUsed)} / {formatBytes(cache.bytesMax)}
+                                · {cache.entries.toLocaleString()}
+                                {cache.unit}
+                            </span>
+                        </div>
+                        <div
+                            class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                            <div
+                                class="h-full rounded-full bg-sky-500/70"
+                                style="width: {cache.fill}%">
+                            </div>
+                        </div>
                     </div>
-                </div>
+                {/each}
             </div>
         {/if}
 

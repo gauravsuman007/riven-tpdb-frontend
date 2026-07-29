@@ -53,12 +53,19 @@ export type NntpProviderHealth = {
     consecutiveNotFound: number;
 };
 
+export type CacheHealth = {
+    name: string;
+    bytesUsed: number;
+    bytesMax: number;
+    entries: number;
+    hits: number;
+    misses: number;
+    hitRate: number;
+};
+
 export type UsenetStreamingHealth = {
-    cacheBytesUsed: number;
-    cacheBytesMax: number;
-    cacheEntries: number;
-    cacheHits: number;
-    cacheMisses: number;
+
+    caches: CacheHealth[];
     cacheHitRate: number;
     fetchesOk: number;
     fetchesFailed: number;
