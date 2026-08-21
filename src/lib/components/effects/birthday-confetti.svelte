@@ -48,7 +48,7 @@
 {/if}
 
 <style>
-    @keyframes confetti-fall-1 {
+    @keyframes -global-confetti-fall-1 {
         0% {
             transform: translateY(-100vh) rotate(0deg);
             opacity: 1;
@@ -58,7 +58,7 @@
             opacity: 0;
         }
     }
-    @keyframes confetti-fall-2 {
+    @keyframes -global-confetti-fall-2 {
         0% {
             transform: translateY(-100vh) rotate(0deg);
             opacity: 1;
@@ -68,7 +68,7 @@
             opacity: 0;
         }
     }
-    @keyframes confetti-fall-3 {
+    @keyframes -global-confetti-fall-3 {
         0% {
             transform: translateY(-100vh) rotate(0deg);
             opacity: 1;
@@ -78,7 +78,7 @@
             opacity: 0;
         }
     }
-    @keyframes confetti-fall-4 {
+    @keyframes -global-confetti-fall-4 {
         0% {
             transform: translateY(-100vh) rotate(0deg);
             opacity: 1;
@@ -88,7 +88,7 @@
             opacity: 0;
         }
     }
-    @keyframes confetti-fall-5 {
+    @keyframes -global-confetti-fall-5 {
         0% {
             transform: translateY(-100vh) rotate(0deg);
             opacity: 1;
