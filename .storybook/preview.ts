@@ -9,6 +9,12 @@ import { mswLoader } from "msw-storybook-addon/csf3";
 
 import ThemeDecorator from "./decorators/ThemeDecorator.svelte";
 
+// `sveltekit-superforms` detects Storybook via `globalThis.STORIES` to disable
+// its navigation-store integration. Storybook's real preview iframe sets this
+// automatically, but the addon-vitest headless test runner does not — set it
+// explicitly so `superForm()` behaves consistently in both.
+(globalThis as { STORIES?: boolean }).STORIES = true;
+
 const preview: Preview = {
     decorators: [() => ({ Component: ThemeDecorator })],
     loaders: [mswLoader()],
