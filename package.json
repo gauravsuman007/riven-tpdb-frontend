@@ -17,7 +17,9 @@
         "ba:generate": "pnpx @better-auth/cli generate --config ./better-auth.config.ts --output ./src/lib/server/schema/ba-auth.ts --yes",
         "db:generate": "drizzle-kit generate",
         "db:pull": "tsx ./scripts/drizzle_pull.ts",
-        "db:studio": "drizzle-kit studio"
+        "db:studio": "drizzle-kit studio",
+        "storybook": "storybook dev -p 6006",
+        "build-storybook": "storybook build"
     },
     "devDependencies": {
         "@eslint/compat": "^2.1.0",
@@ -65,7 +67,19 @@
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.61.0",
         "vaul-svelte": "1.0.0-next.7",
-        "vite": "^8.0.16"
+        "vite": "^8.0.16",
+        "storybook": "^10.5.10",
+        "@storybook/sveltekit": "^10.5.10",
+        "@storybook/addon-svelte-csf": "latest",
+        "@chromatic-com/storybook": "latest",
+        "@storybook/addon-vitest": "^10.5.10",
+        "@storybook/addon-a11y": "^10.5.10",
+        "@storybook/addon-docs": "^10.5.10",
+        "eslint-plugin-storybook": "^10.5.10",
+        "vitest": "latest",
+        "playwright": "latest",
+        "@vitest/browser-playwright": "latest",
+        "@vitest/coverage-v8": "latest"
     },
     "dependencies": {
         "@better-auth/passkey": "^1.6.17",

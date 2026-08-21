@@ -26,3 +26,5 @@ vite.config.ts.timestamp-*
 *.db
 
 config/server.json
+*storybook.log
+storybook-static
