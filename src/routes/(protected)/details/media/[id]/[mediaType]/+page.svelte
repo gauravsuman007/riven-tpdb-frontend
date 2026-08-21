@@ -6,29 +6,20 @@
     import { fade, fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import * as Carousel from "$lib/components/ui/carousel/index.js";
-    import { Badge } from "$lib/components/ui/badge/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
-    import * as Dialog from "$lib/components/ui/dialog/index.js";
-    import Play from "@lucide/svelte/icons/play";
-    import FileJson from "@lucide/svelte/icons/file-json";
-    import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
-    import RefreshCw from "@lucide/svelte/icons/refresh-cw";
-    import Trash2 from "@lucide/svelte/icons/trash-2";
-    import Search from "@lucide/svelte/icons/search";
-    import Pause from "@lucide/svelte/icons/pause";
-    import Download from "@lucide/svelte/icons/download";
-    import { cn } from "$lib/utils";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
-    import ItemRequest from "$lib/components/media/riven/item-request.svelte";
-    import ItemAction from "$lib/components/media/riven/item-action.svelte";
-    import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import CollectionSheet from "$lib/components/media/collection-sheet.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
     import BackdropBackground from "$lib/components/media/backdrop-background.svelte";
+    import SectionHeading from "$lib/components/media/section-heading.svelte";
+    import RatingsRow from "$lib/components/media/ratings-row.svelte";
+    import MoreDetailsPanel from "$lib/components/media/more-details-panel.svelte";
+    import HeroBanner from "$lib/components/media/riven/hero-banner.svelte";
+    import ItemActionToolbar from "$lib/components/media/riven/item-action-toolbar.svelte";
+    import FileInformationPanel from "$lib/components/media/riven/file-information-panel.svelte";
     import LiveSeasons from "./live-seasons.svelte";
     import LiveEpisodes from "./live-episodes.svelte";
     import { toast } from "svelte-sonner";
-    import X from "@lucide/svelte/icons/x";
     import { gqlClient, gqlSubscribeClient } from "$lib/graphql-client";
     import type { RivenMediaItem } from "$lib/types/riven";
     import {
@@ -79,9 +70,6 @@
         return query ? `${path}?${query}` : path;
     }
 
-    let showTrailerOverride = $state(false);
-    const showTrailer = $derived(showTrailerOverride && data.mediaDetails?.details?.trailer);
-
     let liveRiven = $state<RivenMediaItem | undefined>(untrack(() => data.riven));
     let hydratedRiven = $state<RivenMediaItem | undefined>(undefined);
     let liveRivenItemId = $state<number | undefined>(untrack(() => data.riven?.id));
@@ -92,6 +80,7 @@
     let rawRivenLoading = $state(false);
     let rawRivenError = $state<string | undefined>(undefined);
     let rawRivenData = $state<unknown>(undefined);
+    let selectedMovieVersionIdx = $state(0);
 
     const riven = $derived(liveRiven ?? hydratedRiven);
     const rawRivenDisplayData = $derived(
@@ -160,7 +149,6 @@
 
     let selectedSeason: string | undefined = $state(getInitialSeason());
     let selectedEpisode: string | undefined = $state(getInitialEpisode());
-    let selectedMovieVersionIdx = $state(0);
 
     function getMovieEntries() {
         const item = hydratedRiven ?? riven;
@@ -172,46 +160,17 @@
               : [];
     }
 
-    function humanizeProfileName(name: string | undefined) {
-        if (!name) return null;
-        return name
-            .split(/[_-]+/)
-            .filter(Boolean)
-            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-            .join(" ");
-    }
+    const movieFileEntries = $derived(getMovieEntries());
 
-    function getMetadataResolutionLabel(
-        metadata: RivenMediaItem["media_metadata"] | undefined
-    ): string | null {
-        const height = metadata?.video?.resolution_height;
-        if (!height) return null;
-        if (height >= 2160) return "4K";
-        if (height >= 1440) return "1440p";
-        if (height >= 1080) return "1080p";
-        if (height >= 720) return "720p";
-        if (height >= 480) return "480p";
-        return `${height}p`;
-    }
-
-    function getFilesystemEntryLabel(
-        entry:
-            | (NonNullable<RivenMediaItem["filesystem_entry"]> & {
-                  id?: number;
-                  ranking_profile_name?: string;
-              })
-            | undefined,
-        fallback: string
-    ) {
-        const resolutionLabel = getMetadataResolutionLabel(entry?.media_metadata);
-        const profileLabel = humanizeProfileName(entry?.ranking_profile_name);
-
-        if (resolutionLabel && profileLabel) {
-            return `${resolutionLabel} (${profileLabel})`;
-        }
-
-        return resolutionLabel ?? profileLabel ?? fallback;
-    }
+    const externalLinks = $derived.by(() => {
+        const externalIds = data.mediaDetails?.details.external_ids;
+        if (!externalIds) return [];
+        return Object.entries(externalIds).flatMap(([key, value]) => {
+            const meta = getExternal(key);
+            if (!value || !meta) return [];
+            return [{ key, label: meta.name, url: `${meta.url}${value}` }];
+        });
+    });
 
     async function deleteFilesystemEntry(id: number, label: string) {
         if (
@@ -381,12 +340,6 @@
             )
     );
 
-    const formatCurrency = (n: number) =>
-        new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0
-        }).format(n);
     const formatSize = (b: number) => `${(b / 1073741824).toFixed(2)} GB`;
 
     const details = $derived(
@@ -694,16 +647,6 @@
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 
-{#snippet sectionHeading(title: string)}
-    <div class="mb-4 flex items-center gap-3">
-        <div class="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]">
-        </div>
-        <h2 class="text-foreground text-xl font-bold tracking-tight drop-shadow-md">
-            {title}
-        </h2>
-    </div>
-{/snippet}
-
 {#snippet mediaCarousel(
     items: Array<{
         id: number;
@@ -718,7 +661,7 @@
     <section
         class="mt-8 md:mt-12"
         in:fly|global={{ y: 20, duration: 400, delay, easing: cubicOut }}>
-        {@render sectionHeading(title)}
+        <SectionHeading {title} />
         <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
             <Carousel.Content class="-ml-3">
                 {#each items as item (`${item.media_type}-${item.id}`)}
@@ -760,65 +703,10 @@
 
         <div class="z-10 mx-auto flex h-full w-full max-w-600 flex-col">
             <!-- Hero Banner - extends behind search bar -->
-            {#if data.mediaDetails?.details.backdrop_path || data.mediaDetails?.details.trailer}
-                <div class="px-2 md:px-4">
-                    <div
-                        class={cn(
-                            "relative mb-6 flex h-[40vh] max-h-150 min-h-87.5 items-end justify-between overflow-hidden rounded-3xl bg-cover bg-center shadow-2xl transition-all duration-500 md:mb-10",
-                            !showTrailer && "p-6 md:p-12"
-                        )}
-                        style="background-image: url('{data.mediaDetails?.details
-                            .backdrop_path}');">
-                        <div
-                            class="absolute inset-0 bg-linear-to-t from-black/90 via-black/40 to-transparent">
-                        </div>
-                        <!-- Border Overlay to prevent bright edge glitch -->
-                        <div
-                            class="border-border/10 pointer-events-none absolute inset-0 rounded-2xl border">
-                        </div>
-
-                        {#if !showTrailer}
-                            <div class="relative z-10 flex w-full items-end justify-between">
-                                {#if data.mediaDetails?.details.logo}
-                                    <img
-                                        alt="Logo"
-                                        class="max-h-16 max-w-[60%] object-contain drop-shadow-2xl md:max-h-28 lg:max-h-36"
-                                        src={data.mediaDetails?.details.logo}
-                                        loading="lazy" />
-                                {:else}<div></div>{/if}
-
-                                <div class="flex gap-2 md:gap-4">
-                                    {#if data.mediaDetails?.details.trailer}
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            class="border border-white/10 bg-white/10 px-6 text-sm font-bold text-white shadow-lg backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20"
-                                            onclick={() => (showTrailerOverride = !showTrailer)}>
-                                            <Play size={14} class="mr-2 fill-current" />Trailer
-                                        </Button>
-                                    {/if}
-                                </div>
-                            </div>
-                        {:else}
-                            <iframe
-                                class="absolute inset-0 h-full w-full"
-                                src="https://www.youtube-nocookie.com/embed/{data.mediaDetails
-                                    ?.details.trailer
-                                    ?.key}?autoplay=1&controls=1&mute=0&rel=0&modestbranding=1&playsinline=1"
-                                title="Trailer"
-                                allow="autoplay"
-                                allowfullscreen></iframe>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                class="bg-background/60 text-foreground hover:bg-background/80 absolute top-4 right-4 z-20"
-                                onclick={() => (showTrailerOverride = false)}>
-                                <X class="h-6 w-6" />
-                            </Button>
-                        {/if}
-                    </div>
-                </div>
-            {/if}
+            <HeroBanner
+                backdropPath={data.mediaDetails?.details.backdrop_path}
+                logo={data.mediaDetails?.details.logo}
+                trailer={data.mediaDetails?.details.trailer} />
 
             <!-- Rest of content with padding -->
             <div class="px-8 pb-24 md:px-20 lg:px-24">
@@ -859,163 +747,22 @@
                         </div>
 
                         <!-- Actions - Right under title -->
-                        <div
-                            class="flex flex-wrap items-center gap-2"
-                            in:fly|global={{ y: 20, duration: 400, delay: 150, easing: cubicOut }}>
-                            {#if data.mediaDetails?.type && data.mediaDetails?.details?.id != null && !riven && !rivenPending}
-                                <ItemRequest
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
-                                    title={data.mediaDetails?.details.title}
-                                    ids={[]}
-                                    mediaType={data.mediaDetails?.type}
-                                    externalId={data.mediaDetails?.details?.id?.toString() ?? ""}
-                                    seasons={seasonData}
-                                    onSuccess={handleRequestSuccess}>
-                                    <Download class="mr-1.5 h-4 w-4" />
-                                    Request
-                                </ItemRequest>
-                                <ItemManualScrape
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                    title={data.mediaDetails?.details?.title}
-                                    itemId={null}
-                                    externalId={data.mediaDetails?.details?.id?.toString() ?? ""}
-                                    mediaType={data.mediaDetails?.type ?? "movie"}
-                                    seasons={seasonData}>
-                                    <Search class="mr-1.5 h-4 w-4" />
-                                    Manual Scrape
-                                </ItemManualScrape>
-                            {/if}
-                            {#if riven?.id != null}
-                                <ItemAction
-                                    kind="reset"
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                    title={data.mediaDetails?.details.title}
-                                    ids={rivenId ? [rivenId.toString()] : []}
-                                    onSuccess={hydrateInitialState}>
-                                    <RotateCcw class="mr-1.5 h-4 w-4" />
-                                    Reset
-                                </ItemAction>
-                                <ItemAction
-                                    kind="retry"
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                    title={data.mediaDetails?.details.title}
-                                    ids={rivenId ? [rivenId.toString()] : []}
-                                    onSuccess={hydrateInitialState}>
-                                    <RefreshCw class="mr-1.5 h-4 w-4" />
-                                    Retry
-                                </ItemAction>
-
-                                {#if data.mediaDetails?.type === "tv"}
-                                    <ItemRequest
-                                        size="default"
-                                        variant="secondary"
-                                        class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
-                                        title={data.mediaDetails?.details.title}
-                                        ids={rivenId ? [rivenId.toString()] : []}
-                                        mediaType={data.mediaDetails?.type}
-                                        externalId={data.mediaDetails?.details?.id?.toString() ??
-                                            ""}
-                                        seasons={seasonData}
-                                        onSuccess={handleRequestSuccess}>
-                                        <Download class="mr-1.5 h-4 w-4" />
-                                        Request More
-                                    </ItemRequest>
-                                {/if}
-
-                                <ItemManualScrape
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                    title={data.mediaDetails?.details?.title}
-                                    itemId={rivenId?.toString() ?? null}
-                                    externalId={data.mediaDetails?.details?.id?.toString() ?? ""}
-                                    mediaType={data.mediaDetails?.type ?? "movie"}
-                                    seasons={seasonData}>
-                                    <Search class="mr-1.5 h-4 w-4" />
-                                    Manual Scrape
-                                </ItemManualScrape>
-
-                                {#if riven.state !== "Completed"}
-                                    <ItemAction
-                                        kind="pause"
-                                        size="default"
-                                        variant="secondary"
-                                        class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                        title={data.mediaDetails?.details.title}
-                                        isPaused={riven.state === "Paused"}
-                                        ids={rivenId ? [rivenId.toString()] : []}>
-                                        {#if riven.state === "Paused"}
-                                            <Play class="mr-1.5 h-4 w-4" /> Resume
-                                        {:else}
-                                            <Pause class="mr-1.5 h-4 w-4" /> Pause
-                                        {/if}
-                                    </ItemAction>
-                                {/if}
-
-                                <ItemAction
-                                    kind="delete"
-                                    size="default"
-                                    variant="secondary"
-                                    class="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive border bg-transparent px-4"
-                                    title={data.mediaDetails?.details.title}
-                                    ids={rivenId ? [rivenId.toString()] : []}>
-                                    <Trash2 class="mr-1.5 h-4 w-4" />
-                                    Delete
-                                </ItemAction>
-
-                                <Dialog.Root bind:open={rawDataOpen}>
-                                    <Dialog.Trigger>
-                                        {#snippet child({ props })}
-                                            <Button
-                                                variant="secondary"
-                                                size="default"
-                                                class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                                                {...props}>
-                                                <FileJson class="mr-1.5 h-4 w-4" />
-                                                Raw Data
-                                            </Button>
-                                        {/snippet}
-                                    </Dialog.Trigger>
-                                    <Dialog.Content
-                                        class="border-border bg-background w-full max-w-4xl">
-                                        <Dialog.Header>
-                                            <Dialog.Title>Raw Riven Data</Dialog.Title>
-                                        </Dialog.Header>
-                                        <div
-                                            class="bg-muted/50 max-h-100 overflow-auto rounded-lg p-4">
-                                            {#if rawRivenLoading && !rawRivenData}
-                                                <p class="text-muted-foreground text-sm">
-                                                    Loading full Riven data...
-                                                </p>
-                                            {:else if rawRivenError}
-                                                <p class="text-destructive text-sm">
-                                                    {rawRivenError}
-                                                </p>
-                                            {/if}
-                                            {#if rawRivenJson}
-                                                <pre
-                                                    class="font-mono text-xs break-all whitespace-pre-wrap text-green-400">{rawRivenJson}</pre>
-                                            {/if}
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            disabled={!rawRivenJson}
-                                            onclick={() => {
-                                                navigator.clipboard.writeText(rawRivenJson);
-                                                toast.success("Copied!");
-                                            }}>Copy JSON</Button>
-                                    </Dialog.Content>
-                                </Dialog.Root>
-                            {/if}
-                        </div>
+                        <ItemActionToolbar
+                            title={data.mediaDetails?.details.title}
+                            mediaType={data.mediaDetails?.type}
+                            externalId={data.mediaDetails?.details?.id != null
+                                ? data.mediaDetails.details.id.toString()
+                                : null}
+                            seasons={seasonData}
+                            {riven}
+                            {rivenId}
+                            {rivenPending}
+                            onRequestSuccess={handleRequestSuccess}
+                            onActionSuccess={hydrateInitialState}
+                            bind:rawDataOpen
+                            {rawRivenLoading}
+                            {rawRivenError}
+                            {rawRivenJson} />
 
                         <!-- Metadata -->
                         <div
@@ -1046,36 +793,7 @@
                         {/if}
 
                         <!-- Ratings -->
-                        {#if ratingsData?.scores?.length}
-                            <div
-                                class="flex items-center gap-5"
-                                in:fly|global={{
-                                    y: 20,
-                                    duration: 400,
-                                    delay: 300,
-                                    easing: cubicOut
-                                }}>
-                                {#each ratingsData.scores as score (score.name)}
-                                    <a
-                                        href={score.url}
-                                        target="_blank"
-                                        rel="external noopener noreferrer"
-                                        class="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 transition-colors">
-                                        {#if score.image}<img
-                                                src="/rating-logos/{score.image}"
-                                                alt={score.name}
-                                                class="h-6 w-6 object-contain" />{/if}
-                                        <span class="text-base font-semibold">{score.score}</span>
-                                    </a>
-                                {/each}
-                            </div>
-                        {:else if ratingsLoading}
-                            <div class="flex gap-4">
-                                {#each [1, 2, 3] as i (i)}
-                                    <div class="bg-muted h-6 w-14 animate-pulse rounded"></div>
-                                {/each}
-                            </div>
-                        {/if}
+                        <RatingsRow scores={ratingsData?.scores} loading={ratingsLoading} />
 
                         <!-- Description -->
                         <p
@@ -1092,7 +810,7 @@
                         <section
                             class="mt-8 md:mt-12"
                             in:fly|global={{ y: 20, duration: 400, delay: 400, easing: cubicOut }}>
-                            {@render sectionHeading("Collection")}
+                            <SectionHeading title="Collection" />
                             <CollectionSheet
                                 collectionId={movieDetails.collection.id}
                                 collectionName={movieDetails.collection.name}
@@ -1136,7 +854,7 @@
                     <section
                         class="mt-8 md:mt-12"
                         in:fly|global={{ y: 20, duration: 400, delay: 450, easing: cubicOut }}>
-                        {@render sectionHeading("Seasons")}
+                        <SectionHeading title="Seasons" />
                         <LiveSeasons
                             seasons={data.mediaDetails.details.seasons}
                             {selectedSeason}
@@ -1150,7 +868,7 @@
                     <section
                         class="mt-8 md:mt-12"
                         in:fly|global={{ y: 20, duration: 400, delay: 500, easing: cubicOut }}>
-                        {@render sectionHeading("Episodes")}
+                        <SectionHeading title="Episodes" />
                         <LiveEpisodes
                             episodes={data.mediaDetails.details.episodes}
                             {selectedSeason}
@@ -1168,7 +886,7 @@
                     <section
                         class="mt-8 md:mt-12"
                         in:fly|global={{ y: 20, duration: 400, delay: 550, easing: cubicOut }}>
-                        {@render sectionHeading("Cast")}
+                        <SectionHeading title="Cast" />
                         <Carousel.Root opts={{ dragFree: true, slidesToScroll: "auto" }}>
                             <Carousel.Content class="-ml-3">
                                 {#each data.mediaDetails.details.cast as member, i (i)}
@@ -1200,410 +918,26 @@
                     class="mt-8 md:mt-12"
                     in:fly|global={{ y: 20, duration: 400, delay: 600, easing: cubicOut }}>
                     <div class="flex max-w-7xl flex-col gap-8 lg:flex-row lg:gap-12">
-                        <!-- More Details Column -->
-                        <div class="min-w-0 flex-1">
-                            {@render sectionHeading("More Details")}
-                            <div class="flex flex-col gap-6 text-sm">
-                                <!-- Financials Row -->
-                                {#if data.mediaDetails?.type === "movie" && (data.mediaDetails?.details.budget || data.mediaDetails?.details.revenue)}
-                                    <div class="flex flex-wrap gap-12">
-                                        {#if data.mediaDetails.details.budget}
-                                            <div class="flex min-w-30 flex-col gap-1">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Budget</span>
-                                                <span class="text-foreground font-mono"
-                                                    >{formatCurrency(
-                                                        data.mediaDetails.details.budget
-                                                    )}</span>
-                                            </div>
-                                        {/if}
-                                        {#if data.mediaDetails.details.revenue}
-                                            <div class="flex min-w-30 flex-col gap-1">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Revenue</span>
-                                                <span class="text-foreground font-mono"
-                                                    >{formatCurrency(
-                                                        data.mediaDetails.details.revenue
-                                                    )}</span>
-                                            </div>
-                                        {/if}
-                                    </div>
-                                {/if}
+                        <MoreDetailsPanel
+                            budget={data.mediaDetails?.type === "movie"
+                                ? data.mediaDetails.details.budget
+                                : undefined}
+                            revenue={data.mediaDetails?.type === "movie"
+                                ? data.mediaDetails.details.revenue
+                                : undefined}
+                            originCountry={data.mediaDetails?.details.origin_country}
+                            spokenLanguages={data.mediaDetails?.details.spoken_languages}
+                            productionCompanies={data.mediaDetails?.details.production_companies}
+                            homepage={data.mediaDetails?.details.homepage}
+                            imdbId={data.mediaDetails?.details.imdb_id}
+                            {externalLinks} />
 
-                                <!-- Region & Language Row -->
-                                {#if data.mediaDetails?.details.origin_country?.length || data.mediaDetails?.details.spoken_languages?.length}
-                                    <div class="flex flex-wrap gap-12">
-                                        {#if data.mediaDetails?.details.origin_country?.length}
-                                            <div class="flex min-w-30 flex-col gap-1">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Origin</span>
-                                                <span class="text-foreground"
-                                                    >{data.mediaDetails.details.origin_country.join(
-                                                        ", "
-                                                    )}</span>
-                                            </div>
-                                        {/if}
-                                        {#if data.mediaDetails?.details.spoken_languages?.length}
-                                            <div class="flex min-w-30 flex-col gap-1">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Languages</span>
-                                                <span class="text-foreground"
-                                                    >{data.mediaDetails.details.spoken_languages
-                                                        .map((l) => l.english_name)
-                                                        .join(", ")}</span>
-                                            </div>
-                                        {/if}
-                                    </div>
-                                {/if}
-
-                                <!-- Production Companies -->
-                                {#if data.mediaDetails?.details.production_companies?.length}
-                                    <div class="flex flex-col gap-2">
-                                        <span
-                                            class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                            >Production</span>
-                                        <div class="flex flex-wrap gap-2">
-                                            {#each data.mediaDetails.details.production_companies as company, i (i)}
-                                                <span
-                                                    class="text-muted-foreground rounded border border-white/10 bg-white/5 px-2 py-1 text-xs">
-                                                    {company.name}
-                                                </span>
-                                            {/each}
-                                        </div>
-                                    </div>
-                                {/if}
-
-                                <!-- External Links -->
-                                {#if data.mediaDetails?.details.homepage || data.mediaDetails?.details.imdb_id || data.mediaDetails?.details.external_ids}
-                                    <div class="flex flex-col gap-2">
-                                        <span
-                                            class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                            >Links</span>
-                                        <div class="flex flex-wrap gap-2">
-                                            {#if data.mediaDetails?.details.homepage}
-                                                <a
-                                                    href={data.mediaDetails.details.homepage?.startsWith(
-                                                        "http"
-                                                    )
-                                                        ? data.mediaDetails.details.homepage
-                                                        : data.mediaDetails.details.homepage}
-                                                    target="_blank"
-                                                    rel="external noopener noreferrer"
-                                                    class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                    >Website</a>
-                                            {/if}
-                                            {#if data.mediaDetails?.details.imdb_id}
-                                                <a
-                                                    href="https://www.imdb.com/title/{data
-                                                        .mediaDetails.details
-                                                        .imdb_id}/parentalguide/"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                    >Parental Guide</a>
-                                            {/if}
-                                            {#if data.mediaDetails?.details.external_ids}
-                                                {@const validLinks = Object.entries(
-                                                    data.mediaDetails.details.external_ids
-                                                ).filter(
-                                                    ([key, value]) => value && getExternal(key)
-                                                )}
-                                                {#each validLinks as [key, value] (key)}
-                                                    <a
-                                                        href={`${getExternal(key).url}${value}`}
-                                                        target="_blank"
-                                                        rel="external noopener noreferrer"
-                                                        class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                        >{getExternal(key).name}</a>
-                                                {/each}
-                                            {/if}
-                                        </div>
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-
-                        <!-- File Information Column (movies only) -->
-                        {#if riven && data.mediaDetails?.type === "movie" && getMovieEntries().length > 0}
-                            {@const allEntries = getMovieEntries()}
-                            <div class="min-w-0 flex-1">
-                                <div class="mb-4 flex items-center justify-between gap-3">
-                                    {@render sectionHeading("File Information")}
-                                    {#if allEntries.length > 1}
-                                        <select
-                                            onchange={(e) => {
-                                                selectedMovieVersionIdx = Number(
-                                                    e.currentTarget.value
-                                                );
-                                            }}
-                                            class="bg-background border-border text-foreground rounded-md border px-2 py-1 font-mono text-xs">
-                                            {#each allEntries as entry, i (i)}
-                                                <option
-                                                    value={i}
-                                                    selected={i === selectedMovieVersionIdx}
-                                                    >{getFilesystemEntryLabel(
-                                                        entry,
-                                                        `Version ${i + 1}`
-                                                    )}</option>
-                                            {/each}
-                                        </select>
-                                    {/if}
-                                </div>
-                                {#key selectedMovieVersionIdx}
-                                    {@const fs =
-                                        allEntries[
-                                            selectedMovieVersionIdx < allEntries.length
-                                                ? selectedMovieVersionIdx
-                                                : 0
-                                        ] ?? allEntries[0]}
-                                    {@const meta = fs?.media_metadata ?? riven?.media_metadata}
-                                    {@const video = meta?.video}
-                                    <div class="flex flex-col gap-6 text-sm">
-                                        <!-- Filename -->
-                                        {#if meta?.filename || fs?.original_filename}
-                                            <div class="flex flex-col gap-1">
-                                                <p
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                                                    Filename
-                                                </p>
-                                                <p
-                                                    class="text-foreground font-mono text-xs break-all">
-                                                    {meta?.filename ?? fs?.original_filename}
-                                                </p>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Video -->
-                                        {#if video}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Video</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#if video.resolution_width && video.resolution_height}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{video.resolution_width}x{video.resolution_height}</Badge
-                                                        >{/if}
-                                                    {#if video.codec}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{video.codec}</Badge
-                                                        >{/if}
-                                                    {#if video.bit_depth}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{video.bit_depth}-bit</Badge
-                                                        >{/if}
-                                                    {#if video.hdr_type}<Badge
-                                                            variant="secondary"
-                                                            class="border border-purple-500/20 bg-purple-500/10 font-mono text-xs text-purple-200 backdrop-blur-sm"
-                                                            >{video.hdr_type}</Badge
-                                                        >{/if}
-                                                    {#if video.frame_rate}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{video.frame_rate} FPS</Badge
-                                                        >{/if}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Audio -->
-                                        {#if meta?.audio_tracks?.length}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Audio</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#each meta.audio_tracks as track, i (i)}
-                                                        <Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{track.codec}{track.channels
-                                                                ? track.channels === 8
-                                                                    ? " 7.1"
-                                                                    : track.channels === 6
-                                                                      ? " 5.1"
-                                                                      : ` ${track.channels}ch`
-                                                                : ""}{track.language
-                                                                ? ` (${track.language.toUpperCase()})`
-                                                                : ""}</Badge>
-                                                    {/each}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Subtitles -->
-                                        {#if meta?.subtitle_tracks?.length}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Subtitles</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#each meta.subtitle_tracks as track, i (i)}
-                                                        <Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 text-[10px] backdrop-blur-sm"
-                                                            >{track.language
-                                                                ? track.language.toUpperCase()
-                                                                : "Unknown"}</Badge>
-                                                    {/each}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Source -->
-                                        {#if meta?.quality_source || meta?.is_remux || meta?.is_proper || meta?.is_repack}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Source</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#if meta?.quality_source}<Badge
-                                                            variant="secondary"
-                                                            class="border border-blue-500/20 bg-blue-500/10 text-xs font-bold text-blue-200 backdrop-blur-sm"
-                                                            >{meta.quality_source}</Badge
-                                                        >{/if}
-                                                    {#if meta?.is_remux}<Badge
-                                                            variant="secondary"
-                                                            class="border border-amber-500/20 bg-amber-500/10 text-xs font-bold text-amber-200 backdrop-blur-sm"
-                                                            >REMUX</Badge
-                                                        >{/if}
-                                                    {#if meta?.is_proper}<Badge
-                                                            variant="secondary"
-                                                            class="border border-green-500/20 bg-green-500/10 text-xs font-bold text-green-200 backdrop-blur-sm"
-                                                            >PROPER</Badge
-                                                        >{/if}
-                                                    {#if meta?.is_repack}<Badge
-                                                            variant="secondary"
-                                                            class="border border-green-500/20 bg-green-500/10 text-xs font-bold text-green-200 backdrop-blur-sm"
-                                                            >REPACK</Badge
-                                                        >{/if}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Metrics -->
-                                        {#if fs?.file_size || meta?.bitrate || meta?.duration}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Metrics</span>
-                                                <div class="flex flex-wrap gap-4">
-                                                    {#if fs?.file_size}
-                                                        <div class="flex items-center gap-2">
-                                                            <span
-                                                                class="text-muted-foreground text-xs"
-                                                                >Size</span>
-                                                            <span class="text-foreground font-mono"
-                                                                >{formatSize(fs.file_size)}</span>
-                                                        </div>
-                                                    {/if}
-                                                    {#if meta?.bitrate}
-                                                        <div class="flex items-center gap-2">
-                                                            <span
-                                                                class="text-muted-foreground text-xs"
-                                                                >Bitrate</span>
-                                                            <span class="text-foreground font-mono"
-                                                                >{Math.round(
-                                                                    meta.bitrate / 1000000
-                                                                )} Mbps</span>
-                                                        </div>
-                                                    {/if}
-                                                    {#if meta?.duration}
-                                                        <div class="flex items-center gap-2">
-                                                            <span
-                                                                class="text-muted-foreground text-xs"
-                                                                >Duration</span>
-                                                            <span class="text-foreground font-mono"
-                                                                >{Math.floor(meta.duration / 60)}m {meta.duration %
-                                                                    60}s</span>
-                                                        </div>
-                                                    {/if}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Container -->
-                                        {#if meta?.container_format?.length}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Container</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#each meta.container_format as fmt (fmt)}
-                                                        <Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{fmt}</Badge>
-                                                    {/each}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Provider -->
-                                        {#if fs?.provider || fs?.plugin}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Provider</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    {#if fs?.provider}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{fs.provider}</Badge
-                                                        >{/if}
-                                                    {#if fs?.plugin}<Badge
-                                                            variant="secondary"
-                                                            class="text-muted-foreground border border-white/10 bg-white/5 font-mono text-xs backdrop-blur-sm"
-                                                            >{fs.plugin}</Badge
-                                                        >{/if}
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Download (full file to local disk; works for debrid + usenet) -->
-                                        {#if fs?.id}
-                                            <div class="flex flex-col gap-2">
-                                                <span
-                                                    class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                                                    >Download</span>
-                                                <div class="flex flex-wrap gap-2">
-                                                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-                                                    <a
-                                                        href={`/media/${fs.id}`}
-                                                        download={fs.original_filename ?? ""}
-                                                        rel="external"
-                                                        class="text-foreground rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                                                        >Download</a>
-                                                </div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- Delete version -->
-                                        {#if allEntries.length > 1 && fs?.id}
-                                            <button
-                                                type="button"
-                                                class="text-destructive/70 hover:text-destructive border-destructive/30 hover:border-destructive/70 mt-2 rounded-md border px-3 py-1.5 text-xs transition-colors"
-                                                onclick={() =>
-                                                    deleteFilesystemEntry(
-                                                        fs!.id!,
-                                                        getFilesystemEntryLabel(
-                                                            fs,
-                                                            `Version ${selectedMovieVersionIdx + 1}`
-                                                        )
-                                                    )}>
-                                                Remove this version
-                                            </button>
-                                        {/if}
-                                    </div>
-                                {/key}
-                            </div>
+                        {#if riven && data.mediaDetails?.type === "movie" && movieFileEntries.length > 0}
+                            <FileInformationPanel
+                                entries={movieFileEntries}
+                                fallbackMediaMetadata={riven?.media_metadata}
+                                bind:selectedIndex={selectedMovieVersionIdx}
+                                onDeleteEntry={deleteFilesystemEntry} />
                         {/if}
                     </div>
                 </section>
