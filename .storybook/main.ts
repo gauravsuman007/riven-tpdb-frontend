@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const envDynamicPublicStub = fileURLToPath(
     new URL("./env-dynamic-public-stub.ts", import.meta.url)
 );
+const libraryRemoteStub = fileURLToPath(new URL("./library-remote-stub.ts", import.meta.url));
 
 const config: StorybookConfig = {
     stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|ts|svelte)"],
@@ -22,7 +23,8 @@ const config: StorybookConfig = {
         viteConfig.resolve ??= {};
         viteConfig.resolve.alias = {
             ...viteConfig.resolve.alias,
-            "$env/dynamic/public": envDynamicPublicStub
+            "$env/dynamic/public": envDynamicPublicStub,
+            "./library.remote": libraryRemoteStub
         };
         return viteConfig;
     }
