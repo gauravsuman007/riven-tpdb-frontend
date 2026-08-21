@@ -7,7 +7,7 @@ import "@fontsource/merriweather/latin.css";
 import type { Preview } from "@storybook/sveltekit";
 import { mswLoader } from "msw-storybook-addon/csf3";
 
-import ThemeDecorator from "./decorators/ThemeDecorator.svelte";
+import ThemeDecorator from "$lib/storybook/decorators/ThemeDecorator.svelte";
 
 // `sveltekit-superforms` detects Storybook via `globalThis.STORIES` to disable
 // its navigation-store integration. Storybook's real preview iframe sets this
