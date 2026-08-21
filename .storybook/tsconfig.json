@@ -1,0 +1,7 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "types": ["vite/client", "msw-storybook-addon/csf3"]
+    },
+    "include": ["**/*.ts", "**/*.svelte"]
+}
