@@ -2,6 +2,8 @@
     import { getContext, onDestroy, onMount } from "svelte";
     import type { Action } from "svelte/action";
     import ListItem from "$lib/components/list-item.svelte";
+    import ImmersiveBackground from "$lib/components/immersive-background.svelte";
+    import BackdropBackground from "$lib/components/media/backdrop-background.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { SearchStore } from "$lib/services/search-store.svelte";
@@ -119,34 +121,21 @@
 <div class="relative min-h-screen w-full overflow-x-hidden">
     <!-- Immersive Background -->
     {#if backgroundImage}
-        <div class="fixed top-0 left-0 z-0 h-screen w-full transition-opacity duration-1000">
-            {#key backgroundImage}
-                <img
-                    alt=""
-                    class="absolute inset-0 h-full w-full object-cover opacity-30 blur-3xl"
-                    src={backgroundImage}
-                    loading="lazy"
-                    transition:scale={{ duration: 2000, start: 1.1, opacity: 0 }} />
-            {/key}
-            <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
-            <div
-                class="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/50 to-transparent">
-            </div>
-            <div
-                class="absolute inset-0 bg-linear-to-b from-zinc-950/20 via-transparent to-transparent">
-            </div>
-        </div>
+        <BackdropBackground>
+            {#snippet image()}
+                {#key backgroundImage}
+                    <img
+                        alt=""
+                        class="absolute inset-0 h-full w-full object-cover opacity-30 blur-3xl"
+                        src={backgroundImage}
+                        loading="lazy"
+                        transition:scale={{ duration: 2000, start: 1.1, opacity: 0 }} />
+                {/key}
+            {/snippet}
+        </BackdropBackground>
     {:else}
         <!-- Default subtle background -->
-        <div class="pointer-events-none fixed inset-0 z-0">
-            <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
-            <div
-                class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
-            </div>
-            <div
-                class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
-            </div>
-        </div>
+        <ImmersiveBackground />
     {/if}
 
     <!-- Content Container -->

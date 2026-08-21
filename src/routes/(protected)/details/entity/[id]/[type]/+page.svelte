@@ -4,6 +4,8 @@
     import { cubicOut } from "svelte/easing";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
+    import BackdropBackground from "$lib/components/media/backdrop-background.svelte";
+    import BirthdayConfetti from "$lib/components/effects/birthday-confetti.svelte";
     import { calculateAge, formatDate, isDayAndMonthToday } from "$lib/helpers";
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import { cn, deduplicateById } from "$lib/utils";
@@ -23,31 +25,6 @@
 
     const badgeClass =
         "border-white/10 text-zinc-300 hover:text-white bg-white/5 px-3 py-1 text-xs font-mono font-medium backdrop-blur-md transition-colors hover:bg-white/10 rounded-xl";
-
-    const CONFETTI_CONFIG = {
-        colors: [
-            "#ff6b6b",
-            "#4ecdc4",
-            "#ffe66d",
-            "#a8e6cf",
-            "#ff8b94",
-            "#ffd3b6",
-            "#dcedc1",
-            "#a8dadc",
-            "#f1c0e8",
-            "#cfbaf0",
-            "#95e1d3",
-            "#f38181"
-        ],
-        shapes: ["square", "circle", "rectangle", ""] as const,
-        animations: [
-            "confetti-fall-1",
-            "confetti-fall-2",
-            "confetti-fall-3",
-            "confetti-fall-4",
-            "confetti-fall-5"
-        ] as const
-    };
 
     // Combine Cast and Crew for carousel
     const combinedCredits = $derived([
@@ -139,119 +116,24 @@
 
 <svelte:head>
     <title>{data.entity.name} - Riven</title>
-
-    {#if birthdayToday && !data.entity.deathday}
-        <style>
-            @keyframes confetti-fall-1 {
-                0% {
-                    transform: translateY(-100vh) rotate(0deg);
-                    opacity: 1;
-                }
-                100% {
-                    transform: translateY(100vh) translateX(30px) rotate(720deg);
-                    opacity: 0;
-                }
-            }
-            @keyframes confetti-fall-2 {
-                0% {
-                    transform: translateY(-100vh) rotate(0deg);
-                    opacity: 1;
-                }
-                100% {
-                    transform: translateY(100vh) translateX(-40px) rotate(-540deg);
-                    opacity: 0;
-                }
-            }
-            @keyframes confetti-fall-3 {
-                0% {
-                    transform: translateY(-100vh) rotate(0deg);
-                    opacity: 1;
-                }
-                100% {
-                    transform: translateY(100vh) translateX(50px) rotate(900deg);
-                    opacity: 0;
-                }
-            }
-            @keyframes confetti-fall-4 {
-                0% {
-                    transform: translateY(-100vh) rotate(0deg);
-                    opacity: 1;
-                }
-                100% {
-                    transform: translateY(100vh) translateX(-25px) rotate(-720deg);
-                    opacity: 0;
-                }
-            }
-            @keyframes confetti-fall-5 {
-                0% {
-                    transform: translateY(-100vh) rotate(0deg);
-                    opacity: 1;
-                }
-                100% {
-                    transform: translateY(100vh) translateX(15px) rotate(600deg);
-                    opacity: 0;
-                }
-            }
-            .confetti {
-                position: fixed;
-                z-index: 9999;
-                pointer-events: none;
-                border-radius: 2px;
-                opacity: 0;
-            }
-            .confetti.square {
-                border-radius: 0;
-            }
-            .confetti.circle {
-                border-radius: 50%;
-            }
-            .confetti.rectangle {
-                width: 8px;
-                height: 12px;
-            }
-        </style>
-    {/if}
 </svelte:head>
 
 {#key data.entity.id}
     <div class="relative flex min-h-screen flex-col">
         <!-- Birthday Confetti -->
-        {#if birthdayToday && !data.entity.deathday}
-            <div class="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-                {#each Array(20) as i (i)}
-                    <div
-                        class="confetti {CONFETTI_CONFIG.shapes[i % CONFETTI_CONFIG.shapes.length]}"
-                        style="
-                left: {(i * 5.26) % 100}%;
-                background: {CONFETTI_CONFIG.colors[i % CONFETTI_CONFIG.colors.length]};
-                animation: {CONFETTI_CONFIG.animations[
-                            i % CONFETTI_CONFIG.animations.length
-                        ]} {2.5 + (i % 8) * 0.2}s linear infinite;
-                animation-delay: {(i * 0.15) % 2}s;
-                width: {8 + (i % 5)}px;
-                height: {8 + ((i * 3) % 5)}px;
-            ">
-                    </div>
-                {/each}
-            </div>
-        {/if}
+        <BirthdayConfetti active={birthdayToday && !data.entity.deathday} />
 
         <!-- Background -->
         {#if currentBackdrop?.backdrop_path}
-            <div class="fixed top-0 left-0 z-0 h-screen w-full">
-                <img
-                    alt=""
-                    in:fade|global={{ duration: 1000, easing: cubicOut }}
-                    class="h-full w-full object-cover opacity-30 blur-3xl transition-opacity duration-1000"
-                    src={currentBackdrop.backdrop_path} />
-                <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
-                <div
-                    class="from-background via-background/50 absolute inset-0 bg-linear-to-t to-transparent">
-                </div>
-                <div
-                    class="from-background/20 absolute inset-0 bg-linear-to-b via-transparent to-transparent">
-                </div>
-            </div>
+            <BackdropBackground tone="background">
+                {#snippet image()}
+                    <img
+                        alt=""
+                        in:fade|global={{ duration: 1000, easing: cubicOut }}
+                        class="h-full w-full object-cover opacity-30 blur-3xl transition-opacity duration-1000"
+                        src={currentBackdrop.backdrop_path} />
+                {/snippet}
+            </BackdropBackground>
         {:else if data.entity.profile_path}
             <div class="fixed top-0 left-0 z-0 h-screen w-full">
                 <img

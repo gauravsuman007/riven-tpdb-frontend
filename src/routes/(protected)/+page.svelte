@@ -6,6 +6,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { MediaListStore, type BaseListItem } from "$lib/services/lists-cache.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
+    import ImmersiveBackground from "$lib/components/immersive-background.svelte";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import { subscribeToRivenMediaEvents } from "$lib/services/riven-live-updates";
@@ -128,16 +129,7 @@
 
 <PageShell
     class="bg-background relative mt-0 flex min-h-screen flex-col overflow-x-hidden p-0 md:mt-0 md:p-0">
-    <!-- Immersive Background -->
-    <div class="pointer-events-none fixed inset-0 z-0">
-        <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
-        <div
-            class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
-        </div>
-        <div
-            class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
-        </div>
-    </div>
+    <ImmersiveBackground />
 
     <div class="relative z-10 flex w-full flex-col gap-10 pb-24 md:gap-12">
         <div

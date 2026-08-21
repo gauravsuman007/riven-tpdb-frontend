@@ -13,6 +13,8 @@ export type LogEntry = {
 
 export type LiveLogLine = string;
 
+export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
+
 const HISTORICAL_LOGS_QUERY = `
     query GetLogs($limit: Int, $level: String) {
         logs(limit: $limit, level: $level) {
@@ -35,9 +37,7 @@ export class LogStore {
     #activeTab = $state<"live" | "historical">("live");
     #error = $state<string | null>(null);
     #historicalError = $state<string | null>(null);
-    #connectionStatus = $state<"connecting" | "connected" | "disconnected" | "error">(
-        "disconnected"
-    );
+    #connectionStatus = $state<ConnectionStatus>("disconnected");
     #unsubscribe: (() => void) | null = null;
 
     #reconnectAttempts = $state<number>(0);

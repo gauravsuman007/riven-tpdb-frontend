@@ -3,19 +3,19 @@
     import { tick, onDestroy } from "svelte";
     import { page } from "$app/state";
     import type { PageProps } from "./$types";
-    import { fly } from "svelte/transition";
-    import { cubicOut } from "svelte/easing";
     import * as Form from "$lib/components/ui/form/index.js";
-    import type { Component } from "svelte";
     import { superForm } from "sveltekit-superforms";
     import { zod4Client } from "sveltekit-superforms/adapters";
     import { Input } from "$lib/components/ui/input/index.js";
 
     import ListItem from "$lib/components/list-item.svelte";
+    import ImmersiveBackground from "$lib/components/immersive-background.svelte";
+    import SelectionActionBar, {
+        type SelectionAction
+    } from "$lib/components/selection-action-bar.svelte";
     import { itemsSearchSchema } from "$lib/schemas/items";
     import Trash from "@lucide/svelte/icons/trash";
     import Search from "@lucide/svelte/icons/search";
-    import X from "@lucide/svelte/icons/x";
     import { Button } from "$lib/components/ui/button/index.js";
     import ListChecks from "@lucide/svelte/icons/list-checks";
     import * as Select from "$lib/components/ui/select/index.js";
@@ -78,6 +78,78 @@
 
     let actionInProgress = $state(false);
     let formElement: HTMLFormElement;
+
+    const libraryActions: SelectionAction[] = [
+        {
+            label: "Reset",
+            icon: ListChecks,
+            onClick: async () => {
+                actionInProgress = true;
+                try {
+                    const result = await reset_items({
+                        ids: itemsStore.items.map((id) => id.toString())
+                    });
+                    if (result.count > 0) {
+                        toast.success(`Reset ${result.count} items`);
+                    } else {
+                        toast.info("No matching items were reset");
+                    }
+                    itemsStore.clear();
+                    await refreshLiveLibrary();
+                } catch (e) {
+                    if (e instanceof Error) toast.error(`Error: ${e.message}`);
+                    else toast.error("An unknown error occurred");
+                } finally {
+                    actionInProgress = false;
+                }
+            }
+        },
+        {
+            label: "Retry",
+            icon: Loading2Circle,
+            onClick: async () => {
+                actionInProgress = true;
+                try {
+                    const result = await retry_items({
+                        ids: itemsStore.items.map((id) => id.toString())
+                    });
+                    if (result.count > 0) {
+                        toast.success(`Marked ${result.count} items for retry`);
+                    } else {
+                        toast.info("No matching items were marked for retry");
+                    }
+                    itemsStore.clear();
+                    await refreshLiveLibrary();
+                } catch (e) {
+                    if (e instanceof Error) toast.error(`Error: ${e.message}`);
+                    else toast.error("An unknown error occurred");
+                } finally {
+                    actionInProgress = false;
+                }
+            }
+        },
+        {
+            label: "Remove",
+            icon: Trash,
+            variant: "destructive",
+            onClick: async () => {
+                actionInProgress = true;
+                try {
+                    await remove_items({
+                        ids: itemsStore.items.map((id) => id.toString())
+                    });
+                    toast.success(`Removed ${itemsStore.count} items`);
+                    itemsStore.clear();
+                    await refreshLiveLibrary();
+                } catch (e) {
+                    if (e instanceof Error) toast.error(`Error: ${e.message}`);
+                    else toast.error("An unknown error occurred");
+                } finally {
+                    actionInProgress = false;
+                }
+            }
+        }
+    ];
 
     const ITEMS_QUERY = `
         query GetItems(
@@ -268,15 +340,7 @@
     });
 </script>
 
-<!-- Immersive Background -->
-<div class="pointer-events-none fixed inset-0 z-0">
-    <div class="absolute inset-0 bg-linear-to-b from-zinc-900 via-zinc-950 to-black"></div>
-    <div class="bg-primary/5 absolute top-[-20%] left-[-10%] h-150 w-150 rounded-full blur-[120px]">
-    </div>
-    <div
-        class="absolute right-[-5%] bottom-[-10%] h-125 w-125 rounded-full bg-blue-500/5 blur-[100px]">
-    </div>
-</div>
+<ImmersiveBackground />
 
 <PageShell class="relative z-10 flex min-h-screen flex-col overflow-x-hidden bg-transparent">
     <div class="relative z-10 mx-auto flex w-full max-w-600 flex-col gap-8">
@@ -467,124 +531,11 @@
         {/if}
 
         <!-- Floating Selection Bar -->
-        {#if itemsStore.count > 0}
-            <div
-                transition:fly={{ y: 100, duration: 400, easing: cubicOut }}
-                class="fixed bottom-8 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-3xl border border-white/10 bg-zinc-900/80 p-2 pl-4 shadow-2xl backdrop-blur-xl">
-                <div class="mr-4 flex items-center gap-3">
-                    <div
-                        class="bg-primary/20 text-primary flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold">
-                        {itemsStore.count}
-                    </div>
-                    <span class="text-sm font-medium text-zinc-300">Selected</span>
-                </div>
-
-                <div class="mx-1 h-8 w-px bg-white/10"></div>
-
-                <div class="flex items-center gap-1">
-                    {#snippet actionButton(
-                        label: string,
-                        icon: { component: Component },
-                        onClick: () => Promise<void>,
-                        variant: "default" | "destructive" = "default"
-                    )}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={actionInProgress}
-                            onclick={onClick}
-                            class={cn(
-                                "h-9 gap-2 rounded-xl px-3 transition-all",
-                                variant === "destructive"
-                                    ? "hover:bg-red-500/20 hover:text-red-400"
-                                    : "hover:bg-white/10"
-                            )}>
-                            {#if actionInProgress}
-                                <Loading2Circle class="h-3.5 w-3.5 animate-spin" />
-                            {:else}
-                                <icon.component class="h-3.5 w-3.5" />
-                            {/if}
-                            {label}
-                        </Button>
-                    {/snippet}
-
-                    <!-- Actions -->
-                    {@render actionButton("Reset", { component: ListChecks }, async () => {
-                        actionInProgress = true;
-                        try {
-                            const result = await reset_items({
-                                ids: itemsStore.items.map((id) => id.toString())
-                            });
-                            if (result.count > 0) {
-                                toast.success(`Reset ${result.count} items`);
-                            } else {
-                                toast.info("No matching items were reset");
-                            }
-                            itemsStore.clear();
-                            await refreshLiveLibrary();
-                        } catch (e) {
-                            if (e instanceof Error) toast.error(`Error: ${e.message}`);
-                            else toast.error("An unknown error occurred");
-                        } finally {
-                            actionInProgress = false;
-                        }
-                    })}
-
-                    {@render actionButton("Retry", { component: Loading2Circle }, async () => {
-                        actionInProgress = true;
-                        try {
-                            const result = await retry_items({
-                                ids: itemsStore.items.map((id) => id.toString())
-                            });
-                            if (result.count > 0) {
-                                toast.success(`Marked ${result.count} items for retry`);
-                            } else {
-                                toast.info("No matching items were marked for retry");
-                            }
-                            itemsStore.clear();
-                            await refreshLiveLibrary();
-                        } catch (e) {
-                            if (e instanceof Error) toast.error(`Error: ${e.message}`);
-                            else toast.error("An unknown error occurred");
-                        } finally {
-                            actionInProgress = false;
-                        }
-                    })}
-
-                    {@render actionButton(
-                        "Remove",
-                        { component: Trash },
-                        async () => {
-                            actionInProgress = true;
-                            try {
-                                await remove_items({
-                                    ids: itemsStore.items.map((id) => id.toString())
-                                });
-                                toast.success(`Removed ${itemsStore.count} items`);
-                                itemsStore.clear();
-                                await refreshLiveLibrary();
-                            } catch (e) {
-                                if (e instanceof Error) toast.error(`Error: ${e.message}`);
-                                else toast.error("An unknown error occurred");
-                            } finally {
-                                actionInProgress = false;
-                            }
-                        },
-                        "destructive"
-                    )}
-
-                    <div class="mx-1 h-8 w-px bg-white/10"></div>
-
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        class="h-9 w-9 rounded-xl hover:bg-white/10"
-                        onclick={() => itemsStore.clear()}>
-                        <X class="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-        {/if}
+        <SelectionActionBar
+            count={itemsStore.count}
+            actions={libraryActions}
+            disabled={actionInProgress}
+            onClear={() => itemsStore.clear()} />
     </div>
 </PageShell>
 

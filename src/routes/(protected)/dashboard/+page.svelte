@@ -1,7 +1,6 @@
 <script lang="ts">
     import PageShell from "$lib/components/page-shell.svelte";
     import { gqlClient } from "$lib/graphql-client";
-    import { cn } from "$lib/utils";
     import type { PageData } from "./$types";
     import ActivityCard from "$lib/components/dashboard/activity-card.svelte";
     import LibraryChartsCard from "$lib/components/dashboard/library-charts-card.svelte";
@@ -12,6 +11,7 @@
     import UsenetProvidersCard from "$lib/components/dashboard/usenet-providers-card.svelte";
     import UsenetActivityCard from "$lib/components/dashboard/usenet-activity-card.svelte";
     import UsenetHealthCard from "$lib/components/dashboard/usenet-health-card.svelte";
+    import KpiStatTile from "$lib/components/dashboard/kpi-stat-tile.svelte";
     import type {
         ActivePlaybackSession,
         DownloaderService,
@@ -327,27 +327,6 @@
     <title>Dashboard - Riven</title>
 </svelte:head>
 
-{#snippet KPICard({
-    title,
-    value,
-    tone = "default"
-}: {
-    title: string;
-    value: string | undefined;
-    tone?: "default" | "warning";
-})}
-    <div class={cn("border-border/60 border-b py-5", tone === "warning" && "border-amber-600/30")}>
-        <p class="text-sm font-medium text-neutral-300">{title}</p>
-        <div
-            class={cn(
-                "mt-3 text-2xl font-semibold tracking-tight",
-                tone === "warning" ? "text-amber-300" : "text-neutral-50"
-            )}>
-            {value}
-        </div>
-    </div>
-{/snippet}
-
 <PageShell class="mx-auto w-full max-w-7xl">
     <header class="border-border/60 border-b pb-6">
         <h1 class="text-3xl font-bold tracking-tight">Media Library Statistics</h1>
@@ -355,7 +334,7 @@
 
     <section class="grid grid-cols-1 gap-x-10 gap-y-4 py-2 md:grid-cols-2 lg:grid-cols-4">
         {#each kpiCards as card (card.title)}
-            {@render KPICard(card)}
+            <KpiStatTile {...card} />
         {/each}
     </section>
 

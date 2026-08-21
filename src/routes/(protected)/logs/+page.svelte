@@ -2,9 +2,17 @@
     import { onMount, onDestroy } from "svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import { toast } from "svelte-sonner";
-    import { logStore, type LogEntry, type LiveLogLine } from "$lib/stores/logs.svelte";
+    import { logStore } from "$lib/stores/logs.svelte";
     import { createScopedLogger } from "$lib/logger";
     import PageShell from "$lib/components/page-shell.svelte";
+    import LiveLogLineRow from "$lib/components/logs/live-log-line.svelte";
+    import LogEntryRow from "$lib/components/logs/log-entry-row.svelte";
+    import ConnectionStatusIndicator from "$lib/components/logs/connection-status-indicator.svelte";
+    import LogTabButton from "$lib/components/logs/log-tab-button.svelte";
+    import LoadingSpinner from "$lib/components/logs/loading-spinner.svelte";
+    import ErrorDisplay from "$lib/components/logs/error-display.svelte";
+    import EmptyState from "$lib/components/logs/empty-state.svelte";
+    import { getConnectionStatusText } from "$lib/components/logs/helpers";
 
     const logger = createScopedLogger("logs-page");
 
@@ -40,38 +48,6 @@
         logStore.disconnect();
     });
 
-    function getStatusColor() {
-        switch (connectionStatus) {
-            case "connected":
-                return "bg-green-500";
-            case "connecting":
-                return "bg-yellow-500";
-            case "disconnected":
-                return "bg-gray-500";
-            case "error":
-                return "bg-red-500";
-            default:
-                return "bg-gray-500";
-        }
-    }
-
-    function getStatusText() {
-        switch (connectionStatus) {
-            case "connected":
-                return "Connected";
-            case "connecting":
-                return reconnectAttempts > 0
-                    ? `Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`
-                    : "Connecting...";
-            case "disconnected":
-                return "Disconnected";
-            case "error":
-                return "Connection Error";
-            default:
-                return "Unknown";
-        }
-    }
-
     async function handleUploadLogs() {
         try {
             toast.info("Log upload is not supported in the new backend.");
@@ -84,95 +60,6 @@
 <svelte:head>
     <title>Logs - Riven</title>
 </svelte:head>
-
-{#snippet liveLine(line: LiveLogLine)}
-    <div class="border-border/50 hover:bg-muted/20 border-b transition-colors last:border-b-0">
-        <div class="text-foreground/90 p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap">
-            {line}
-        </div>
-    </div>
-{/snippet}
-
-{#snippet logEntry(log: LogEntry)}
-    {@const levelColors: Record<string, string> = {
-        error: "text-red-400",
-        warn: "text-yellow-400",
-        info: "text-green-400",
-        debug: "text-blue-400",
-        trace: "text-muted-foreground"
-    }}
-    {@const level = (log.level ?? "info").toLowerCase()}
-    <div class="border-border/50 hover:bg-muted/20 border-b transition-colors last:border-b-0">
-        <div
-            class="text-foreground/90 grid grid-cols-[auto_auto_auto_1fr] gap-x-3 p-2 font-mono text-xs">
-            <span class="text-muted-foreground shrink-0">{log.timestamp ?? ""}</span>
-            <span class="shrink-0 font-semibold uppercase {levelColors[level] ?? 'text-foreground'}"
-                >{level}</span>
-            <span class="text-muted-foreground/70 shrink-0">{log.target ?? ""}</span>
-            <span class="wrap-break-word whitespace-pre-wrap">{log.message ?? ""}</span>
-        </div>
-    </div>
-{/snippet}
-
-{#snippet loadingSpinner(message: string)}
-    <div class="flex h-full flex-col items-center justify-center p-8">
-        <div
-            class="border-primary mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-t-transparent">
-        </div>
-        <p class="text-muted-foreground text-sm">{message}</p>
-    </div>
-{/snippet}
-
-{#snippet errorDisplay(
-    errorMessage: string,
-    retryAction: () => void,
-    buttonText: string = "Try Again"
-)}
-    <div class="bg-destructive/10 border-destructive/20 rounded-lg border p-6">
-        <h3 class="text-destructive mb-3 text-lg font-semibold">Error Loading Logs</h3>
-        <pre
-            class="text-destructive/80 bg-destructive/5 mb-4 overflow-x-auto rounded border p-3 font-mono text-sm">{errorMessage}</pre>
-        <button
-            class="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-4 py-2 font-medium transition-colors"
-            onclick={retryAction}>
-            {buttonText}
-        </button>
-    </div>
-{/snippet}
-
-{#snippet tabButton(name: string, isActive: boolean, onClickAction: () => void)}
-    <button
-        class="rounded px-3 py-1.5 text-sm font-medium transition-colors {isActive
-            ? 'bg-primary/10 text-primary'
-            : 'hover:bg-muted/50'}"
-        onclick={onClickAction}>
-        {name}
-    </button>
-{/snippet}
-
-{#snippet statusIndicator()}
-    <div class="flex items-center gap-2">
-        <div
-            class="{getStatusColor()} h-2 w-2 rounded-full {connectionStatus === 'connecting'
-                ? 'animate-pulse'
-                : ''}">
-        </div>
-        <span class="text-muted-foreground text-sm">{getStatusText()}</span>
-    </div>
-{/snippet}
-
-{#snippet emptyState(message: string, actionText?: string, actionFn?: () => void)}
-    <div class="flex h-full flex-col items-center justify-center p-8">
-        <p class="text-muted-foreground text-sm">{message}</p>
-        {#if actionText && actionFn}
-            <button
-                class="bg-primary/10 hover:bg-primary/20 text-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                onclick={actionFn}>
-                {actionText}
-            </button>
-        {/if}
-    </div>
-{/snippet}
 
 <PageShell class="h-full">
     {#if error && connectionStatus === "error" && reconnectAttempts >= maxReconnectAttempts}
@@ -206,16 +93,21 @@
                 <div
                     class="bg-muted/30 flex shrink-0 flex-col items-center justify-between gap-4 border-b px-6 py-3 md:flex-row">
                     <div class="flex items-center gap-2">
-                        {@render tabButton("Live Logs", activeTab === "live", () =>
-                            logStore.setActiveTab("live")
-                        )}
-                        {@render tabButton("Historical Logs", activeTab === "historical", () =>
-                            logStore.setActiveTab("historical")
-                        )}
+                        <LogTabButton
+                            name="Live Logs"
+                            isActive={activeTab === "live"}
+                            onclick={() => logStore.setActiveTab("live")} />
+                        <LogTabButton
+                            name="Historical Logs"
+                            isActive={activeTab === "historical"}
+                            onclick={() => logStore.setActiveTab("historical")} />
                     </div>
                     <div class="flex items-center gap-4">
                         {#if activeTab === "live"}
-                            {@render statusIndicator()}
+                            <ConnectionStatusIndicator
+                                {connectionStatus}
+                                {reconnectAttempts}
+                                {maxReconnectAttempts} />
                             {#if connectionStatus === "error" && reconnectAttempts < maxReconnectAttempts}
                                 <button
                                     class="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 rounded border px-3 py-1 text-sm font-medium transition-colors"
@@ -238,37 +130,42 @@
                     {#if activeTab === "live"}
                         {#if logs.length > 0}
                             {#each logs.slice().reverse() as line, i (i)}
-                                {@render liveLine(line)}
+                                <LiveLogLineRow {line} />
                             {/each}
                         {:else if connectionStatus === "connecting"}
-                            {@render loadingSpinner(getStatusText())}
+                            <LoadingSpinner
+                                message={getConnectionStatusText(
+                                    connectionStatus,
+                                    reconnectAttempts,
+                                    maxReconnectAttempts
+                                )} />
                         {:else if connectionStatus === "connected" || hasConnected}
-                            {@render emptyState("Connected. Waiting for live logs...")}
+                            <EmptyState message="Connected. Waiting for live logs..." />
                         {:else if error}
                             <div class="p-8">
-                                {@render errorDisplay(
-                                    error,
-                                    () => logStore.reconnect(),
-                                    "Reconnect"
-                                )}
+                                <ErrorDisplay
+                                    errorMessage={error}
+                                    retryAction={() => logStore.reconnect()}
+                                    buttonText="Reconnect" />
                             </div>
                         {/if}
                     {:else if isLoadingHistorical}
-                        {@render loadingSpinner("Loading historical logs...")}
+                        <LoadingSpinner message="Loading historical logs..." />
                     {:else if historicalError}
                         <div class="p-8">
-                            {@render errorDisplay(historicalError, () =>
-                                logStore.fetchHistoricalLogs()
-                            )}
+                            <ErrorDisplay
+                                errorMessage={historicalError}
+                                retryAction={() => logStore.fetchHistoricalLogs()} />
                         </div>
                     {:else if historicalLogs.length > 0}
                         {#each historicalLogs.slice().reverse() as log, i (i)}
-                            {@render logEntry(log)}
+                            <LogEntryRow {log} />
                         {/each}
                     {:else}
-                        {@render emptyState("No historical logs found", "Refresh", () =>
-                            logStore.fetchHistoricalLogs()
-                        )}
+                        <EmptyState
+                            message="No historical logs found"
+                            actionText="Refresh"
+                            actionFn={() => logStore.fetchHistoricalLogs()} />
                     {/if}
                 </div>
             </div>

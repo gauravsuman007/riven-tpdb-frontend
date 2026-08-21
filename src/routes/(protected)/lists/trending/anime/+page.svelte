@@ -4,6 +4,7 @@
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { onMount } from "svelte";
     import PageShell from "$lib/components/page-shell.svelte";
+    import ImmersiveBackground from "$lib/components/immersive-background.svelte";
     import { gqlClient } from "$lib/graphql-client";
 
     const ANILIST_TRENDING_QUERY = `query TrendingAnilist($page: Int!, $perPage: Int) {
@@ -64,16 +65,7 @@
 </svelte:head>
 
 <PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden">
-    <!-- Immersive Background -->
-    <div class="pointer-events-none fixed inset-0 z-0">
-        <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
-        <div
-            class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
-        </div>
-        <div
-            class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
-        </div>
-    </div>
+    <ImmersiveBackground />
 
     <div
         class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-6 px-6 pt-6 pb-24 md:px-12 md:pt-16 md:pb-12 lg:px-16">

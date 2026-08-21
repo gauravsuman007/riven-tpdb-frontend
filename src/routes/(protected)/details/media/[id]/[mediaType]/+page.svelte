@@ -24,6 +24,7 @@
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import CollectionSheet from "$lib/components/media/collection-sheet.svelte";
     import StatusBadge from "$lib/components/media/status-badge.svelte";
+    import BackdropBackground from "$lib/components/media/backdrop-background.svelte";
     import LiveSeasons from "./live-seasons.svelte";
     import LiveEpisodes from "./live-episodes.svelte";
     import { toast } from "svelte-sonner";
@@ -745,21 +746,16 @@
 {#key data.mediaDetails?.details.id}
     <div class="relative flex min-h-screen flex-col overflow-x-hidden">
         {#if data.mediaDetails?.details.backdrop_path}
-            <div class="fixed top-0 left-0 z-0 h-screen w-full">
-                <img
-                    alt=""
-                    in:fade={{ duration: 1000, easing: cubicOut }}
-                    class="h-full w-full object-cover opacity-30 blur-3xl transition-opacity duration-1000"
-                    src={data.mediaDetails?.details.backdrop_path}
-                    loading="lazy" />
-                <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
-                <div
-                    class="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/50 to-transparent">
-                </div>
-                <div
-                    class="absolute inset-0 bg-linear-to-b from-zinc-950/20 via-transparent to-transparent">
-                </div>
-            </div>
+            <BackdropBackground>
+                {#snippet image()}
+                    <img
+                        alt=""
+                        in:fade={{ duration: 1000, easing: cubicOut }}
+                        class="h-full w-full object-cover opacity-30 blur-3xl transition-opacity duration-1000"
+                        src={data.mediaDetails?.details.backdrop_path}
+                        loading="lazy" />
+                {/snippet}
+            </BackdropBackground>
         {/if}
 
         <div class="z-10 mx-auto flex h-full w-full max-w-600 flex-col">
