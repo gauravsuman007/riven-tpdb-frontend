@@ -29,7 +29,7 @@
 
 {#if active}
     <div class="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-        {#each Array(20) as i (i)}
+        {#each Array(20) as _, i (i)}
             <div
                 class="confetti {CONFETTI_CONFIG.shapes[i % CONFETTI_CONFIG.shapes.length]}"
                 style="
