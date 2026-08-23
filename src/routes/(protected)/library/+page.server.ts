@@ -19,9 +19,11 @@ interface RivenLibraryItem {
     title: string;
     tmdb_id?: string | null;
     tvdb_id?: string | null;
+    tpdb_id?: string | null;
     parent_ids?: {
         tmdb_id?: string | null;
         tvdb_id?: string | null;
+        tpdb_id?: string | null;
     } | null;
     poster_path?: string | null;
     aired_at?: string | null;
@@ -43,9 +45,17 @@ function transformItems(items: RivenLibraryItem[]) {
             // Determine ID and indexer for navigation
             // Movies use TMDB, Shows use TVDB (skip resolution)
             let id: string | number | null = null;
-            let indexer: "tmdb" | "tvdb" = "tmdb";
+            let indexer: "tmdb" | "tvdb" | "tpdb" = "tmdb";
 
-            if (item.type === "movie") {
+            // Adult items are keyed on TPDB and carry no TMDB/TVDB id at all.
+            // They must be checked first, otherwise the branches below leave
+            // `id` null and the item is dropped from the library entirely.
+            const tpdbId = item.tpdb_id ?? item.parent_ids?.tpdb_id ?? null;
+
+            if (tpdbId) {
+                id = tpdbId;
+                indexer = "tpdb";
+            } else if (item.type === "movie") {
                 id = item.tmdb_id ?? null;
                 indexer = "tmdb";
             } else if (item.type === "show") {
@@ -73,6 +83,7 @@ function transformItems(items: RivenLibraryItem[]) {
                 media_type: item.type,
                 year: extractYear(item.aired_at),
                 indexer,
+                tpdb_uuid: tpdbId,
                 type: getItemType(item.type),
                 riven_id: item.id
             };
