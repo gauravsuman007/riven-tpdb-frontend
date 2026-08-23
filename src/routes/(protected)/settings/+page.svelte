@@ -17,6 +17,8 @@
 
     setShadcnContext();
 
+    let { data }: { data: PageData } = $props();
+
     const meta = createMeta<ActionData, PageData>().form;
 
     // @ts-expect-error - Schema is provided by page data
@@ -72,6 +74,24 @@
         { id: "post", label: "Post-processing", sections: ["post_processing"] }
     ] as const;
 
+    /**
+     * Any top-level schema key not claimed by a tab above still has to render,
+     * or saving would drop it. Rather than trusting the list to stay in step
+     * with the backend, anything unclaimed is collected into a final tab.
+     */
+    const extraSections = $derived.by(() => {
+        const schema = (data as any)?.form?.schema;
+        const keys: string[] = Object.keys(schema?.properties ?? {});
+        const claimed = new Set(TABS.flatMap((tab) => tab.sections as readonly string[]));
+        return keys.filter((key) => !claimed.has(key));
+    });
+
+    const tabs = $derived(
+        extraSections.length > 0
+            ? [...TABS, { id: "other", label: "Other", sections: extraSections }]
+            : [...TABS]
+    );
+
     let active = $state<string>(TABS[0].id);
 </script>
 
@@ -86,7 +106,7 @@
         <div
             class="border-border/60 bg-background/60 sticky top-0 z-20 flex flex-wrap gap-1 border-b pb-2 backdrop-blur-md"
             role="tablist">
-            {#each TABS as tab (tab.id)}
+            {#each tabs as tab (tab.id)}
                 <button
                     type="button"
                     role="tab"
@@ -110,13 +130,16 @@
                      submitted FormData; BasicForm renders this internally. -->
                 <HiddenIdPrefixInput {form} />
 
-                {#each TABS as tab (tab.id)}
+                {#each tabs as tab (tab.id)}
                     <div
                         id="settings-panel-{tab.id}"
                         role="tabpanel"
                         class={cn("flex-col gap-8", active === tab.id ? "flex" : "hidden")}>
                         {#each tab.sections as section (section)}
-                            <Field {form} path={[section]} />
+                            <!-- The schema is fetched from the backend at
+                                 runtime, so section names cannot be checked
+                                 against a literal union at compile time. -->
+                            <Field {form} path={[section] as never} />
                         {/each}
                     </div>
                 {/each}
