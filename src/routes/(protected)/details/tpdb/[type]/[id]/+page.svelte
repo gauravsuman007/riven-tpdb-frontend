@@ -3,7 +3,6 @@
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";
-    import ListItem from "$lib/components/list-item.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
     import DownloadIcon from "@lucide/svelte/icons/download";
     import BookmarkIcon from "@lucide/svelte/icons/bookmark";
@@ -18,6 +17,11 @@
     const backdrop = $derived(item.background?.full || item.background?.large || null);
     const performers = $derived((item.performers ?? []).filter((p: any) => p?.name));
     const tags = $derived((item.tags ?? []).filter((t: any) => t?.name));
+
+    // Related rows link the same way list-item.svelte does: prefer the TPDB
+    // uuid, falling back to the numeric id.
+    const relatedHref = (related: Record<string, any>) =>
+        `/details/tpdb/${data.type}/${related.tpdb_uuid ?? related.id}`;
 
     // TPDB reports duration in seconds.
     const runtime = $derived.by(() => {
@@ -121,12 +125,48 @@
         {#if data.similar.length}
             <div class="flex flex-col gap-4">
                 <h2 class="text-foreground text-2xl font-bold tracking-tight">Related on TPDB</h2>
-                <div
-                    class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+                <div class="flex flex-col divide-y divide-border/60">
                     {#each data.similar as related (related.id)}
-                        <div class="aspect-[2/3] w-full">
-                            <ListItem data={related} indexer="tpdb" type={data.type} />
-                        </div>
+                        <a
+                            href={relatedHref(related)}
+                            class="group hover:bg-accent/40 flex items-start gap-4 rounded-lg p-3 transition-colors">
+                            <div
+                                class="bg-muted h-28 w-20 shrink-0 overflow-hidden rounded-md sm:h-32 sm:w-24">
+                                {#if related.poster_path}
+                                    <img
+                                        src={related.poster_path}
+                                        alt={related.title}
+                                        loading="lazy"
+                                        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                {/if}
+                            </div>
+
+                            <div class="flex min-w-0 flex-col gap-1 py-0.5">
+                                <span
+                                    class="text-foreground line-clamp-2 text-base font-semibold leading-snug">
+                                    {related.title}
+                                </span>
+
+                                <span class="text-muted-foreground text-xs">
+                                    {[related.site_name, related.year !== "N/A" ? related.year : null]
+                                        .filter(Boolean)
+                                        .join(" \u00b7 ")}
+                                </span>
+
+                                {#if related.performers?.length}
+                                    <span class="text-primary/90 line-clamp-1 text-sm">
+                                        {related.performers.join(", ")}
+                                    </span>
+                                {/if}
+
+                                {#if related.overview}
+                                    <p
+                                        class="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
+                                        {related.overview}
+                                    </p>
+                                {/if}
+                            </div>
+                        </a>
                     {/each}
                 </div>
             </div>

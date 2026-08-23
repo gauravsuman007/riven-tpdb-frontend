@@ -25,6 +25,17 @@ export const load: PageServerLoad = async ({ url, fetch, locals }) => {
     let searchExamples: string[] = [];
     let recommendationBasis: string | null = null;
 
+    // Discovery content feeds the empty state only -- the hero carousel, the
+    // "Feeling Lucky" pool and the example chips all render inside
+    // `{#if showEmptyState}`. A search re-runs this load (the header debounces
+    // into `goto`), and refetching ~3MB of query-irrelevant JSON is what made
+    // typing feel slow. When there is a query, skip it: the search results
+    // replace this content anyway, and clearing the box navigates back to the
+    // query-less URL, which repopulates it.
+    if (parsed?.query) {
+        return { form, parsed, searchExamples, heroItems, feelingLuckyItems, recommendationBasis };
+    }
+
     try {
         const auth = {
             baseUrl: locals.backendUrl,
