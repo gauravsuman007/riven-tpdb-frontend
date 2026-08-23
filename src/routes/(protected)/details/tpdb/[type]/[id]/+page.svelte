@@ -10,6 +10,9 @@
     import CheckIcon from "@lucide/svelte/icons/check";
     import LoaderIcon from "@lucide/svelte/icons/loader-circle";
     import { describeState } from "$lib/utils/item-state";
+    import { formatBytes } from "$lib/helpers";
+    import PlayIcon from "@lucide/svelte/icons/play";
+    import VideoPlayer from "$lib/components/media/video-player.svelte";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -21,6 +24,15 @@
     const libraryState = $derived(data.libraryState ?? null);
     const requested = $derived(!!libraryState || (form as any)?.requested === true);
     const status = $derived(libraryState ? describeState(libraryState.state) : null);
+
+    const files = $derived(libraryState?.files ?? []);
+    const releases = $derived(libraryState?.streams ?? []);
+
+    // Playable means a file is actually mounted, not merely that the item
+    // reached Completed -- the VFS entry is what the stream endpoint reads.
+    const playable = $derived(files.some((file) => file.available_in_vfs));
+
+    let showPlayer = $state(false);
 
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
@@ -98,6 +110,13 @@
                 {/if}
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
+                    {#if playable && libraryState}
+                        <Button onclick={() => (showPlayer = !showPlayer)}>
+                            <PlayIcon class="mr-2 size-4" />
+                            {showPlayer ? "Close player" : "Play"}
+                        </Button>
+                    {/if}
+
                     <!--
                         A title already in the library must not offer Request
                         as though nothing had happened -- show where it actually
@@ -154,6 +173,97 @@
                     <p class="text-muted-foreground text-xs">
                         {status.description}
                     </p>
+                {/if}
+
+                {#if showPlayer && libraryState}
+                    <div class="mt-2 overflow-hidden rounded-xl border">
+                        <VideoPlayer itemId={libraryState.riven_id} />
+                    </div>
+                {/if}
+
+                {#if files.length}
+                    <div class="mt-2 flex flex-col gap-2">
+                        <p
+                            class="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
+                            On disk
+                        </p>
+                        {#each files as file (file.path ?? file.filename)}
+                            <div class="bg-muted/40 flex flex-col gap-1.5 rounded-lg p-3">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    {#if file.resolution}
+                                        <Badge variant="secondary" class="font-mono text-xs">
+                                            {file.resolution}
+                                        </Badge>
+                                    {/if}
+                                    {#if file.codec}
+                                        <Badge variant="outline" class="font-mono text-xs">
+                                            {file.codec}
+                                        </Badge>
+                                    {/if}
+                                    {#if file.hdr_type}
+                                        <Badge variant="outline" class="font-mono text-xs">
+                                            {file.hdr_type}
+                                        </Badge>
+                                    {/if}
+                                    <Badge variant="outline" class="font-mono text-xs">
+                                        {formatBytes(file.file_size)}
+                                    </Badge>
+                                    {#if !file.available_in_vfs}
+                                        <Badge variant="outline" class="text-xs">Not mounted</Badge>
+                                    {/if}
+                                </div>
+                                {#if file.path}
+                                    <p class="text-muted-foreground font-mono text-xs break-all">
+                                        {file.path}
+                                    </p>
+                                {/if}
+                                <p class="text-muted-foreground/70 font-mono text-xs break-all">
+                                    from {file.filename}
+                                </p>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+
+                <!--
+                    Candidate releases, shown while an item is still being
+                    worked on. Riven records no size for a release it has not
+                    downloaded, so only what it actually parsed appears here.
+                -->
+                {#if !files.length && releases.length}
+                    <div class="mt-2 flex flex-col gap-2">
+                        <p
+                            class="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
+                            Candidate releases
+                        </p>
+                        <div class="flex flex-col gap-1">
+                            {#each releases.slice(0, 5) as release (release.raw_title)}
+                                <div class="flex items-start gap-2 text-xs">
+                                    {#if release.resolution}
+                                        <Badge
+                                            variant="secondary"
+                                            class="shrink-0 font-mono text-xs">
+                                            {release.resolution}
+                                        </Badge>
+                                    {:else}
+                                        <Badge variant="outline" class="shrink-0 font-mono text-xs">
+                                            ?
+                                        </Badge>
+                                    {/if}
+                                    <span class="text-muted-foreground min-w-0 break-all">
+                                        {release.raw_title}
+                                        {#if release.is_active}
+                                            <span class="text-primary">· selected</span>
+                                        {/if}
+                                    </span>
+                                </div>
+                            {/each}
+                        </div>
+                        <p class="text-muted-foreground/70 text-xs">
+                            Sizes are not shown because Riven does not record one for a release it
+                            has not downloaded yet.
+                        </p>
+                    </div>
                 {/if}
 
                 {#if collected}

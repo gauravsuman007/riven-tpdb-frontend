@@ -2322,6 +2322,47 @@ export interface components {
             preferred: string[];
         };
         /**
+         * LibraryFile
+         * @description One file on disk belonging to a library item.
+         */
+        LibraryFile: {
+            /**
+             * Filename
+             * @description Original filename from the release
+             */
+            filename: string;
+            /**
+             * Path
+             * @description Full path inside the mounted filesystem
+             */
+            path: string | null;
+            /**
+             * File Size
+             * @description Size in bytes
+             */
+            file_size: number;
+            /**
+             * Resolution
+             * @description Resolution label such as "1080p" or "4K", when known
+             */
+            resolution: string | null;
+            /**
+             * Codec
+             * @description Video codec, when probed
+             */
+            codec: string | null;
+            /**
+             * Hdr Type
+             * @description HDR flavour, when probed
+             */
+            hdr_type: string | null;
+            /**
+             * Available In Vfs
+             * @description Whether the file is mounted and playable
+             */
+            available_in_vfs: boolean;
+        };
+        /**
          * LibraryProfile
          * @description Library profile configuration for organizing media into different libraries
          */
@@ -2431,6 +2472,26 @@ export interface components {
              * @description The item's title in the library
              */
             title: string;
+            /**
+             * Resolution
+             * @description Best known resolution for the item as a whole
+             */
+            resolution: string | null;
+            /**
+             * Total Size
+             * @description Total bytes on disk, when downloaded
+             */
+            total_size: number | null;
+            /**
+             * Files
+             * @description Files on disk; empty unless detailed
+             */
+            files?: components["schemas"]["LibraryFile"][];
+            /**
+             * Streams
+             * @description Candidate releases, best first; empty unless detailed
+             */
+            streams?: components["schemas"]["LibraryStream"][];
         };
         /** LibraryStatesResponse */
         LibraryStatesResponse: {
@@ -2441,6 +2502,36 @@ export interface components {
             states: {
                 [key: string]: components["schemas"]["LibraryStateEntry"];
             };
+        };
+        /**
+         * LibraryStream
+         * @description A release found for an item but not yet downloaded.
+         *
+         *     There is no size here because Riven does not record one: indexers report
+         *     sizes inconsistently and the value is not stored on the stream, so claiming
+         *     a size would mean inventing it.
+         */
+        LibraryStream: {
+            /**
+             * Raw Title
+             * @description Release title as the indexer gave it
+             */
+            raw_title: string;
+            /**
+             * Resolution
+             * @description Parsed resolution, when known
+             */
+            resolution: string | null;
+            /**
+             * Rank
+             * @description RTN rank; higher is preferred
+             */
+            rank: number;
+            /**
+             * Is Active
+             * @description Whether this is the release Riven settled on
+             */
+            is_active: boolean;
         };
         /** ListrrModel */
         ListrrModel: {
@@ -4939,6 +5030,8 @@ export interface operations {
             query: {
                 /** @description TPDB uuids to look up. Ids not in the library are omitted. */
                 tpdb_ids: string[];
+                /** @description Include per-file details and candidate releases. A detail page wants these; a poster grid does not. */
+                detailed?: boolean;
                 api_key?: string | null;
             };
             header?: never;

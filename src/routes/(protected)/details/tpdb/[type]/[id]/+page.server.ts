@@ -78,7 +78,9 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
             : Promise.resolve(null),
         providers.riven.GET("/api/v1/items/library_states", {
             ...auth,
-            params: { query: { tpdb_ids: [tpdbUuid] } }
+            // Detail form: this page renders files, sizes and candidate
+            // releases, none of which a poster grid would ask for.
+            params: { query: { tpdb_ids: [tpdbUuid], detailed: true } }
         })
     ]);
 
