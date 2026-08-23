@@ -14,6 +14,7 @@
     import { icons } from "@sjsf/lucide-icons";
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
+    import { buildSecretUiSchema } from "$lib/components/settings/secret-ui-schema";
 
     setShadcnContext();
 
@@ -21,9 +22,16 @@
 
     const meta = createMeta<ActionData, PageData>().form;
 
+    // Credential fields render masked; see secret-ui-schema.ts. Exposed as a
+    // getter so the form reads it lazily rather than capturing the first value.
+    const uiSchema = $derived(buildSecretUiSchema((data as any)?.form?.initialValue));
+
     // @ts-expect-error - Schema is provided by page data
     const { form } = setupSvelteKitForm(meta, {
         ...defaults,
+        get uiSchema() {
+            return uiSchema;
+        },
         icons,
         delayedMs: 500,
         timeoutMs: 30000,
