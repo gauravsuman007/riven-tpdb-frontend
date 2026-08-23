@@ -54,12 +54,52 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
                   })
               ]);
 
-    if (detail.error || !detail.data) {
+    // A TPDB uuid names either a scene or a movie, and Riven stores both as
+    // type "movie" -- so a scene reached from the library arrives here asking
+    // for a movie and misses. Fall back to the other kind rather than 404-ing
+    // a title that plainly exists.
+    let resolved = detail.data ? detail : null;
+    let resolvedType: "movie" | "tv" = type;
+    let resolvedSimilar = similar.data ?? [];
+
+    if (!resolved) {
+        const otherType: "movie" | "tv" = type === "movie" ? "tv" : "movie";
+        const [fallback, fallbackSimilar] =
+            otherType === "movie"
+                ? await Promise.all([
+                      providers.riven.GET("/api/v1/tpdb/movies/{movie_id}", {
+                          ...auth,
+                          params: { path: { movie_id: id } }
+                      }),
+                      providers.riven.GET("/api/v1/tpdb/movies/{movie_id}/similar", {
+                          ...auth,
+                          params: { path: { movie_id: id } }
+                      })
+                  ])
+                : await Promise.all([
+                      providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}", {
+                          ...auth,
+                          params: { path: { scene_id: id } }
+                      }),
+                      providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}/similar", {
+                          ...auth,
+                          params: { path: { scene_id: id } }
+                      })
+                  ]);
+
+        if (fallback.data) {
+            resolved = fallback;
+            resolvedType = otherType;
+            resolvedSimilar = fallbackSimilar.data ?? [];
+        }
+    }
+
+    if (!resolved?.data) {
         logger.error("TPDB detail fetch failed", detail.error);
         error(404, "Title not found on TPDB");
     }
 
-    const item = detail.data as Record<string, any>;
+    const item = resolved.data as Record<string, any>;
     const numericId = item._id ?? null;
     const tpdbUuid = (item.id as string | undefined) ?? params.id;
 
@@ -92,14 +132,16 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 
     return {
         item,
-        type,
+        // The kind the title actually turned out to be, which is not always
+        // the kind the URL asked for.
+        type: resolvedType,
         numericId,
         // The uuid, not the numeric id, is what Riven stores as tpdb_id and
         // what the manual scrape addresses the title by.
         tpdbUuid,
         collected,
         libraryState,
-        similar: transformTPDBList(similar.data ?? [], type)
+        similar: transformTPDBList(resolvedSimilar, resolvedType)
     };
 };
 
