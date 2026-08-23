@@ -7,12 +7,20 @@
     import DownloadIcon from "@lucide/svelte/icons/download";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+    import CheckIcon from "@lucide/svelte/icons/check";
+    import LoaderIcon from "@lucide/svelte/icons/loader-circle";
+    import { describeState } from "$lib/utils/item-state";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
     const item = $derived(data.item as Record<string, any>);
     const collected = $derived(data.collected || (form as any)?.collected === true);
-    const requested = $derived((form as any)?.requested === true);
+
+    // `libraryState` is what Riven already knows; the form result covers the
+    // moment just after requesting, before the page has been reloaded.
+    const libraryState = $derived(data.libraryState ?? null);
+    const requested = $derived(!!libraryState || (form as any)?.requested === true);
+    const status = $derived(libraryState ? describeState(libraryState.state) : null);
 
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
@@ -90,14 +98,33 @@
                 {/if}
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
-                    <form method="POST" action="?/request" use:enhance>
-                        <input type="hidden" name="uuid" value={item.id} />
-                        <input type="hidden" name="type" value={data.type} />
-                        <Button type="submit" disabled={requested}>
-                            <DownloadIcon class="mr-2 size-4" />
-                            {requested ? "Queued in Riven" : "Request"}
+                    <!--
+                        A title already in the library must not offer Request
+                        as though nothing had happened -- show where it actually
+                        stands instead, and only fall back to the form when
+                        Riven has never seen it.
+                    -->
+                    {#if status}
+                        <Button variant="outline" disabled>
+                            {#if status.available}
+                                <CheckIcon class="mr-2 size-4" />
+                            {:else if status.inProgress}
+                                <LoaderIcon class="mr-2 size-4 animate-spin" />
+                            {:else}
+                                <DownloadIcon class="mr-2 size-4" />
+                            {/if}
+                            {status.label}
                         </Button>
-                    </form>
+                    {:else}
+                        <form method="POST" action="?/request" use:enhance>
+                            <input type="hidden" name="uuid" value={item.id} />
+                            <input type="hidden" name="type" value={data.type} />
+                            <Button type="submit" disabled={requested}>
+                                <DownloadIcon class="mr-2 size-4" />
+                                {requested ? "Queued in Riven" : "Request"}
+                            </Button>
+                        </form>
+                    {/if}
 
                     <!--
                         Manual scrape: pick the exact release and file rather
@@ -123,10 +150,16 @@
                     {/if}
                 </div>
 
+                {#if status}
+                    <p class="text-muted-foreground text-xs">
+                        {status.description}
+                    </p>
+                {/if}
+
                 {#if collected}
                     <p class="text-muted-foreground text-xs">
-                        TPDB has no endpoint for removing a title from a collection, so this
-                        cannot be undone from here.
+                        TPDB has no endpoint for removing a title from a collection, so this cannot
+                        be undone from here.
                     </p>
                 {/if}
 
@@ -139,7 +172,7 @@
         {#if data.similar.length}
             <div class="flex flex-col gap-4">
                 <h2 class="text-foreground text-2xl font-bold tracking-tight">Related on TPDB</h2>
-                <div class="flex flex-col divide-y divide-border/60">
+                <div class="divide-border/60 flex flex-col divide-y">
                     {#each data.similar as related (related.id)}
                         <a
                             href={relatedHref(related)}
@@ -157,12 +190,15 @@
 
                             <div class="flex min-w-0 flex-col gap-1 py-0.5">
                                 <span
-                                    class="text-foreground line-clamp-2 text-base font-semibold leading-snug">
+                                    class="text-foreground line-clamp-2 text-base leading-snug font-semibold">
                                     {related.title}
                                 </span>
 
                                 <span class="text-muted-foreground text-xs">
-                                    {[related.site_name, related.year !== "N/A" ? related.year : null]
+                                    {[
+                                        related.site_name,
+                                        related.year !== "N/A" ? related.year : null
+                                    ]
                                         .filter(Boolean)
                                         .join(" \u00b7 ")}
                                 </span>

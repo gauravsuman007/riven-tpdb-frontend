@@ -11,6 +11,8 @@
     import Heatmap from "$lib/components/heatmap.svelte";
     import { curveCatmullRom } from "d3-shape";
     import { fly } from "svelte/transition";
+    import { describeState } from "$lib/utils/item-state";
+    import * as dateUtils from "$lib/utils/date";
     import { cubicOut } from "svelte/easing";
 
     let { data }: { data: PageData } = $props();
@@ -51,6 +53,30 @@
             "%"
         );
     });
+
+    const activeDownloads = $derived(data.downloads?.active ?? []);
+    const recentDownloads = $derived(data.downloads?.recent ?? []);
+
+    /** "3h ago" style age, so a stalled item is obvious at a glance. */
+    function since(iso: string | null | undefined): string {
+        if (!iso) return "";
+
+        const then = new Date(iso).getTime();
+        if (Number.isNaN(then)) return "";
+
+        const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
+        if (minutes < 60) return `${minutes}m ago`;
+
+        const hours = Math.round(minutes / 60);
+        if (hours < 48) return `${hours}h ago`;
+
+        return `${Math.round(hours / 24)}d ago`;
+    }
+
+    function detailsHref(entry: { tpdb_id?: string | null; type?: string }): string | null {
+        if (!entry.tpdb_id) return null;
+        return `/details/tpdb/${entry.type === "show" ? "tv" : "movie"}/${entry.tpdb_id}`;
+    }
 
     const heatmapLegend = [
         { label: "No Activity", color: "var(--muted)" },
@@ -293,6 +319,126 @@
                         <p class="text-sm text-neutral-400">No service data available.</p>
                     {/if}
                 </div>
+            </Card.Content>
+        </Card.Root>
+    </section>
+
+    <!--
+        Download activity. There is no per-torrent progress bar to show: a
+        debrid provider either has a release or it does not. What actually
+        distinguishes "working" from "stuck" is the state reached, how long it
+        has been sitting there, and how many releases were found -- so those
+        are the columns.
+    -->
+    <section class="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card.Root class="flex h-full flex-col">
+            <Card.Header class="pb-2">
+                <div class="flex items-center justify-between">
+                    <Card.Title class="text-sm font-medium text-neutral-300">
+                        In Progress
+                    </Card.Title>
+                    <Badge variant="secondary" class="rounded-xl">{activeDownloads.length}</Badge>
+                </div>
+            </Card.Header>
+            <Card.Content class="flex-1">
+                {#if activeDownloads.length === 0}
+                    <p class="text-muted-foreground py-8 text-center text-sm">
+                        Nothing in the pipeline.
+                    </p>
+                {:else}
+                    <ul class="divide-border divide-y">
+                        {#each activeDownloads as entry (entry.riven_id)}
+                            {@const status = describeState(entry.state)}
+                            {@const href = detailsHref(entry)}
+                            <li class="flex items-center justify-between gap-3 py-2.5">
+                                <div class="min-w-0">
+                                    {#if href}
+                                        <a
+                                            {href}
+                                            class="truncate text-sm font-medium text-neutral-100 hover:underline">
+                                            {entry.title}
+                                        </a>
+                                    {:else}
+                                        <p class="truncate text-sm font-medium text-neutral-100">
+                                            {entry.title}
+                                        </p>
+                                    {/if}
+                                    <p class="text-muted-foreground mt-0.5 text-xs">
+                                        {#if entry.requested_at}
+                                            requested {since(entry.requested_at)}
+                                        {/if}
+                                        {#if entry.stream_count}
+                                            · {entry.stream_count} release{entry.stream_count === 1
+                                                ? ""
+                                                : "s"} found
+                                        {/if}
+                                        {#if entry.scraped_times > 1}
+                                            · {entry.scraped_times} scrape passes
+                                        {/if}
+                                        {#if entry.blacklisted_count}
+                                            · {entry.blacklisted_count} rejected
+                                        {/if}
+                                    </p>
+                                </div>
+                                <Badge
+                                    variant="secondary"
+                                    class={cn(
+                                        "shrink-0 rounded-xl",
+                                        status.variant === "error" && "bg-red-600/25 text-red-300",
+                                        status.variant === "success" &&
+                                            "bg-green-600/25 text-green-300"
+                                    )}>{status.label}</Badge>
+                            </li>
+                        {/each}
+                    </ul>
+                {/if}
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root class="flex h-full flex-col">
+            <Card.Header class="pb-2">
+                <Card.Title class="text-sm font-medium text-neutral-300">
+                    Recently Downloaded
+                </Card.Title>
+            </Card.Header>
+            <Card.Content class="flex-1">
+                {#if recentDownloads.length === 0}
+                    <p class="text-muted-foreground py-8 text-center text-sm">
+                        Nothing downloaded yet.
+                    </p>
+                {:else}
+                    <ul class="divide-border divide-y">
+                        {#each recentDownloads as entry (entry.riven_id)}
+                            {@const href = detailsHref(entry)}
+                            <li class="flex items-center justify-between gap-3 py-2.5">
+                                <div class="min-w-0">
+                                    {#if href}
+                                        <a
+                                            {href}
+                                            class="truncate text-sm font-medium text-neutral-100 hover:underline">
+                                            {entry.title}
+                                        </a>
+                                    {:else}
+                                        <p class="truncate text-sm font-medium text-neutral-100">
+                                            {entry.title}
+                                        </p>
+                                    {/if}
+                                    <p class="text-muted-foreground mt-0.5 text-xs">
+                                        {since(entry.completed_at)}
+                                        {#if entry.file_size}
+                                            · {formatBytes(entry.file_size)}
+                                        {/if}
+                                    </p>
+                                </div>
+                                <Badge
+                                    variant="secondary"
+                                    class="shrink-0 rounded-xl bg-green-600/25 text-green-300">
+                                    Available
+                                </Badge>
+                            </li>
+                        {/each}
+                    </ul>
+                {/if}
             </Card.Content>
         </Card.Root>
     </section>

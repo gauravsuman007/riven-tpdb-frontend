@@ -405,6 +405,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Activity
+         * @description In-flight items and recently completed downloads
+         */
+        get: operations["get_download_activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/library_states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Library State by TPDB ID
+         * @description Look up which of the given TPDB uuids already exist in the library
+         */
+        get: operations["get_library_states"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{id}": {
         parameters: {
             query?: never;
@@ -1345,6 +1385,57 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIOStreamsConfig */
+        AIOStreamsConfig: {
+            /**
+             * Enabled
+             * @description Enable AIOStreams scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Url
+             * @description AIOStreams instance URL
+             * @default http://localhost:8000
+             */
+            url: string;
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
+            /**
+             * Proxy Url
+             * @description Proxy URL for AIOStreams requests
+             * @default
+             */
+            proxy_url: string;
+            /**
+             * Uuid
+             * @description User UUID for AIOStreams authentication
+             * @default
+             */
+            uuid: string;
+            /**
+             * Password
+             * @description User password for AIOStreams authentication
+             * @default
+             */
+            password: string;
+        };
         /** AddMediaItemPayload */
         AddMediaItemPayload: {
             /**
@@ -1438,12 +1529,12 @@ export interface components {
             content?: components["schemas"]["ContentModel"];
             /** @description Scraper configuration */
             scraping?: components["schemas"]["ScraperModel"];
+            /** @description ThePornDB metadata configuration */
+            tpdb?: components["schemas"]["TpdbModel"];
             /** @description Result ranking configuration */
             ranking?: components["schemas"]["RTNSettingsModel"];
             /** @description Indexer configuration */
             indexer?: components["schemas"]["IndexerModel"];
-            /** @description ThePornDB metadata configuration */
-            tpdb?: components["schemas"]["TpdbModel"];
             /** @description Database configuration */
             database?: components["schemas"]["DatabaseModel"];
             /** @description Notifications configuration */
@@ -1572,6 +1663,39 @@ export interface components {
             /** Collected */
             collected: boolean;
         };
+        /** CometConfig */
+        CometConfig: {
+            /**
+             * Enabled
+             * @description Enable Comet scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Url
+             * @description Comet URL
+             * @default http://localhost:8000
+             */
+            url: string;
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
+        };
         /**
          * Container
          * @description Root model for container mapping file IDs to file information.
@@ -1591,18 +1715,20 @@ export interface components {
         Container: {
             [key: string]: components["schemas"]["DebridFile"];
         };
-        /**
-         * ContentModel
-         * @description Content sources.
-         *
-         *     This fork is adult-only, so the mainstream providers upstream ships
-         *     (Overseerr, Plex Watchlist, MDBList, Listrr, Trakt) are gone -- none of them
-         *     can produce an item carrying a TPDB id, which is the only thing the indexer
-         *     will resolve.
-         */
+        /** ContentModel */
         ContentModel: {
             /** @description TPDB adult content subscriptions */
             tpdb?: components["schemas"]["TpdbContentModel"];
+            /** @description Overseerr configuration */
+            overseerr?: components["schemas"]["OverseerrModel"];
+            /** @description Plex Watchlist configuration */
+            plex_watchlist?: components["schemas"]["PlexWatchlistModel"];
+            /** @description MDBList configuration */
+            mdblist?: components["schemas"]["MdblistModel"];
+            /** @description Listrr configuration */
+            listrr?: components["schemas"]["ListrrModel"];
+            /** @description Trakt configuration */
+            trakt?: components["schemas"]["TraktModel"];
         };
         /**
          * CustomRank
@@ -1710,6 +1836,90 @@ export interface components {
             errors: string[];
         };
         /**
+         * DownloadActivityEntry
+         * @description One row of the downloads view.
+         */
+        DownloadActivityEntry: {
+            /**
+             * Riven Id
+             * @description The Riven media item id
+             */
+            riven_id: number;
+            /**
+             * Title
+             * @description Item title
+             */
+            title: string;
+            /**
+             * Type
+             * @description Item type
+             */
+            type: string;
+            /**
+             * State
+             * @description Current state
+             */
+            state: string;
+            /**
+             * Tpdb Id
+             * @description TPDB uuid, when adult
+             */
+            tpdb_id: string | null;
+            /**
+             * Poster Path
+             * @description Poster URL
+             */
+            poster_path: string | null;
+            /**
+             * Requested At
+             * @description When the item was requested, ISO 8601
+             */
+            requested_at: string | null;
+            /**
+             * Scraped At
+             * @description When the item was last scraped, ISO 8601
+             */
+            scraped_at: string | null;
+            /**
+             * Scraped Times
+             * @description How many scrape passes have run
+             */
+            scraped_times: number;
+            /**
+             * Stream Count
+             * @description Usable streams found so far
+             */
+            stream_count: number;
+            /**
+             * Blacklisted Count
+             * @description Streams rejected for this item
+             */
+            blacklisted_count: number;
+            /**
+             * File Size
+             * @description Total bytes on disk, when downloaded
+             */
+            file_size: number | null;
+            /**
+             * Completed At
+             * @description When the file appeared on disk, ISO 8601
+             */
+            completed_at: string | null;
+        };
+        /** DownloadActivityResponse */
+        DownloadActivityResponse: {
+            /**
+             * Active
+             * @description Items still moving through the pipeline, oldest request first
+             */
+            active: components["schemas"]["DownloadActivityEntry"][];
+            /**
+             * Recent
+             * @description Most recently completed items, newest first
+             */
+            recent: components["schemas"]["DownloadActivityEntry"][];
+        };
+        /**
          * DownloaderUserInfo
          * @description Normalized downloader user information response
          */
@@ -1786,14 +1996,32 @@ export interface components {
              * @default
              */
             proxy_url: string;
+            /**
+             * Download Uncached
+             * @description Ask the debrid provider to fetch torrents it has not cached yet, instead of discarding them. Uses provider download quota.
+             * @default true
+             */
+            download_uncached: boolean;
+            /**
+             * Uncached Poll Minutes
+             * @description Minutes between re-checks while the provider caches a torrent
+             * @default 10
+             */
+            uncached_poll_minutes: number;
+            /**
+             * Uncached Max Wait Hours
+             * @description Give up on an uncached torrent this many hours after the provider started fetching it
+             * @default 24
+             */
+            uncached_max_wait_hours: number;
             /** @description Real-Debrid downloader configuration */
             real_debrid?: components["schemas"]["RealDebridModel"];
             /** @description Debrid-Link downloader configuration */
             debrid_link?: components["schemas"]["DebridLinkModel"];
-            /** @description TorBox configuration */
-            torbox?: components["schemas"]["TorBoxModel"];
             /** @description AllDebrid downloader configuration */
             all_debrid?: components["schemas"]["AllDebridModel"];
+            /** @description TorBox configuration */
+            torbox?: components["schemas"]["TorBoxModel"];
         };
         /** EmbyLibraryModel */
         EmbyLibraryModel: {
@@ -2183,6 +2411,68 @@ export interface components {
              */
             content_ratings?: string[] | null;
         };
+        /**
+         * LibraryStateEntry
+         * @description Where one TPDB title stands in the local library.
+         */
+        LibraryStateEntry: {
+            /**
+             * Riven Id
+             * @description The Riven media item id
+             */
+            riven_id: number;
+            /**
+             * State
+             * @description The item's current state
+             */
+            state: string;
+            /**
+             * Title
+             * @description The item's title in the library
+             */
+            title: string;
+        };
+        /** LibraryStatesResponse */
+        LibraryStatesResponse: {
+            /**
+             * States
+             * @description TPDB uuid -> library state, omitting unknown ids
+             */
+            states: {
+                [key: string]: components["schemas"]["LibraryStateEntry"];
+            };
+        };
+        /** ListrrModel */
+        ListrrModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds (24 hours default)
+             * @default 86400
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable Listrr integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Movie Lists
+             * @description Listrr movie list IDs
+             */
+            movie_lists?: string[];
+            /**
+             * Show Lists
+             * @description Listrr TV show list IDs
+             */
+            show_lists?: string[];
+            /**
+             * Api Key
+             * @description Listrr API key
+             * @default
+             */
+            api_key: string;
+        };
         /** LoggingModel */
         LoggingModel: {
             /**
@@ -2221,6 +2511,32 @@ export interface components {
         LogsResponse: {
             /** Logs */
             logs: string[];
+        };
+        /** MdblistModel */
+        MdblistModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds (24 hours default)
+             * @default 86400
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable MDBList integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Api Key
+             * @description MDBList API key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Lists
+             * @description MDBList list IDs to monitor
+             */
+            lists?: (number | string)[];
         };
         /**
          * MediaMetadata
@@ -2328,6 +2644,39 @@ export interface components {
          * @enum {string}
          */
         MediaTypeEnum: "movie" | "show" | "season" | "episode" | "anime";
+        /** MediafusionConfig */
+        MediafusionConfig: {
+            /**
+             * Enabled
+             * @description Enable Mediafusion scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Url
+             * @description Mediafusion URL
+             * @default http://localhost:8000
+             */
+            url: string;
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
+        };
         /** MessageResponse */
         MessageResponse: {
             /** Message */
@@ -2400,6 +2749,101 @@ export interface components {
              */
             remove_adult_content: boolean;
         };
+        /** OrionoidConfig */
+        OrionoidConfig: {
+            /**
+             * Enabled
+             * @description Enable Orionoid scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Api Key
+             * @description Orionoid API key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Cached Results Only
+             * @description Only return cached/downloadable results
+             * @default false
+             */
+            cached_results_only: boolean;
+            /** @description Additional Orionoid parameters */
+            parameters?: components["schemas"]["OrionoidConfigParametersDict"];
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
+        };
+        /** OrionoidConfigParametersDict */
+        OrionoidConfigParametersDict: {
+            /**
+             * Video3D
+             * @description Include 3D video results
+             * @default false
+             */
+            video3d: boolean;
+            /**
+             * Videoquality
+             * @description Video quality filter
+             * @default sd_hd8k
+             */
+            videoquality: string;
+            /**
+             * Limitcount
+             * @description Maximum number of results
+             * @default 5
+             */
+            limitcount: number;
+        };
+        /** OverseerrModel */
+        OverseerrModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds
+             * @default 60
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable Overseerr integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Url
+             * @description Overseerr URL
+             * @default http://localhost:5055
+             */
+            url: string;
+            /**
+             * Api Key
+             * @description Overseerr API key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Use Webhook
+             * @description Use webhook instead of polling
+             * @default false
+             */
+            use_webhook: boolean;
+        };
         /** ParseTorrentTitleResponse */
         ParseTorrentTitleResponse: {
             /** Message */
@@ -2454,6 +2898,26 @@ export interface components {
              * @default http://localhost:32400
              */
             url: string;
+        };
+        /** PlexWatchlistModel */
+        PlexWatchlistModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds
+             * @default 60
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable Plex Watchlist integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Rss
+             * @description Plex Watchlist RSS feed URLs
+             */
+            rss?: string[];
         };
         /**
          * PopularTagsResponse
@@ -2594,6 +3058,39 @@ export interface components {
             languages?: components["schemas"]["LanguagesConfig"];
             /** @description Custom ranking configurations for specific attributes */
             custom_ranks?: components["schemas"]["CustomRanksConfig"];
+        };
+        /** RarbgConfig */
+        RarbgConfig: {
+            /**
+             * Enabled
+             * @description Enable RARBG scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Url
+             * @description RARBG URL
+             * @default https://therarbg.to
+             */
+            url: string;
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
         };
         /** RealDebridModel */
         RealDebridModel: {
@@ -2803,12 +3300,24 @@ export interface components {
              * @default false
              */
             dubbed_anime_only: boolean;
+            /** @description Torrentio configuration */
+            torrentio?: components["schemas"]["TorrentioConfig"];
             /** @description Jackett configuration */
             jackett?: components["schemas"]["JackettConfig"];
             /** @description Prowlarr configuration */
             prowlarr?: components["schemas"]["ProwlarrConfig"];
+            /** @description Orionoid configuration */
+            orionoid?: components["schemas"]["OrionoidConfig"];
+            /** @description Mediafusion configuration */
+            mediafusion?: components["schemas"]["MediafusionConfig"];
             /** @description Zilean configuration */
             zilean?: components["schemas"]["ZileanConfig"];
+            /** @description Comet configuration */
+            comet?: components["schemas"]["CometConfig"];
+            /** @description RARBG configuration */
+            rarbg?: components["schemas"]["RarbgConfig"];
+            /** @description AIOStreams configuration */
+            aiostreams?: components["schemas"]["AIOStreamsConfig"];
         };
         /** SelectFilesResponse */
         SelectFilesResponse: {
@@ -3118,6 +3627,51 @@ export interface components {
             /** Links */
             links?: string[];
         };
+        /** TorrentioConfig */
+        TorrentioConfig: {
+            /**
+             * Enabled
+             * @description Enable Torrentio scraper
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Filter
+             * @description Torrentio filter parameters
+             * @default sort=qualitysize%7Cqualityfilter=480p,scr,cam
+             */
+            filter: string;
+            /**
+             * Url
+             * @description Torrentio URL
+             * @default http://torrentio.strem.fun
+             */
+            url: string;
+            /**
+             * Timeout
+             * @description Request timeout in seconds
+             * @default 30
+             */
+            timeout: number;
+            /**
+             * Retries
+             * @description Number of retries for failed requests
+             * @default 1
+             */
+            retries: number;
+            /**
+             * Ratelimit
+             * @description Enable rate limiting
+             * @default true
+             */
+            ratelimit: boolean;
+            /**
+             * Proxy Url
+             * @description Proxy URL for Torrentio requests
+             * @default
+             */
+            proxy_url: string;
+        };
         /** TpdbContentModel */
         TpdbContentModel: {
             /**
@@ -3325,6 +3879,125 @@ export interface components {
             name?: string | null;
         } & {
             [key: string]: unknown;
+        };
+        /** TraktModel */
+        TraktModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds (24 hours default)
+             * @default 86400
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable Trakt integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Api Key
+             * @description Trakt API key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Watchlist
+             * @description Trakt usernames for watchlist monitoring
+             */
+            watchlist?: string[];
+            /**
+             * User Lists
+             * @description Trakt user list URLs to monitor
+             */
+            user_lists?: string[];
+            /**
+             * Collection
+             * @description Trakt usernames for collection monitoring
+             */
+            collection?: string[];
+            /**
+             * Fetch Trending
+             * @description Fetch trending content from Trakt
+             * @default false
+             */
+            fetch_trending: boolean;
+            /**
+             * Trending Count
+             * @description Number of trending items to fetch
+             * @default 10
+             */
+            trending_count: number;
+            /**
+             * Fetch Popular
+             * @description Fetch popular content from Trakt
+             * @default false
+             */
+            fetch_popular: boolean;
+            /**
+             * Popular Count
+             * @description Number of popular items to fetch
+             * @default 10
+             */
+            popular_count: number;
+            /**
+             * Fetch Most Watched
+             * @description Fetch most watched content from Trakt
+             * @default false
+             */
+            fetch_most_watched: boolean;
+            /**
+             * Most Watched Period
+             * @description Period for most watched (daily, weekly, monthly, yearly)
+             * @default weekly
+             */
+            most_watched_period: string;
+            /**
+             * Most Watched Count
+             * @description Number of most watched items to fetch
+             * @default 10
+             */
+            most_watched_count: number;
+            /** @description Trakt OAuth configuration */
+            oauth?: components["schemas"]["TraktOauthModel"];
+            /**
+             * Proxy Url
+             * @description Proxy URL for Trakt API requests
+             * @default
+             */
+            proxy_url: string;
+        };
+        /** TraktOauthModel */
+        TraktOauthModel: {
+            /**
+             * Oauth Client Id
+             * @description Trakt OAuth client ID
+             * @default
+             */
+            oauth_client_id: string;
+            /**
+             * Oauth Client Secret
+             * @description Trakt OAuth client secret
+             * @default
+             */
+            oauth_client_secret: string;
+            /**
+             * Oauth Redirect Uri
+             * @description Trakt OAuth redirect URI
+             * @default
+             */
+            oauth_redirect_uri: string;
+            /**
+             * Access Token
+             * @description Trakt OAuth access token
+             * @default
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @description Trakt OAuth refresh token
+             * @default
+             */
+            refresh_token: string;
         };
         /**
          * TrashRankModel
@@ -4201,6 +4874,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_download_activity: {
+        parameters: {
+            query?: {
+                /** @description Maximum rows per section */
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadActivityResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_library_states: {
+        parameters: {
+            query: {
+                /** @description TPDB uuids to look up. Ids not in the library are omitted. */
+                tpdb_ids: string[];
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryStatesResponse"];
                 };
             };
             /** @description Not found */

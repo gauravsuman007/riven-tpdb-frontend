@@ -6,7 +6,7 @@ import { createScopedLogger } from "$lib/logger";
 const logger = createScopedLogger("dashboard");
 
 export const load = (async ({ fetch, locals }) => {
-    const [statistics, svc, downloaderInfo] = await Promise.all([
+    const [statistics, svc, downloaderInfo, downloads] = await Promise.all([
         providers.riven.GET("/api/v1/stats", {
             baseUrl: locals.backendUrl,
             headers: {
@@ -28,6 +28,14 @@ export const load = (async ({ fetch, locals }) => {
                 "x-api-key": locals.apiKey
             },
             fetch: fetch
+        }),
+        providers.riven.GET("/api/v1/items/downloads", {
+            baseUrl: locals.backendUrl,
+            headers: {
+                "x-api-key": locals.apiKey
+            },
+            params: { query: { limit: 15 } },
+            fetch: fetch
         })
     ]);
 
@@ -46,9 +54,16 @@ export const load = (async ({ fetch, locals }) => {
         error(500, "Unable to fetch downloader info data");
     }
 
+    // Download activity is supporting detail, not the point of the page --
+    // a failure here degrades the section rather than 500-ing the dashboard.
+    if (downloads.error) {
+        logger.error("Download activity fetch error:", downloads.error);
+    }
+
     return {
         statistics: statistics.data,
         services: svc.data || {},
-        downloaderInfo: downloaderInfo.data
+        downloaderInfo: downloaderInfo.data,
+        downloads: downloads.data ?? { active: [], recent: [] }
     };
 }) satisfies PageServerLoad;

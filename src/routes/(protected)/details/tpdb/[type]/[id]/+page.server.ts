@@ -61,18 +61,32 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 
     const item = detail.data as Record<string, any>;
     const numericId = item._id ?? null;
+    const tpdbUuid = (item.id as string | undefined) ?? params.id;
 
-    // Collection membership is keyed on the numeric id, not the UUID, and the
-    // endpoint 404s for ids TPDB does not track -- treat that as "not collected"
-    // rather than failing the whole page.
-    let collected = false;
-    if (numericId) {
-        const status = await providers.riven.GET("/api/v1/tpdb/collection/{numeric_id}", {
+    // Both of these depend on the detail response (collection membership is
+    // keyed on the numeric id, not the uuid), so they can only start now --
+    // but they do not depend on each other, so they run together rather than
+    // adding two serial round trips to a page that was already slow.
+    const [status, library] = await Promise.all([
+        // The endpoint 404s for ids TPDB does not track -- treat that as
+        // "not collected" rather than failing the whole page.
+        numericId
+            ? providers.riven.GET("/api/v1/tpdb/collection/{numeric_id}", {
+                  ...auth,
+                  params: { path: { numeric_id: numericId } }
+              })
+            : Promise.resolve(null),
+        providers.riven.GET("/api/v1/items/library_states", {
             ...auth,
-            params: { path: { numeric_id: numericId } }
-        });
-        collected = status.data?.collected ?? false;
-    }
+            params: { query: { tpdb_ids: [tpdbUuid] } }
+        })
+    ]);
+
+    const collected = status?.data?.collected ?? false;
+
+    // Absent from the response means "not in the library" -- the endpoint omits
+    // ids it does not know rather than erroring, so a miss is not a failure.
+    const libraryState = library.data?.states?.[tpdbUuid] ?? null;
 
     return {
         item,
@@ -80,8 +94,9 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         numericId,
         // The uuid, not the numeric id, is what Riven stores as tpdb_id and
         // what the manual scrape addresses the title by.
-        tpdbUuid: (item.id as string | undefined) ?? params.id,
+        tpdbUuid,
         collected,
+        libraryState,
         similar: transformTPDBList(similar.data ?? [], type)
     };
 };

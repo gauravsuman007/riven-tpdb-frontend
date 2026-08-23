@@ -6,6 +6,7 @@ import providers from "$lib/providers";
 import { superValidate } from "sveltekit-superforms";
 import * as dateUtils from "$lib/utils/date";
 import { createScopedLogger } from "$lib/logger";
+import { stateBadge } from "$lib/utils/item-state";
 
 const logger = createScopedLogger("library-page-server");
 
@@ -27,6 +28,7 @@ interface RivenLibraryItem {
     } | null;
     poster_path?: string | null;
     aired_at?: string | null;
+    state?: string | null;
 }
 
 function getItemType(type: string): ItemType {
@@ -85,7 +87,11 @@ function transformItems(items: RivenLibraryItem[]) {
                 indexer,
                 tpdb_uuid: tpdbId,
                 type: getItemType(item.type),
-                riven_id: item.id
+                riven_id: item.id,
+                state: item.state ?? null,
+                // The card renders whatever `badge` it is handed; deriving it
+                // here keeps the state vocabulary in one place.
+                badge: stateBadge(item.state)
             };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
