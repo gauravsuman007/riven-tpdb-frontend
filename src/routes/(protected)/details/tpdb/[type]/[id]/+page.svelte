@@ -5,6 +5,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
     import DownloadIcon from "@lucide/svelte/icons/download";
+    import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -97,6 +98,19 @@
                             {requested ? "Queued in Riven" : "Request"}
                         </Button>
                     </form>
+
+                    <!--
+                        Manual scrape: pick the exact release and file rather
+                        than letting the ranker choose. Addressed by TPDB uuid,
+                        so it works before the title exists in the library.
+                    -->
+                    <ItemManualScrape
+                        title={item.title}
+                        externalId=""
+                        tpdbId={data.tpdbUuid}
+                        mediaType="movie"
+                        variant="outline"
+                        size="default" />
 
                     {#if data.numericId}
                         <form method="POST" action="?/collect" use:enhance>

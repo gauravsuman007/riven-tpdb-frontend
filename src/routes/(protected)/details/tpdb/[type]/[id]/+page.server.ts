@@ -78,6 +78,9 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         item,
         type,
         numericId,
+        // The uuid, not the numeric id, is what Riven stores as tpdb_id and
+        // what the manual scrape addresses the title by.
+        tpdbUuid: (item.id as string | undefined) ?? params.id,
         collected,
         similar: transformTPDBList(similar.data ?? [], type)
     };

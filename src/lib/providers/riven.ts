@@ -1502,6 +1502,8 @@ export interface components {
             tvdb_id?: string | null;
             /** Imdb Id */
             imdb_id?: string | null;
+            /** Tpdb Id */
+            tpdb_id?: string | null;
             /** Ranking Overrides */
             ranking_overrides?: {
                 [key: string]: string[];
@@ -1716,7 +1718,7 @@ export interface components {
              * Service
              * @enum {string}
              */
-            service: "realdebrid" | "alldebrid" | "debridlink";
+            service: "realdebrid" | "alldebrid" | "debridlink" | "torbox";
             /** Username */
             username?: string | null;
             /** Email */
@@ -1788,6 +1790,8 @@ export interface components {
             real_debrid?: components["schemas"]["RealDebridModel"];
             /** @description Debrid-Link downloader configuration */
             debrid_link?: components["schemas"]["DebridLinkModel"];
+            /** @description TorBox configuration */
+            torbox?: components["schemas"]["TorBoxModel"];
             /** @description AllDebrid downloader configuration */
             all_debrid?: components["schemas"]["AllDebridModel"];
         };
@@ -1895,13 +1899,13 @@ export interface components {
             cache_metrics: boolean;
             /**
              * Movie Dir Template
-             * @description Template for movie directory names. Available variables: title, year, tmdb_id, imdb_id, resolution, codec, hdr, audio, quality, is_remux, is_proper, is_repack, is_extended, is_directors_cut, container. Example: '{title} ({year})' or '{title} ({year}) [{resolution}]'
-             * @default {title} ({year}) {{tmdb-{tmdb_id}}}
+             * @description Template for movie directory names. Available variables: title, year, tpdb_id, tmdb_id, imdb_id, resolution, codec, hdr, audio, quality, is_remux, is_proper, is_repack, is_extended, is_directors_cut, container. Example: '{title} ({year})' or '{title} ({year}) [{resolution}]'
+             * @default {title} ({year}) {{tpdb-{tpdb_id}}}
              */
             movie_dir_template: string;
             /**
              * Movie File Template
-             * @description Template for movie file names (without extension). Available variables: title, year, tmdb_id, imdb_id, resolution, codec, hdr, audio, quality, remux, proper, repack, extended, directors_cut, edition (string flags, empty if false). Example: '{title} ({year})' or '{title} ({year}) {edition} [{resolution}] {remux}'
+             * @description Template for movie file names (without extension). Available variables: title, year, tpdb_id, tmdb_id, imdb_id, resolution, codec, hdr, audio, quality, remux, proper, repack, extended, directors_cut, edition (string flags, empty if false). Example: '{title} ({year})' or '{title} ({year}) {edition} [{resolution}] {remux}'
              * @default {title} ({year})
              */
             movie_file_template: string;
@@ -2540,7 +2544,20 @@ export interface components {
             webmux?: components["schemas"]["CustomRank"];
             xvid?: components["schemas"]["CustomRank"];
         };
-        /** RTNSettingsModel */
+        /**
+         * RTNSettingsModel
+         * @description Ranking settings, with defaults corrected for adult releases.
+         *
+         *     RTN is tuned for mainstream media, and two of its defaults are actively
+         *     wrong in an adult-only fork:
+         *
+         *     * ``remove_adult_content`` discards exactly the content this fork exists
+         *       to serve.
+         *     * ``title_similarity`` of 0.85 is too strict for adult naming, where a
+         *       release is routinely titled "<Title> Vol. 3" against a TPDB title of
+         *       "<Title>". At 0.85 every result for a real request was rejected; 0.60
+         *       accepts the genuine matches while still filtering unrelated titles.
+         */
         RTNSettingsModel: {
             /**
              * Name
@@ -3022,6 +3039,21 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** TorBoxModel */
+        TorBoxModel: {
+            /**
+             * Enabled
+             * @description Enable TorBox
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Api Key
+             * @description TorBox API key
+             * @default
+             */
+            api_key: string;
+        };
         /**
          * TorrentContainer
          * @description Represents a collection of files from an infohash from a debrid service
@@ -3135,7 +3167,7 @@ export interface components {
             /**
              * Enabled
              * @description Enable ThePornDB (TPDB) metadata integration
-             * @default false
+             * @default true
              */
             enabled: boolean;
             /**
@@ -4790,6 +4822,8 @@ export interface operations {
                 tvdb_id?: string | null;
                 /** @description The IMDB ID of the media item */
                 imdb_id?: string | null;
+                /** @description The TPDB UUID of the media item */
+                tpdb_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;
                 /** @description Custom title to use for scraping (not persisted) */
@@ -4848,6 +4882,8 @@ export interface operations {
                 tvdb_id?: string | null;
                 /** @description The IMDB ID of the media item */
                 imdb_id?: string | null;
+                /** @description The TPDB UUID of the media item */
+                tpdb_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;
                 api_key?: string | null;

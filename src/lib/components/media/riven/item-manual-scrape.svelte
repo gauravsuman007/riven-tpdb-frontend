@@ -58,7 +58,12 @@
     interface Props {
         title: string | null | undefined;
         itemId?: string | null;
+        /**
+         * TMDB/TVDB id. Empty for TPDB titles, which identify by `tpdbId`.
+         */
         externalId: string;
+        /** TPDB uuid, for titles sourced from ThePornDB rather than TMDB. */
+        tpdbId?: string | null;
         mediaType: "tv" | "movie";
         variant?:
             | "ghost"
@@ -78,6 +83,7 @@
         title,
         itemId,
         externalId,
+        tpdbId = null,
         mediaType,
         variant = "ghost",
         size = "sm",
@@ -378,6 +384,7 @@
 
             if (itemId)
                 queryParams.item_id = parseFileId(itemId); // Ensure int
+            else if (tpdbId) queryParams.tpdb_id = tpdbId;
             else if (externalId) {
                 if (mediaType === "movie") queryParams.tmdb_id = externalId;
                 if (mediaType === "tv") queryParams.tvdb_id = externalId;
@@ -575,7 +582,9 @@
             params.item_id = parseFileId(itemId);
         }
 
-        if (externalId) {
+        if (tpdbId) {
+            params.tpdb_id = tpdbId;
+        } else if (externalId) {
             if (mediaType === "movie") params.tmdb_id = externalId;
             if (mediaType === "tv") params.tvdb_id = externalId;
         }
