@@ -275,7 +275,7 @@ export interface TMDBTransformedListItem {
     vote_average: number | null;
     vote_count: number | null;
     popularity?: number;
-    indexer: "tmdb" | "tvdb";
+    indexer: "tmdb" | "tvdb" | "tpdb";
     original_language?: string;
     overview?: string;
     backdrop_path?: string | null;
@@ -283,6 +283,14 @@ export interface TMDBTransformedListItem {
     release_date?: string;
     first_air_date?: string;
     original_title?: string;
+}
+
+export interface TPDBTransformedListItem extends TMDBTransformedListItem {
+    /** TPDB UUID, used for detail and /similar lookups. */
+    tpdb_uuid: string | null;
+    /** Studio/network name, TPDB's closest equivalent to a genre chip. */
+    site_name: string | null;
+    performers: string[];
 }
 
 export interface ParsedMovieDetails extends ParsedMediaDetailsBase {
@@ -342,6 +350,45 @@ export function transformTMDBList(
             first_air_date: item.first_air_date,
             original_title: item.original_title ?? item.original_name
         })) || ([] as TMDBTransformedListItem[])
+    );
+}
+
+/**
+ * Map a TPDB scene or movie onto the shared list-item shape so the existing
+ * cards render it unchanged.
+ *
+ * Two things differ from the TMDB/TVDB sources and are deliberate:
+ *
+ *   * `vote_average`/`vote_count` are always null. TPDB carries a `rating`
+ *     field but it is 0 on every record, so surfacing it would draw an empty
+ *     star bar on every card and imply a score that does not exist.
+ *   * `id` is TPDB's integer `_id`, not the UUID in `id`. The UUID is kept in
+ *     `tpdb_uuid` because detail and /similar lookups need it, while the
+ *     integer is what the collection endpoints take.
+ */
+export function transformTPDBList(
+    items: unknown[] | null,
+    type: "movie" | "tv" = "movie"
+): TPDBTransformedListItem[] {
+    return (
+        (items as any[])?.map((item) => ({
+            id: item._id ?? 0,
+            tpdb_uuid: item.id ?? null,
+            title: item.title || "",
+            poster_path: item.poster || item.posters?.large || item.image || null,
+            media_type: type,
+            year: item.date ? (dateUtils.getYearFromISO(item.date) ?? "N/A") : "N/A",
+            vote_average: null,
+            vote_count: null,
+            indexer: "tpdb" as const,
+            overview: item.description || "",
+            backdrop_path: item.background?.full || item.background?.large || null,
+            release_date: item.date,
+            site_name: item.site?.name ?? null,
+            performers: (item.performers ?? [])
+                .map((performer: any) => performer?.name)
+                .filter(Boolean)
+        })) || ([] as TPDBTransformedListItem[])
     );
 }
 

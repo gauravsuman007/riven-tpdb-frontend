@@ -1094,6 +1094,327 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tpdb/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Scenes
+         * @description Newest scenes, optionally restricted to a single site.
+         */
+        get: operations["tpdb_list_scenes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/movies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Movies
+         * @description Newest movies, optionally restricted to a single site.
+         */
+        get: operations["tpdb_list_movies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Full-text search across one TPDB collection.
+         */
+        get: operations["tpdb_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tags
+         * @description The TPDB tag vocabulary (~2.6k entries).
+         */
+        get: operations["tpdb_list_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/tags/popular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Popular Tags
+         * @description Most frequent tags across the newest scenes.
+         *
+         *     Derived locally by counting tags over a sample of recent scenes. TPDB has no
+         *     tag popularity endpoint, so this reflects what is being published now rather
+         *     than what is most watched.
+         */
+        get: operations["tpdb_popular_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recommendations
+         * @description Recommendations seeded from the TPDB collection, then the library.
+         *
+         *     When the account has collected titles, each one is expanded through TPDB's
+         *     own ``/similar`` list -- the same relatedness the website shows -- and the
+         *     results are ranked by how many seeds recommended them, with anything already
+         *     collected or already in the library removed. ``because_of`` names the seeds
+         *     responsible, so a suggestion can be explained rather than just asserted.
+         *
+         *     Falls back to library site/performer overlap, then to configured
+         *     subscriptions, then to the newest scenes.
+         */
+        get: operations["tpdb_recommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sites
+         * @description Search sites (studios/networks) by name.
+         */
+        get: operations["tpdb_search_sites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/sites/{site_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Site
+         * @description A single site by UUID or numeric id.
+         */
+        get: operations["tpdb_get_site"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/performers/{performer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Performer
+         * @description A single performer by id.
+         */
+        get: operations["tpdb_get_performer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/scenes/{scene_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scene
+         * @description A single scene by UUID.
+         */
+        get: operations["tpdb_get_scene"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/movies/{movie_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Movie
+         * @description A single movie by id.
+         */
+        get: operations["tpdb_get_movie"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Collection
+         * @description The titles marked as collected on the authenticated TPDB account.
+         */
+        get: operations["tpdb_get_collection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/collection/{numeric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Collection Status
+         * @description Whether one title is collected. Takes the integer ``_id``, not the UUID.
+         */
+        get: operations["tpdb_get_collection_status"];
+        put?: never;
+        /**
+         * Add To Collection
+         * @description Add one title to the TPDB collection, by integer ``_id``.
+         *
+         *     This writes to the upstream TPDB account. TPDB exposes no DELETE on the
+         *     route, so it cannot be undone from here -- removal is manual on the TPDB
+         *     website.
+         */
+        post: operations["tpdb_add_to_collection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/movies/{movie_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Similar Movies
+         * @description Movies TPDB considers related to this one.
+         */
+        get: operations["tpdb_similar_movies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tpdb/scenes/{scene_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Similar Scenes
+         * @description Scenes TPDB considers related to this one.
+         */
+        get: operations["tpdb_similar_scenes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1241,6 +1562,8 @@ export interface components {
             ranking?: components["schemas"]["RTNSettingsModel"];
             /** @description Indexer configuration */
             indexer?: components["schemas"]["IndexerModel"];
+            /** @description ThePornDB metadata configuration */
+            tpdb?: components["schemas"]["TpdbModel"];
             /** @description Database configuration */
             database?: components["schemas"]["DatabaseModel"];
             /** @description Notifications configuration */
@@ -1353,6 +1676,20 @@ export interface components {
             /** Deleted Files */
             deleted_files: string[];
         };
+        /** CollectionResponse */
+        CollectionResponse: {
+            /** Movies */
+            movies: components["schemas"]["TpdbMovie"][];
+            /** Scenes */
+            scenes: components["schemas"]["TpdbScene"][];
+        };
+        /** CollectionStatus */
+        CollectionStatus: {
+            /** Numeric Id */
+            numeric_id: number;
+            /** Collected */
+            collected: boolean;
+        };
         /** CometConfig */
         CometConfig: {
             /**
@@ -1417,6 +1754,8 @@ export interface components {
             listrr?: components["schemas"]["ListrrModel"];
             /** @description Trakt configuration */
             trakt?: components["schemas"]["TraktModel"];
+            /** @description TPDB adult content subscriptions */
+            tpdb?: components["schemas"]["TpdbContentModel"];
         };
         /**
          * CustomRank
@@ -2479,6 +2818,20 @@ export interface components {
              */
             rss?: string[];
         };
+        /**
+         * PopularTagsResponse
+         * @description Tag frequency across a sample of the newest scenes.
+         *
+         *     Derived locally: TPDB exposes no tag popularity of its own.
+         */
+        PopularTagsResponse: {
+            /** Derived From */
+            derived_from: string;
+            /** Scenes Sampled */
+            scenes_sampled: number;
+            /** Tags */
+            tags: components["schemas"]["TagCount"][];
+        };
         /** PostProcessing */
         PostProcessing: {
             /** @description Subtitle post-processing configuration */
@@ -2639,6 +2992,38 @@ export interface components {
              * @default
              */
             api_key: string;
+        };
+        /**
+         * RecommendationsResponse
+         * @description Recommendations and the signal they were derived from.
+         *
+         *     ``basis`` says which signal was available, strongest first: the TPDB
+         *     collection, then the local library, then configured subscriptions, then the
+         *     plain newest feed.
+         */
+        RecommendationsResponse: {
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "collection" | "library" | "subscriptions" | "latest";
+            /** Seeds */
+            seeds: string[];
+            /** Movies */
+            movies: components["schemas"]["RecommendedMovie"][];
+            /** Scenes */
+            scenes: components["schemas"]["TpdbScene"][];
+        };
+        /**
+         * RecommendedMovie
+         * @description A recommended movie plus why it was surfaced.
+         */
+        RecommendedMovie: {
+            /** Votes */
+            votes: number;
+            /** Because Of */
+            because_of: string[];
+            movie: components["schemas"]["TpdbMovie"];
         };
         /** ReindexPayload */
         ReindexPayload: {
@@ -2879,6 +3264,10 @@ export interface components {
             item_id: number;
             /** Media Type */
             media_type?: ("movie" | "tv") | null;
+            /** Requested Season */
+            requested_season?: number | null;
+            /** Requested Episode */
+            requested_episode?: number | null;
             /** Tmdb Id */
             tmdb_id?: string | null;
             /** Tvdb Id */
@@ -3038,6 +3427,13 @@ export interface components {
             /** @description OpenSubtitles provider configuration */
             opensubtitles?: components["schemas"]["SubtitleProviderConfig"];
         };
+        /** TagCount */
+        TagCount: {
+            /** Name */
+            name: string;
+            /** Count */
+            count: number;
+        };
         /**
          * TorrentContainer
          * @description Represents a collection of files from an infohash from a debrid service
@@ -3146,6 +3542,214 @@ export interface components {
              * @default
              */
             proxy_url: string;
+        };
+        /** TpdbContentModel */
+        TpdbContentModel: {
+            /**
+             * Update Interval
+             * @description Update interval in seconds (1 hour default)
+             * @default 3600
+             */
+            update_interval: number;
+            /**
+             * Enabled
+             * @description Enable TPDB adult content subscriptions
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Sites
+             * @description TPDB site UUIDs (studios/networks) to subscribe to
+             */
+            sites?: string[];
+            /**
+             * Max Pages
+             * @description Pages of results (20 scenes each) to fetch per site per run
+             * @default 3
+             */
+            max_pages: number;
+        };
+        /** TpdbDirector */
+        TpdbDirector: {
+            /** Id */
+            id?: number | string | null;
+            /** Name */
+            name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TpdbImage */
+        TpdbImage: {
+            /** Full */
+            full?: string | null;
+            /** Large */
+            large?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TpdbModel */
+        TpdbModel: {
+            /**
+             * Enabled
+             * @description Enable ThePornDB (TPDB) metadata integration
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Api Token
+             * @description ThePornDB API token (Bearer)
+             * @default
+             */
+            api_token: string;
+            /**
+             * Api Base Url
+             * @description ThePornDB API base URL
+             * @default https://api.theporndb.net
+             */
+            api_base_url: string;
+        };
+        /**
+         * TpdbMovie
+         * @description A full-length movie.
+         */
+        TpdbMovie: {
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Rating */
+            rating?: number | null;
+            /** Date */
+            date?: string | null;
+            /** Duration */
+            duration?: number | null;
+            site?: components["schemas"]["TpdbSite"] | null;
+            /** Performers */
+            performers?: components["schemas"]["TpdbPerformer"][];
+            /** Directors */
+            directors?: components["schemas"]["TpdbDirector"][];
+            /** Tags */
+            tags?: components["schemas"]["TpdbTag"][];
+            /** Poster */
+            poster?: string | null;
+            background?: components["schemas"]["TpdbImage"] | null;
+            posters?: components["schemas"]["TpdbImage"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TpdbPerformer
+         * @description A performer (actor).
+         */
+        TpdbPerformer: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Disambiguation */
+            disambiguation?: string | null;
+            /** Face */
+            face?: string | null;
+            /** Image */
+            image?: string | null;
+            extras?: components["schemas"]["TpdbPerformerExtras"] | null;
+            /** Parent */
+            parent?: unknown | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TpdbPerformerExtras */
+        TpdbPerformerExtras: {
+            /** Gender */
+            gender?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TpdbScene
+         * @description A single scene.
+         */
+        TpdbScene: {
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Rating */
+            rating?: number | null;
+            /** Trailer */
+            trailer?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Duration */
+            duration?: number | null;
+            site?: components["schemas"]["TpdbSite"] | null;
+            /** Performers */
+            performers?: components["schemas"]["TpdbPerformer"][];
+            /** Directors */
+            directors?: components["schemas"]["TpdbDirector"][];
+            /** Tags */
+            tags?: components["schemas"]["TpdbTag"][];
+            /** Poster */
+            poster?: string | null;
+            background?: components["schemas"]["TpdbImage"] | null;
+            background_back?: components["schemas"]["TpdbImage"] | null;
+            posters?: components["schemas"]["TpdbImage"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TpdbSite
+         * @description A TPDB site, a.k.a. studio/network.
+         */
+        TpdbSite: {
+            /** Id */
+            id?: number | null;
+            /** Uuid */
+            uuid?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Poster */
+            poster?: string | null;
+            /** Logo */
+            logo?: string | null;
+            /** Favicon */
+            favicon?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Network Id */
+            network_id?: number | null;
+            parent?: components["schemas"]["TpdbSiteParent"] | null;
+            network?: components["schemas"]["TpdbSiteParent"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TpdbSiteParent
+         * @description Parent/network reference for a site (studio).
+         */
+        TpdbSiteParent: {
+            /** Id */
+            id?: number | null;
+            /** Name */
+            name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TpdbTag
+         * @description A tag (genre).
+         */
+        TpdbTag: {
+            /** Id */
+            id?: number | null;
+            /** Name */
+            name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TraktModel */
         TraktModel: {
@@ -5642,6 +6246,539 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_list_scenes: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                /** @description Site UUID or numeric id */
+                site_id?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbScene"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_list_movies: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                /** @description Site UUID or numeric id */
+                site_id?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbMovie"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_search: {
+        parameters: {
+            query: {
+                query: string;
+                type?: "scenes" | "movies" | "performers" | "sites";
+                page?: number;
+                per_page?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_list_tags: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbTag"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_popular_tags: {
+        parameters: {
+            query?: {
+                pages?: number;
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PopularTagsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_recommendations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                pages?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_search_sites: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbSite"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_site: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                site_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbSite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_performer: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                performer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbPerformer"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_scene: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbScene"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_movie: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbMovie"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_collection: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_get_collection_status: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                numeric_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_add_to_collection: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                numeric_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_similar_movies: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbMovie"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tpdb_similar_scenes: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpdbScene"][];
+                };
             };
             /** @description Validation Error */
             422: {

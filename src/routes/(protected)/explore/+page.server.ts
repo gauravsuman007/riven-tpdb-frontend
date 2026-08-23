@@ -4,118 +4,80 @@ import { searchSchema } from "$lib/schemas/search";
 import type { PageServerLoad } from "./$types";
 import { parseSearchQuery } from "$lib/search-parser";
 import providers from "$lib/providers";
-import {
-    transformTMDBList,
-    type TMDBListItem,
-    type TMDBTransformedListItem
-} from "$lib/providers/parser";
-import { createCustomFetch } from "$lib/custom-fetch";
+import { transformTPDBList, type TPDBTransformedListItem } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
 
-export const load: PageServerLoad = async ({ url, fetch }) => {
-    // Parse and validate search params from the URL
+/**
+ * Discovery is sourced from the Riven backend's TPDB endpoints rather than
+ * TMDB. The hero row is the backend's recommendations feed, which seeds from
+ * the TPDB collection and expands each title through TPDB's own related list;
+ * the browse pool is the newest movies and scenes.
+ *
+ * Nothing here ranks by popularity, because TPDB exposes no such signal --
+ * `rating` is 0 on every record and its ordering parameters are ignored.
+ */
+export const load: PageServerLoad = async ({ url, fetch, locals }) => {
     const form = await superValidate(url.searchParams, zod4(searchSchema));
     const parsed = parseSearchQuery(form.data.query || "");
 
-    // Fetch trending content for search examples and hero
-    let heroItems: TMDBTransformedListItem[] = [];
-    let feelingLuckyItems: TMDBTransformedListItem[] = [];
+    let heroItems: TPDBTransformedListItem[] = [];
+    let feelingLuckyItems: TPDBTransformedListItem[] = [];
     let searchExamples: string[] = [];
+    let recommendationBasis: string | null = null;
 
     try {
-        const customFetch = createCustomFetch(fetch);
+        const auth = {
+            baseUrl: locals.backendUrl,
+            headers: { "x-api-key": locals.apiKey },
+            fetch
+        };
 
-        // Generate 4 distinct random pages to ensure variety
-        const randomPagePopMovie = Math.floor(Math.random() * 50) + 1;
-        const randomPagePopTV = Math.floor(Math.random() * 50) + 1;
-        const randomPageTopMovie = Math.floor(Math.random() * 50) + 1;
-        const randomPageTopTV = Math.floor(Math.random() * 50) + 1;
-
-        const [trendingMovies, trendingTV, popularMovies, popularTV, topRatedMovies, topRatedTV] =
-            await Promise.all([
-                // High quality for Hero/Examples
-                providers.tmdb.GET("/3/trending/movie/{time_window}", {
-                    params: {
-                        path: { time_window: "week" },
-                        query: { language: "en-US" }
-                    },
-                    fetch: customFetch
-                }),
-                providers.tmdb.GET("/3/trending/tv/{time_window}", {
-                    params: {
-                        path: { time_window: "week" },
-                        query: { language: "en-US" }
-                    },
-                    fetch: customFetch
-                }),
-                // Random popular content
-                providers.tmdb.GET("/3/movie/popular", {
-                    params: {
-                        query: { page: randomPagePopMovie, language: "en-US" }
-                    },
-                    fetch: customFetch
-                }),
-                providers.tmdb.GET("/3/tv/popular", {
-                    params: {
-                        query: { page: randomPagePopTV, language: "en-US" }
-                    },
-                    fetch: customFetch
-                }),
-                // Random top rated content
-                providers.tmdb.GET("/3/movie/top_rated", {
-                    params: {
-                        query: { page: randomPageTopMovie, language: "en-US" }
-                    },
-                    fetch: customFetch
-                }),
-                providers.tmdb.GET("/3/tv/top_rated", {
-                    params: {
-                        query: { page: randomPageTopTV, language: "en-US" }
-                    },
-                    fetch: customFetch
-                })
-            ]);
-
-        const heroMovieResults = transformTMDBList(
-            (trendingMovies.data?.results as TMDBListItem[]) ?? []
-        );
-        const heroTvResults = transformTMDBList(
-            (trendingTV.data?.results as TMDBListItem[]) ?? [],
-            "tv"
-        );
-
-        const popularMovieResults = transformTMDBList(
-            (popularMovies.data?.results as TMDBListItem[]) ?? []
-        );
-        const popularTvResults = transformTMDBList(
-            (popularTV.data?.results as TMDBListItem[]) ?? [],
-            "tv"
-        );
-
-        const topRatedMovieResults = transformTMDBList(
-            (topRatedMovies.data?.results as TMDBListItem[]) ?? []
-        );
-        const topRatedTvResults = transformTMDBList(
-            (topRatedTV.data?.results as TMDBListItem[]) ?? [],
-            "tv"
-        );
-
-        // Hero items: Top trending
-        heroItems = shuffleArray([...heroMovieResults.slice(0, 5), ...heroTvResults.slice(0, 5)]);
-
-        // Feeling Lucky: Massive pool of random high-quality content
-        feelingLuckyItems = shuffleArray([
-            ...heroItems,
-            ...popularMovieResults,
-            ...popularTvResults,
-            ...topRatedMovieResults,
-            ...topRatedTvResults
+        const [recommendations, latestMovies, latestScenes] = await Promise.all([
+            providers.riven.GET("/api/v1/tpdb/recommendations", {
+                ...auth,
+                params: { query: { limit: 20 } }
+            }),
+            providers.riven.GET("/api/v1/tpdb/movies", {
+                ...auth,
+                params: { query: { per_page: 40 } }
+            }),
+            providers.riven.GET("/api/v1/tpdb/scenes", {
+                ...auth,
+                params: { query: { per_page: 40 } }
+            })
         ]);
 
-        // Extract titles for search examples from hero items
-        searchExamples = heroItems.slice(0, 6).map((item) => item.title?.toLowerCase() || "");
+        if (recommendations.error) {
+            logger.error("TPDB recommendations failed", recommendations.error);
+        }
+
+        const recommended = recommendations.data;
+        recommendationBasis = recommended?.basis ?? null;
+
+        // The recommendations payload nests each movie under `movie` alongside
+        // the vote count and the seeds that produced it.
+        heroItems = transformTPDBList(
+            (recommended?.movies ?? []).map((entry) => entry.movie)
+        );
+
+        const latest = [
+            ...transformTPDBList(latestMovies.data ?? []),
+            ...transformTPDBList(latestScenes.data ?? [])
+        ];
+
+        // Recommendations can be empty on a fresh account with nothing
+        // collected; fall back to the newest titles so the page is never bare.
+        if (heroItems.length === 0) {
+            heroItems = latest.slice(0, 10);
+        }
+
+        feelingLuckyItems = shuffleArray([...heroItems, ...latest]);
+        searchExamples = heroItems
+            .slice(0, 6)
+            .map((item) => item.title?.toLowerCase() || "")
+            .filter(Boolean);
     } catch (err) {
-        logger.error("Failed to fetch trending content", err);
+        logger.error("Failed to fetch TPDB discovery content", err);
     }
 
     return {
@@ -123,7 +85,8 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
         parsed,
         searchExamples,
         heroItems,
-        feelingLuckyItems
+        feelingLuckyItems,
+        recommendationBasis
     };
 };
 
