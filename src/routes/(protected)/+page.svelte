@@ -2,7 +2,6 @@
     import type { PageData } from "./$types";
     import TmdbNowPlaying from "$lib/components/tmdb-now-playing.svelte";
     import ListCarousel from "$lib/components/list-carousel.svelte";
-    import AnimatedToggle from "$lib/components/animated-toggle.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import { MediaListStore, type BaseListItem } from "$lib/services/lists-cache.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -20,19 +19,15 @@
         null,
         { noCache: true, initialData: data.recentlyAdded }
     );
-    const trendingMoviesStore = new MediaListStore<BaseListItem>(
-        "trendingMovies",
-        "/api/tmdb/movie",
-        "day"
+    // TPDB has no trending window -- its ordering parameters are ignored
+    // upstream -- so these are newest-first feeds with no day/week toggle.
+    const latestMoviesStore = new MediaListStore<BaseListItem>(
+        "tpdbLatestMovies",
+        "/api/tpdb/search/movie"
     );
-    const trendingShowsStore = new MediaListStore<BaseListItem>(
-        "trendingShows",
-        "/api/tmdb/tv",
-        "day"
-    );
-    const anilistTrendingStore = new MediaListStore<BaseListItem>(
-        "anilistTrending",
-        "/api/anilist/trending"
+    const latestScenesStore = new MediaListStore<BaseListItem>(
+        "tpdbLatestScenes",
+        "/api/tpdb/search/tv"
     );
 </script>
 
@@ -47,7 +42,7 @@
 {/snippet}
 
 <svelte:head>
-    <title>Home - Riven</title>
+    <title>Home - Riven TPDB</title>
 </svelte:head>
 
 <PageShell
@@ -86,56 +81,24 @@
                 class="flex flex-col gap-4"
                 in:fly|global={{ y: 20, duration: 400, delay: 150, easing: cubicOut }}>
                 <div class="mb-1 flex items-center justify-between">
-                    {@render listHeading("Trending Movies")}
-                    <div class="flex items-center gap-3">
-                        <AnimatedToggle
-                            options={[
-                                { label: "Today", value: "day" },
-                                { label: "This Week", value: "week" }
-                            ]}
-                            value={trendingMoviesStore.timeWindow ?? "day"}
-                            onchange={(v) =>
-                                trendingMoviesStore.changeTimeWindow(v as "day" | "week")} />
-                        <Button
-                            class={viewAllButtonClass}
-                            variant="ghost"
-                            href="/lists/trending/movie">View All</Button>
-                    </div>
+                    {@render listHeading("Latest Movies")}
+                    <Button class={viewAllButtonClass} variant="ghost" href="/lists/trending/movie"
+                        >View All</Button>
                 </div>
-                <ListCarousel data={trendingMoviesStore.items} />
+                <ListCarousel data={latestMoviesStore.items} />
             </div>
 
             <div
                 class="flex flex-col gap-4"
                 in:fly|global={{ y: 20, duration: 400, delay: 200, easing: cubicOut }}>
                 <div class="mb-1 flex items-center justify-between">
-                    {@render listHeading("Trending TV Shows")}
-                    <div class="flex items-center gap-3">
-                        <AnimatedToggle
-                            options={[
-                                { label: "Today", value: "day" },
-                                { label: "This Week", value: "week" }
-                            ]}
-                            value={trendingShowsStore.timeWindow ?? "day"}
-                            onchange={(v) =>
-                                trendingShowsStore.changeTimeWindow(v as "day" | "week")} />
-                        <Button class={viewAllButtonClass} variant="ghost" href="/lists/trending/tv"
-                            >View All</Button>
-                    </div>
-                </div>
-                <ListCarousel data={trendingShowsStore.items} />
-            </div>
-
-            <div
-                class="flex flex-col gap-4"
-                in:fly|global={{ y: 20, duration: 400, delay: 250, easing: cubicOut }}>
-                <div class="mb-1 flex items-center justify-between">
-                    {@render listHeading("Trending Anime")}
-                    <Button class={viewAllButtonClass} variant="ghost" href="/lists/trending/anime"
+                    {@render listHeading("Latest Scenes")}
+                    <Button class={viewAllButtonClass} variant="ghost" href="/lists/trending/tv"
                         >View All</Button>
                 </div>
-                <ListCarousel data={anilistTrendingStore.items} indexer="anilist" />
+                <ListCarousel data={latestScenesStore.items} />
             </div>
+
         </div>
     </div>
 </PageShell>

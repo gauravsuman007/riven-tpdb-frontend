@@ -8,7 +8,6 @@
     import { getSeasonAndYear } from "$lib/helpers";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
-    import { getRatings } from "$lib/stores/ratings";
     import { Play, Info, Star } from "@lucide/svelte";
 
     export interface TMDBNowPlayingItem {
@@ -73,49 +72,12 @@
     });
 
     async function loadItemData(item: TMDBNowPlayingItem) {
-        // Fetch Ratings (independent of logo)
-        if (ratings[item.id] === undefined) {
-            const mediaType = item.media_type === "tv" ? "tv" : "movie";
-            getRatings(item.id, mediaType)
-                .then((data) => {
-                    ratings[item.id] = data;
-                })
-                .catch(() => {
-                    ratings[item.id] = null;
-                });
-        }
-
-        // Fetch Logo & Certification
-        if (logos[item.id] !== undefined) return;
-
-        const mediaType = item.media_type === "tv" ? "tv" : "movie";
-        try {
-            const res = await fetch(`/api/tmdb/${mediaType}/${item.id}/logo`);
-            const data = await res.json();
-
-            // Set certification if available
-            if (data.certification) {
-                certifications[item.id] = data.certification;
-            } else {
-                certifications[item.id] = null;
-            }
-
-            if (data.logo) {
-                const img = new Image();
-                img.src = data.logo;
-                img.onload = () => {
-                    logos[item.id] = data.logo;
-                };
-                img.onerror = () => {
-                    logos[item.id] = null;
-                };
-            } else {
-                logos[item.id] = null;
-            }
-        } catch (e) {
-            console.error("Failed to fetch logo/cert", e);
-            logos[item.id] = null;
-        }
+        // TPDB carries no ratings, logo artwork or certifications -- `rating` is
+        // 0 on every record -- and the TMDB endpoints that supplied them are
+        // gone, so these are pinned to null rather than fetched.
+        if (ratings[item.id] === undefined) ratings[item.id] = null;
+        if (logos[item.id] === undefined) logos[item.id] = null;
+        if (certifications[item.id] === undefined) certifications[item.id] = null;
     }
 
     $effect(() => {
@@ -381,7 +343,7 @@
                                         <Button
                                             variant="secondary"
                                             size="lg"
-                                            href="/details/media/{item.id}/{mediaType}"
+                                            href="/details/tpdb/{mediaType}/{(item as any).tpdb_uuid ?? item.id}"
                                             class="flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/10 px-8 text-sm font-bold text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:bg-white/20 md:h-12 md:text-base">
                                             More Info
                                         </Button>

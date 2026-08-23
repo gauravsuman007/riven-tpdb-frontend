@@ -1,29 +1,20 @@
 <script lang="ts">
     import { setContext } from "svelte";
     import ListItem from "$lib/components/list-item.svelte";
-    import { Button } from "$lib/components/ui/button/index.js";
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { onMount } from "svelte";
     import { SearchStore } from "$lib/services/search-store.svelte";
-    import { FilterStore, SORT_OPTIONS } from "$lib/services/filter-store.svelte";
-    import FilterPopover from "$lib/components/filter-popover.svelte";
-    import * as Select from "$lib/components/ui/select/index.js";
-    import XIcon from "@lucide/svelte/icons/x";
-    import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
     import PageShell from "$lib/components/page-shell.svelte";
 
     let searchStore = new SearchStore();
-    let filterStore = new FilterStore();
     let loadMoreTrigger = $state<HTMLDivElement | null>(null);
 
-    // Provide stores to children (like FilterPopover)
     setContext("searchStore", searchStore);
-    setContext("filterStore", filterStore);
 
     let isTriggerVisible = $state(false);
 
     onMount(() => {
-        // Initialize as a discovery page for TV shows
+        // Discovery page for TPDB scenes
         searchStore.mediaType = "tv";
         searchStore.allowEmptySearch = true; // Enable discovery mode
         searchStore.search(); // Initial fetch
@@ -54,26 +45,12 @@
         }
     });
 
-    function applyFilters() {
-        const params = filterStore.buildParams("tv");
-        searchStore.setFilters(params, true);
-    }
 
-    function clearFilters() {
-        filterStore.reset();
-        searchStore.clearFilters();
-        searchStore.search();
-    }
 
-    function handleSortChange(value: string) {
-        if (!value) return;
-        filterStore.sortBy = value;
-        applyFilters();
-    }
 </script>
 
 <svelte:head>
-    <title>Trending TV Shows - Riven</title>
+    <title>Scenes - Riven TPDB</title>
 </svelte:head>
 
 <PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden">
@@ -94,42 +71,9 @@
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <h1
                     class="text-foreground text-3xl font-black tracking-tight drop-shadow-md sm:text-4xl lg:text-5xl">
-                    Trending TV Shows
+                    Scenes
                 </h1>
 
-                <div class="flex items-center gap-2">
-                    <!-- Sort Dropdown -->
-                    <Select.Root
-                        type="single"
-                        value={filterStore.sortBy}
-                        onValueChange={handleSortChange}>
-                        <Select.Trigger class="h-9 w-[180px] gap-2">
-                            <ArrowUpDownIcon class="text-muted-foreground size-4" />
-                            <span class="truncate">
-                                {SORT_OPTIONS.find((s) => s.value === filterStore.sortBy)?.label ||
-                                    "Most Popular"}
-                            </span>
-                        </Select.Trigger>
-                        <Select.Content
-                            class="bg-popover rounded-2xl border-none shadow-2xl shadow-black/50">
-                            {#each SORT_OPTIONS.filter( (o) => (o.allowedFor as readonly string[]).includes("tv") ) as option (option.value)}
-                                <Select.Item value={option.value} label={option.label}>
-                                    {option.label}
-                                </Select.Item>
-                            {/each}
-                        </Select.Content>
-                    </Select.Root>
-
-                    <div class="bg-border mx-2 h-6 w-px"></div>
-
-                    <FilterPopover onApply={applyFilters} />
-                    {#if filterStore.hasActiveFilters}
-                        <Button variant="ghost" size="sm" onclick={clearFilters} class="gap-1">
-                            <XIcon class="size-4" />
-                            Clear
-                        </Button>
-                    {/if}
-                </div>
             </div>
         </div>
 
@@ -160,11 +104,7 @@
             </div>
         {:else}
             <div class="flex flex-col items-center justify-center gap-2 py-16">
-                <p class="text-muted-foreground">No shows found</p>
-                {#if filterStore.hasActiveFilters}
-                    <Button variant="outline" size="sm" onclick={clearFilters}
-                        >Clear Filters</Button>
-                {/if}
+                <p class="text-muted-foreground">Nothing found</p>
             </div>
         {/if}
         <div bind:this={loadMoreTrigger}></div>

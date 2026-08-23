@@ -351,34 +351,19 @@ export class SearchStore {
      * Build the search endpoint URL for a given type and page
      */
     private buildSearchUrl(type: "movie" | "tv" | "person" | "company", page: number): string {
-        // Merge parsed search params with filter params
-        // Filter params take precedence
-        const hasFilters = Object.keys(this.filterParams).length > 0;
-
-        // When filters are active, always use discover mode because
-        // TMDB's search endpoints don't support most filter params
-        const searchMode = hasFilters ? "discover" : this.parsedSearch?.searchMode || "discover";
-
-        const params = {
-            ...(this.parsedSearch?.tmdbParams || {}),
-            ...this.filterParams,
-            page,
-            searchMode
-        };
-
-        // Remove 'query' param when using discover mode (it's not supported)
-        if (searchMode === "discover") {
-            delete params.query;
-        }
-
+        // The TPDB backend understands only a free-text query and a page. Its
+        // sort and filter parameters are silently ignored upstream, so passing
+        // the TMDB filter set through would produce a page that looks filtered
+        // but is not. Only the query survives.
         const searchParams = new URLSearchParams();
-        for (const [key, value] of Object.entries(params)) {
-            if (value !== undefined && value !== null && value !== "") {
-                searchParams.append(key, String(value));
-            }
-        }
+        const query = this.parsedSearch?.query;
 
-        return `/api/tmdb/search/${type}?${searchParams.toString()}`;
+        if (query) {
+            searchParams.append("query", query);
+        }
+        searchParams.append("page", String(page));
+
+        return `/api/tpdb/search/${type}?${searchParams.toString()}`;
     }
 
     /**

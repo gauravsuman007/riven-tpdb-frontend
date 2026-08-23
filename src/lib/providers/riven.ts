@@ -1483,6 +1483,11 @@ export interface components {
              */
             tvdb_ids?: string[] | null;
             /**
+             * Tpdb Ids
+             * @description Comma-separated list of TPDB UUIDs
+             */
+            tpdb_ids?: string[] | null;
+            /**
              * Media Type
              * @description Media type
              * @enum {string}

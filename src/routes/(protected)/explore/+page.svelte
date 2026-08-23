@@ -29,22 +29,6 @@
         data.heroItems && data.heroItems.length > 0 ? data.heroItems[currentHeroIndex] : null
     );
 
-    // Ratings promise derived from hero item
-    let ratingsPromise = $derived.by(async () => {
-        const item = heroItem;
-        if (!item) return null;
-
-        const res = await fetch(`/api/ratings/${item.id}?type=${item.media_type}`);
-
-        // Race condition check: If the hero item has rotated while fetching, ignore this result
-        if (heroItem?.id !== item.id) return null;
-
-        return res.ok
-            ? (res.json() as Promise<{
-                  scores: Array<{ name: string; image?: string; score: string; url: string }>;
-              }>)
-            : null;
-    });
 
     // Derived background image: Use hero item for empty state, first result for active search
     let backgroundImage = $derived(
@@ -59,7 +43,7 @@
         if (!data.feelingLuckyItems?.length) return;
         const randomItem =
             data.feelingLuckyItems[Math.floor(Math.random() * data.feelingLuckyItems.length)];
-        const route = resolve(`/details/media/${randomItem.id}/${randomItem.media_type}`);
+        const route = `/details/tpdb/${randomItem.media_type === "tv" ? "tv" : "movie"}/${randomItem.tpdb_uuid ?? randomItem.id}`;
         goto(route);
     }
 
@@ -252,56 +236,15 @@
                                 in:fly={{ y: 20, duration: 1000 }}
                                 class="flex flex-col gap-6 md:gap-8">
                                 <div class="max-w-3xl space-y-4">
-                                    <div class="flex items-center gap-4">
-                                        {#await ratingsPromise}
+                                    {#if (heroItem as any).site_name}
+                                        <div class="flex items-center gap-4">
                                             <div
-                                                class="h-6 w-24 animate-pulse rounded-full bg-white/10">
+                                                class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md">
+                                                <span class="text-sm font-bold text-white"
+                                                    >{(heroItem as any).site_name}</span>
                                             </div>
-                                        {:then ratings}
-                                            {#if ratings?.scores?.length}
-                                                <div class="flex items-center gap-3">
-                                                    {#each ratings.scores as score (score.name)}
-                                                        <div
-                                                            title={score.name}
-                                                            class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md transition-transform hover:scale-105">
-                                                            {#if score.image}
-                                                                <img
-                                                                    src="/rating-logos/{score.image}"
-                                                                    alt={score.name}
-                                                                    class="h-4 w-4 object-contain" />
-                                                            {:else}
-                                                                <span class="font-bold text-white"
-                                                                    >{score.name}</span>
-                                                            {/if}
-                                                            <span
-                                                                class="text-sm font-bold text-white"
-                                                                >{score.score}</span>
-                                                        </div>
-                                                    {/each}
-                                                </div>
-                                            {:else if heroItem.vote_average}
-                                                <div
-                                                    class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md">
-                                                    <span class="font-black text-[#01b4e4]"
-                                                        >TMDB</span>
-                                                    <span class="text-sm font-bold text-white">
-                                                        {heroItem.vote_average.toFixed(1)}
-                                                    </span>
-                                                </div>
-                                            {/if}
-                                        {:catch}
-                                            {#if heroItem.vote_average}
-                                                <div
-                                                    class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md">
-                                                    <span class="font-black text-[#01b4e4]"
-                                                        >TMDB</span>
-                                                    <span class="text-sm font-bold text-white">
-                                                        {heroItem.vote_average.toFixed(1)}
-                                                    </span>
-                                                </div>
-                                            {/if}
-                                        {/await}
-                                    </div>
+                                        </div>
+                                    {/if}
                                     <h2
                                         class="text-foreground text-4xl font-black tracking-tight drop-shadow-lg md:text-6xl lg:text-7xl">
                                         {heroItem.title}
@@ -314,7 +257,7 @@
                                         <Button
                                             size="lg"
                                             class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary rounded-xl border bg-transparent font-bold shadow-xl backdrop-blur-md"
-                                            href={`/details/media/${heroItem.id}/${heroItem.media_type}`}>
+                                            href={`/details/tpdb/${heroItem.media_type === "tv" ? "tv" : "movie"}/${(heroItem as any).tpdb_uuid ?? heroItem.id}`}>
                                             <Info class="mr-2 h-5 w-5" />
                                             View Details
                                         </Button>

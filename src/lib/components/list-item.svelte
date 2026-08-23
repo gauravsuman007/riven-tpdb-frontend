@@ -30,6 +30,15 @@
 
     let mediaURL = $derived.by(() => {
         if (!data.id) return null;
+
+        // TPDB items are addressed by their UUID and have their own detail
+        // page; the TMDB one expects seasons/episodes and external ids.
+        if (indexer === "tpdb") {
+            if (normalizedType === "person" || normalizedType === "company") return null;
+            const uuid = data.tpdb_uuid ?? data.id;
+            return `/details/tpdb/${normalizedType === "tv" ? "tv" : "movie"}/${uuid}`;
+        }
+
         if (normalizedType === "person" || normalizedType === "company") {
             return `/details/entity/${data.id}/${normalizedType}`;
         }
