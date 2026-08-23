@@ -2,7 +2,14 @@
 FROM node:24-alpine AS frontend
 WORKDIR /app
 COPY . .
-RUN npm install -g pnpm && pnpm install
+# Activate the pnpm version pinned in package.json's packageManager field.
+# `npm install -g pnpm` installs a different build, and pnpm 10 then tries to
+# self-manage by fetching @pnpm/exe, which fails on arm64 because the lockfile
+# has no entry for that platform.
+RUN corepack enable && corepack prepare pnpm@10.28.0 --activate && pnpm install --frozen-lockfile
+# Vite's SSR bundle exceeds node's default old-space limit on this project,
+# aborting with a heap OOM (exit 134). Raise it for the build only.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm run build && pnpm prune --prod
 
 # Final Image
