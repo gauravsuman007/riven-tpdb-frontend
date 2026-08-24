@@ -754,8 +754,25 @@
                 pinchStartDistance
                     ? 'none'
                     : 'transform 120ms ease-out'};">
-                {#key target.itemId}
-                    <VideoPlayer itemId={target.itemId} bind:element={video} class="h-full w-full" />
+                <!--
+                    Keyed so switching titles remounts the player: the element
+                    is reused across targets, and a stale src would otherwise
+                    keep playing under the new title.
+                -->
+                {#key target.kind === "library" ? `item-${target.itemId}` : target.src}
+                    {#if target.kind === "library"}
+                        <VideoPlayer
+                            itemId={target.itemId}
+                            bind:element={video}
+                            class="h-full w-full" />
+                    {:else}
+                        <VideoPlayer
+                            src={target.src}
+                            mimeType={target.mimeType}
+                            poster={target.poster}
+                            bind:element={video}
+                            class="h-full w-full" />
+                    {/if}
                 {/key}
             </div>
 

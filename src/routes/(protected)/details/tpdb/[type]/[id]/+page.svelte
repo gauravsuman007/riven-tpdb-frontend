@@ -13,6 +13,7 @@
     import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import LayersIcon from "@lucide/svelte/icons/layers";
     import * as Collapsible from "$lib/components/ui/collapsible/index.js";
+    import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
     import ReleaseMeta from "$lib/components/media/riven/release-meta.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { formatBytes } from "$lib/helpers";
@@ -241,6 +242,14 @@
                         {/each}
                     </div>
                 {/if}
+
+                <!--
+                    Sits above the candidate releases on purpose. A user who
+                    opens this section wants to watch the title now; the
+                    releases below are about getting it into the library, which
+                    is a slower and different intention.
+                -->
+                <DirectSearch title={item.title} />
 
                 <!--
                     Candidate releases: every release the scrapers found for

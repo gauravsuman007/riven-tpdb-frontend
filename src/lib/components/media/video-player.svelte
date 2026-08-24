@@ -18,7 +18,21 @@
     import Hls from "hls.js";
 
     interface VideoPlayerProps {
-        itemId: number;
+        /**
+         * Library item to play. Omitted for a direct-site video, which has no
+         * item id because nothing was ever downloaded for it.
+         */
+        itemId?: number;
+        /**
+         * A ready-made URL to play instead of a library item. When set, the
+         * codec negotiation below is skipped entirely: the backend has already
+         * resolved and is proxying the file, and there is no remux or
+         * transcode path to fall back to.
+         */
+        src?: string;
+        /** What `src` serves. An HLS playlist needs hls.js, an MP4 does not. */
+        mimeType?: string;
+        poster?: string;
         class?: string;
         /**
          * Exposed so the overlay can drive seeking and read the frame size.
@@ -51,6 +65,9 @@
 
     let {
         itemId,
+        src,
+        mimeType = "video/mp4",
+        poster,
         class: className = "",
         element = $bindable(),
         controls = false
@@ -141,7 +158,39 @@
         });
     }
 
+    /** Play a URL the backend has already resolved for us. */
+    function startExternal(url: string) {
+        if (isHlsPlaylist(mimeType)) {
+            mode = "transcode";
+            if (videoElement?.canPlayType(mimeType)) {
+                videoElement.src = url;
+                return;
+            }
+            if (!Hls.isSupported()) {
+                error = "This browser cannot play this stream.";
+                return;
+            }
+            hls = new Hls();
+            hls.loadSource(url);
+            if (videoElement) hls.attachMedia(videoElement);
+            return;
+        }
+
+        mode = "external";
+        if (videoElement) videoElement.src = url;
+    }
+
+    function isHlsPlaylist(type: string): boolean {
+        return type.includes("mpegurl") || type.includes("x-mpegURL");
+    }
+
     onMount(async () => {
+        if (src) {
+            startExternal(src);
+            loading = false;
+            return;
+        }
+
         try {
             const response = await fetch(`/api/stream/${itemId}/playback_info`);
 
@@ -177,7 +226,7 @@
         hls?.destroy();
 
         // Free the ffmpeg session rather than waiting for it to idle out.
-        if (mode === "transcode" && typeof fetch !== "undefined") {
+        if (mode === "transcode" && itemId !== undefined && typeof fetch !== "undefined") {
             fetch(`/api/stream/${itemId}/hls/index.m3u8`, { method: "DELETE" }).catch(() => {});
         }
     });
@@ -197,6 +246,13 @@
             if (mode === "remux") {
                 console.log("Remux failed to decode; falling back to transcoding.");
                 startHls();
+                return;
+            }
+
+            if (mode === "external") {
+                // Nothing to escalate to: there is no library file behind this,
+                // so remux and transcode have nothing to read.
+                error = "This browser cannot play this video.";
                 return;
             }
         }
@@ -222,6 +278,7 @@
             bind:this={videoElement}
             onerror={onVideoError}
             {controls}
+            {poster}
             autoplay
             controlslist="nofullscreen noremoteplayback nodownload"
             disablepictureinpicture
