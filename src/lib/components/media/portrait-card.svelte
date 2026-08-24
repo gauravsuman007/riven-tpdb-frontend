@@ -2,6 +2,7 @@
     import Mountain from "@lucide/svelte/icons/mountain";
     import Check from "@lucide/svelte/icons/check";
     import { cn } from "$lib/utils";
+    import Play from "@lucide/svelte/icons/play";
     import type { Snippet } from "svelte";
 
     interface Props {
@@ -15,6 +16,8 @@
         class?: string;
         topRight?: Snippet;
         showContent?: boolean;
+        /** When set, a play affordance is drawn over the poster. */
+        onPlay?: () => void;
     }
 
     let {
@@ -27,7 +30,8 @@
         onSelectToggle,
         class: className,
         topRight,
-        showContent = true
+        showContent = true,
+        onPlay
     }: Props = $props();
 </script>
 
@@ -59,6 +63,28 @@
         <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center">
             <Mountain size={32} strokeWidth={1} />
         </div>
+    {/if}
+
+    <!--
+        Play affordance. Sits above the poster but below the content, and
+        stops propagation because the whole card is usually wrapped in a link
+        to the detail page -- a play tap must not also navigate.
+    -->
+    {#if onPlay}
+        <button
+            type="button"
+            onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onPlay?.();
+            }}
+            aria-label={`Play ${title}`}
+            class="absolute inset-0 z-20 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-visible:opacity-100">
+            <span
+                class="flex size-12 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/30 backdrop-blur transition-transform duration-300 hover:scale-110">
+                <Play class="ml-0.5 size-6 fill-current" />
+            </span>
+        </button>
     {/if}
 
     <!-- Selection Overlay -->

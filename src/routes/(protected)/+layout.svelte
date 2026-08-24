@@ -1,4 +1,5 @@
 <script lang="ts">
+    import OverlayPlayer from "$lib/components/media/overlay-player.svelte";
     import "@fontsource/oxanium/300.css";
     import "@fontsource/oxanium/400.css";
     import "@fontsource/oxanium/500.css";
@@ -72,3 +73,6 @@
     </main>
     <MobileNav />
 </div>
+
+<!-- Rendered once: play buttons anywhere in the app open it via the store. -->
+<OverlayPlayer />

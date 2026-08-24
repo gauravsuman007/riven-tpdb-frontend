@@ -12,7 +12,7 @@
     import { describeState } from "$lib/utils/item-state";
     import { formatBytes } from "$lib/helpers";
     import PlayIcon from "@lucide/svelte/icons/play";
-    import VideoPlayer from "$lib/components/media/video-player.svelte";
+    import { openPlayer } from "$lib/stores/player.svelte";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -31,8 +31,6 @@
     // Playable means a file is actually mounted, not merely that the item
     // reached Completed -- the VFS entry is what the stream endpoint reads.
     const playable = $derived(files.some((file) => file.available_in_vfs));
-
-    let showPlayer = $state(false);
 
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
@@ -111,9 +109,9 @@
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
                     {#if playable && libraryState}
-                        <Button onclick={() => (showPlayer = !showPlayer)}>
+                        <Button onclick={() => openPlayer(libraryState.riven_id, item.title)}>
                             <PlayIcon class="mr-2 size-4" />
-                            {showPlayer ? "Close player" : "Play"}
+                            Play
                         </Button>
                     {/if}
 
@@ -173,12 +171,6 @@
                     <p class="text-muted-foreground text-xs">
                         {status.description}
                     </p>
-                {/if}
-
-                {#if showPlayer && libraryState}
-                    <div class="mt-2 overflow-hidden rounded-xl border">
-                        <VideoPlayer itemId={libraryState.riven_id} />
-                    </div>
                 {/if}
 
                 {#if files.length}
@@ -320,8 +312,12 @@
                                 {/if}
 
                                 {#if related.overview}
+                                    <!-- Four lines, not two: these rows have the
+                                         vertical room and the extra context is
+                                         what makes a related title worth
+                                         clicking. -->
                                     <p
-                                        class="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
+                                        class="text-muted-foreground line-clamp-4 text-sm leading-relaxed">
                                         {related.overview}
                                     </p>
                                 {/if}

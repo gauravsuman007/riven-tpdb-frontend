@@ -9,6 +9,8 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { Play, Info, Star } from "@lucide/svelte";
+    import { describeState } from "$lib/utils/item-state";
+    import { openPlayer } from "$lib/stores/player.svelte";
 
     export interface TMDBNowPlayingItem {
         id: number;
@@ -331,19 +333,32 @@
                                             alignment,
                                             'flex'
                                         )}">
-                                        {#if showRequestButton}
+                                        <!--
+                                            This used to link to /watch/{id},
+                                            a route that does not exist. It now
+                                            opens the overlay player, and only
+                                            appears when the file is actually
+                                            available.
+                                        -->
+                                        {#if showRequestButton && describeState((item as any).state).available && (item as any).riven_id}
                                             <Button
-                                                href="/watch/{item.id}"
+                                                onclick={() =>
+                                                    openPlayer(
+                                                        (item as any).riven_id,
+                                                        item.title ?? ""
+                                                    )}
                                                 variant="default"
                                                 size="lg"
                                                 class="bg-primary text-primary-foreground hover:bg-primary/90 flex h-10 items-center justify-center rounded-md px-8 text-sm font-bold shadow-sm transition-all hover:scale-[1.02] md:h-12 md:text-base">
+                                                <Play class="mr-2 size-4 fill-current" />
                                                 Play Now
                                             </Button>
                                         {/if}
                                         <Button
                                             variant="secondary"
                                             size="lg"
-                                            href="/details/tpdb/{mediaType}/{(item as any).tpdb_uuid ?? item.id}"
+                                            href="/details/tpdb/{mediaType}/{(item as any)
+                                                .tpdb_uuid ?? item.id}"
                                             class="flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/10 px-8 text-sm font-bold text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:bg-white/20 md:h-12 md:text-base">
                                             More Info
                                         </Button>

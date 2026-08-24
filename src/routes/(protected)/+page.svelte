@@ -17,7 +17,9 @@
         "recentlyAdded",
         "/api/library/recent",
         null,
-        { noCache: true, initialData: data.recentlyAdded }
+        // No initialData: the store fetches this itself on mount, so the
+        // server load no longer blocks first paint on a library round trip.
+        { noCache: true }
     );
     // TPDB has no trending window -- its ordering parameters are ignored
     // upstream -- so these are newest-first feeds with no day/week toggle.
@@ -98,7 +100,6 @@
                 </div>
                 <ListCarousel data={latestScenesStore.items} />
             </div>
-
         </div>
     </div>
 </PageShell>

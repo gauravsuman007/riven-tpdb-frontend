@@ -3,6 +3,7 @@ import { redirect } from "@sveltejs/kit";
 import providers from "$lib/providers";
 import { transformTPDBList } from "$lib/providers/parser";
 import { createScopedLogger } from "$lib/logger";
+import { attachLibraryStates } from "$lib/server/library-state";
 
 const logger = createScopedLogger("home");
 
@@ -24,6 +25,9 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
             fetch
         };
 
+        // Only the carousel is awaited. Everything else on this page is below
+        // the fold and its promise is streamed, so first paint no longer waits
+        // on TPDB's rate limiter.
         const [recommendations, latestMovies] = await Promise.all([
             providers.riven.GET("/api/v1/tpdb/recommendations", {
                 ...auth,
@@ -48,17 +52,14 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
         // dropped rather than rendered as an empty panel.
         const withBackdrop = [...recommended, ...latest].filter((item) => item.backdrop_path);
 
-        const recentlyAddedRes = await fetch("/api/library/recent");
-        const recentlyAddedJson = recentlyAddedRes.ok
-            ? await recentlyAddedRes.json()
-            : { items: [] };
-
+        // "Recently added" is fetched client-side by the page's list store, so
+        // it is deliberately not loaded here -- it used to add a serial round
+        // trip to every home page render.
         return {
-            nowPlaying: withBackdrop.slice(0, 20),
-            recentlyAdded: (recentlyAddedJson.items || []) as any[]
+            nowPlaying: await attachLibraryStates(withBackdrop.slice(0, 20), auth)
         };
     } catch (err) {
         logger.error("Error fetching TPDB home content:", err);
-        return { nowPlaying: [], recentlyAdded: [] };
+        return { nowPlaying: [] };
     }
 };
