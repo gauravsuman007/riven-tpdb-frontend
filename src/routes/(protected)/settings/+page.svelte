@@ -1,14 +1,9 @@
 <script lang="ts">
     import type { ActionData, PageData } from "./$types";
-    import {
-        Form,
-        Field,
-        SubmitButton,
-        HiddenIdPrefixInput,
-        setFormContext
-    } from "@sjsf/form";
+    import { Form, Field, SubmitButton, HiddenIdPrefixInput, setFormContext } from "@sjsf/form";
     import { createMeta, setupSvelteKitForm } from "@sjsf/sveltekit/client";
     import * as defaults from "$lib/components/settings/form-defaults";
+    import IndexerPicker from "$lib/components/settings/indexer-picker.svelte";
     import { setShadcnContext } from "$lib/components/shadcn-context";
     import { toast } from "svelte-sonner";
     import { icons } from "@sjsf/lucide-icons";
@@ -143,6 +138,26 @@
                         id="settings-panel-{tab.id}"
                         role="tabpanel"
                         class={cn("flex-col gap-8", active === tab.id ? "flex" : "hidden")}>
+                        <!--
+                            The generated form renders indexer_ids as a bare
+                            array of integers, which is unusable without
+                            knowing Prowlarr's ids. The picker sits alongside
+                            it and writes the same setting.
+                        -->
+                        {#if tab.id === "scraping"}
+                            <div
+                                class="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium">Prowlarr indexers</p>
+                                    <p class="text-muted-foreground text-xs">
+                                        Restrict searches to specific indexers. Scrapes wait for the
+                                        slowest one.
+                                    </p>
+                                </div>
+                                <IndexerPicker />
+                            </div>
+                        {/if}
+
                         {#each tab.sections as section (section)}
                             <!-- The schema is fetched from the backend at
                                  runtime, so section names cannot be checked

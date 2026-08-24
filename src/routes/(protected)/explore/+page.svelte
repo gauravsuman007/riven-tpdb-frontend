@@ -2,6 +2,7 @@
     import { getContext, onDestroy, onMount } from "svelte";
     import { type Action } from "svelte/action";
     import ListItem from "$lib/components/list-item.svelte";
+    import MediaRowItem from "$lib/components/media/media-row-item.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { SearchStore } from "$lib/services/search-store.svelte";
@@ -22,13 +23,21 @@
     let showEmptyState = $derived(
         !searchStore.rawSearchString && Object.keys(searchStore.filterParams).length === 0
     );
+    /** Search returns TPDB rows plus the occasional person/company. */
+    const searchHref = (item: Record<string, any>) => {
+        const type = item.media_type === "tv" ? "tv" : "movie";
+        if (item.indexer === "tpdb") {
+            return `/details/tpdb/${type}/${item.tpdb_uuid ?? item.id}`;
+        }
+        return `/details/media/${item.id}/${type}`;
+    };
+
     let hasResults = $derived(Array.isArray(searchStore.results) && searchStore.results.length > 0);
 
     // Hero item derived from rotation
     let heroItem = $derived(
         data.heroItems && data.heroItems.length > 0 ? data.heroItems[currentHeroIndex] : null
     );
-
 
     // Derived background image: Use hero item for empty state, first result for active search
     let backgroundImage = $derived(
@@ -318,10 +327,9 @@
                     </div>
                 </div>
             {:else if hasResults}
-                <div
-                    class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
+                <div class="divide-border/60 mx-auto flex w-full max-w-5xl flex-col divide-y">
                     {#each searchStore.results as item (`${item.media_type}-${item.id}`)}
-                        <ListItem data={item} indexer={item.indexer} type={item.media_type} />
+                        <MediaRowItem {item} href={searchHref(item)} />
                     {/each}
                     {#if searchStore.loading}
                         {#each Array(6) as _, i (i)}
