@@ -307,6 +307,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pipeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect the event pipeline
+         * @description Report what the event loop is doing, and what is stopping it.
+         */
+        get: operations["get_pipeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vfs_stats": {
         parameters: {
             query?: never;
@@ -1642,6 +1662,8 @@ export interface components {
              * @default false
              */
             tracemalloc: boolean;
+            /** @description Passwordless access for trusted local networks */
+            local_access?: components["schemas"]["LocalAccessModel"];
             /** @description Filesystem configuration */
             filesystem?: components["schemas"]["FilesystemModel"];
             /** @description Library updaters configuration */
@@ -2630,9 +2652,9 @@ export interface components {
          * LibraryStream
          * @description A release found for an item.
          *
-         *     There is no size here because Riven does not record one: indexers report
-         *     sizes inconsistently and the value is not stored on the stream, so claiming
-         *     a size would mean inventing it.
+         *     The swarm and size figures are what the indexer claimed at scrape time, not
+         *     a live measurement -- they are reported as `None` when the indexer did not
+         *     say, because "unknown seeders" and "no seeders" mean very different things.
          */
         LibraryStream: {
             /**
@@ -2655,6 +2677,26 @@ export interface components {
              * @description RTN rank; higher is preferred
              */
             rank: number;
+            /**
+             * Seeders
+             * @description Seeders the indexer reported, when it did
+             */
+            seeders: number | null;
+            /**
+             * Leechers
+             * @description Leechers the indexer reported, when it did
+             */
+            leechers: number | null;
+            /**
+             * Size
+             * @description Size in bytes the indexer reported, when it did
+             */
+            size: number | null;
+            /**
+             * Indexer
+             * @description Indexer this release came from, when known
+             */
+            indexer: string | null;
             /**
              * Is Active
              * @description Whether this is the release that was actually downloaded
@@ -2701,6 +2743,39 @@ export interface components {
              * @default
              */
             api_key: string;
+        };
+        /**
+         * LocalAccessModel
+         * @description Skip the login screen for clients on your own network.
+         *
+         *     This is an authentication bypass, so it is off by default and the networks
+         *     it trusts must be stated explicitly -- there is no "detect my LAN" mode,
+         *     because guessing wrong here means guessing the whole library open.
+         *
+         *     The frontend applies this against the address of the socket the request
+         *     arrived on. If Riven sits behind a reverse proxy, every request appears to
+         *     come from the proxy, so either leave this off or trust nothing wider than
+         *     the proxy's own address and accept that the proxy is then the only thing
+         *     authenticating anyone.
+         */
+        LocalAccessModel: {
+            /**
+             * Enabled
+             * @description Let clients on the trusted networks below use the web UI without signing in. This is an authentication bypass -- anything that can reach the site from those addresses gets full access.
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Networks
+             * @description CIDR ranges allowed to skip the login screen. Bare addresses are accepted and treated as a single host.
+             */
+            networks?: string[];
+            /**
+             * Username
+             * @description The existing account trusted clients are signed in as. Leave empty to use the first admin account. Permissions still apply -- this decides who they are, not that they are unrestricted.
+             * @default
+             */
+            username: string;
         };
         /** LoggingModel */
         LoggingModel: {
@@ -3127,6 +3202,81 @@ export interface components {
              * @description The IDs to pause
              */
             ids: number[];
+        };
+        /**
+         * PipelineEvent
+         * @description One event, queued or in flight.
+         */
+        PipelineEvent: {
+            /**
+             * Item Id
+             * @description Media item the event targets
+             */
+            item_id: number | null;
+            /**
+             * Title
+             * @description Item title, when it has one
+             */
+            title: string | null;
+            /**
+             * Emitted By
+             * @description What produced this event
+             */
+            emitted_by: string;
+            /**
+             * Item State
+             * @description State cached on the event
+             */
+            item_state: string | null;
+            /**
+             * Run At
+             * @description When the event becomes eligible
+             */
+            run_at: string;
+            /**
+             * Ready
+             * @description Whether run_at has passed
+             */
+            ready: boolean;
+        };
+        /**
+         * PipelineResponse
+         * @description A snapshot of the event pipeline.
+         *
+         *     Exists because a stalled pipeline is otherwise invisible: items simply sit
+         *     in Scraped with nothing in the log. `blocked_by` and `running` are the two
+         *     things worth looking at -- an enabled-but-uninitialized service halts every
+         *     event, and an event stuck in `running` silently suppresses every later
+         *     event for the same item, since new ones are deduped against it.
+         */
+        PipelineResponse: {
+            /**
+             * Healthy
+             * @description Whether the loop is processing events
+             */
+            healthy: boolean;
+            /**
+             * Blocked By
+             * @description Enabled services that are not initialized; any entry halts everything
+             */
+            blocked_by: string[];
+            /**
+             * Queued
+             * @description Events waiting to run
+             */
+            queued: components["schemas"]["PipelineEvent"][];
+            /**
+             * Running
+             * @description Events in flight
+             */
+            running: components["schemas"]["PipelineEvent"][];
+            /**
+             * Executors
+             * @description Per-service worker pools and their pending futures
+             */
+            executors: {
+                [key: string]: number;
+            };
         };
         /**
          * PlaybackInfo
@@ -3933,6 +4083,8 @@ export interface components {
             completed_at?: string | null;
             /** Alternative Filename */
             alternative_filename?: string | null;
+            /** Seeders */
+            seeders?: number | null;
             /** Files */
             files?: {
                 [key: string]: components["schemas"]["TorrentFile"];
@@ -4070,8 +4222,8 @@ export interface components {
             cache_max_size_mb: number;
             /**
              * Cache Ttl Seconds
-             * @description How long a cached TPDB response stays fresh, in seconds. 0 disables expiry and relies on the size limit alone.
-             * @default 300
+             * @description How long a cached TPDB response stays fresh, in seconds. 0 disables expiry and relies on the size limit alone. TPDB catalogue records barely change, and its /similar endpoint answers in 10-16 seconds, so a short TTL is paid for in page load time rather than freshness.
+             * @default 21600
              */
             cache_ttl_seconds: number;
         };
@@ -5004,6 +5156,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalendarResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pipeline: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineResponse"];
                 };
             };
             /** @description Not found */

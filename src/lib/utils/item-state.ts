@@ -52,12 +52,16 @@ const STATES: Record<string, StateDisplay> = {
         description: "The provider has the file; Riven is adding it to the library."
     },
     Scraped: {
-        label: "Searching",
+        // Not "Searching": the search is over by this point -- releases were
+        // found and one is being fetched. Calling it searching contradicted
+        // the candidate list on the detail page, which was showing a release
+        // as selected while the item claimed to still be looking.
+        label: "Fetching",
         variant: "default",
         available: false,
         inProgress: true,
         description:
-            "Releases were found and are being offered to your debrid provider. Uncached ones are fetched in the background, which can take hours."
+            "A release has been found and handed to your debrid provider. Uncached releases are fetched from the swarm first, which can take hours."
     },
     Indexed: {
         label: "Queued",

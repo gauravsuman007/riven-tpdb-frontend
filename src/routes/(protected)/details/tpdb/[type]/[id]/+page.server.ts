@@ -32,28 +32,32 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 
     // openapi-fetch infers its response types from the literal path, so each
     // branch calls it directly rather than through a shared helper.
-    const [detail, similar] =
-        type === "movie"
-            ? await Promise.all([
-                  providers.riven.GET("/api/v1/tpdb/movies/{movie_id}", {
-                      ...auth,
-                      params: { path: { movie_id: id } }
-                  }),
-                  providers.riven.GET("/api/v1/tpdb/movies/{movie_id}/similar", {
-                      ...auth,
-                      params: { path: { movie_id: id } }
-                  })
-              ])
-            : await Promise.all([
-                  providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}", {
-                      ...auth,
-                      params: { path: { scene_id: id } }
-                  }),
-                  providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}/similar", {
-                      ...auth,
-                      params: { path: { scene_id: id } }
-                  })
-              ]);
+    //
+    // `similar` is started here but deliberately NOT awaited. TPDB answers its
+    // /similar endpoint in 10-16 seconds -- measured, repeatedly -- and this
+    // page used to sit inside a Promise.all with it, so every cold detail load
+    // paid that in full before rendering anything. The promise is handed to
+    // `streamed` below and resolves after the page has painted.
+    const relatedFor = (kind: "movie" | "tv", uuid: string) =>
+        kind === "movie"
+            ? providers.riven.GET("/api/v1/tpdb/movies/{movie_id}/similar", {
+                  ...auth,
+                  params: { path: { movie_id: uuid } }
+              })
+            : providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}/similar", {
+                  ...auth,
+                  params: { path: { scene_id: uuid } }
+              });
+
+    const detail = await (type === "movie"
+        ? providers.riven.GET("/api/v1/tpdb/movies/{movie_id}", {
+              ...auth,
+              params: { path: { movie_id: id } }
+          })
+        : providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}", {
+              ...auth,
+              params: { path: { scene_id: id } }
+          }));
 
     // A TPDB uuid names either a scene or a movie, and Riven stores both as
     // type "movie" -- so a scene reached from the library arrives here asking
@@ -61,37 +65,22 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
     // a title that plainly exists.
     let resolved = detail.data ? detail : null;
     let resolvedType: "movie" | "tv" = type;
-    let resolvedSimilar = similar.data ?? [];
 
     if (!resolved) {
         const otherType: "movie" | "tv" = type === "movie" ? "tv" : "movie";
-        const [fallback, fallbackSimilar] =
-            otherType === "movie"
-                ? await Promise.all([
-                      providers.riven.GET("/api/v1/tpdb/movies/{movie_id}", {
-                          ...auth,
-                          params: { path: { movie_id: id } }
-                      }),
-                      providers.riven.GET("/api/v1/tpdb/movies/{movie_id}/similar", {
-                          ...auth,
-                          params: { path: { movie_id: id } }
-                      })
-                  ])
-                : await Promise.all([
-                      providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}", {
-                          ...auth,
-                          params: { path: { scene_id: id } }
-                      }),
-                      providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}/similar", {
-                          ...auth,
-                          params: { path: { scene_id: id } }
-                      })
-                  ]);
+        const fallback = await (otherType === "movie"
+            ? providers.riven.GET("/api/v1/tpdb/movies/{movie_id}", {
+                  ...auth,
+                  params: { path: { movie_id: id } }
+              })
+            : providers.riven.GET("/api/v1/tpdb/scenes/{scene_id}", {
+                  ...auth,
+                  params: { path: { scene_id: id } }
+              }));
 
         if (fallback.data) {
             resolved = fallback;
             resolvedType = otherType;
-            resolvedSimilar = fallbackSimilar.data ?? [];
         }
     }
 
@@ -147,9 +136,16 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         // paint on it made the page feel slow for content nobody had scrolled
         // to yet.
         streamed: {
-            similar: Promise.resolve(transformTPDBList(resolvedSimilar, resolvedType)).then(
-                (items) => attachLibraryStates(items, auth)
-            )
+            // Only started now that the title's real kind is known, and never
+            // awaited here -- see the note above `relatedFor`. A failure is
+            // rendered as an empty row rather than taken as a page error.
+            similar: relatedFor(resolvedType, tpdbUuid)
+                .then((related) => transformTPDBList(related.data ?? [], resolvedType))
+                .then((items) => attachLibraryStates(items, auth))
+                .catch((err) => {
+                    logger.error("TPDB related fetch failed", err);
+                    return [];
+                })
         }
     };
 };

@@ -9,8 +9,10 @@
     import BookmarkIcon from "@lucide/svelte/icons/bookmark";
     import CheckIcon from "@lucide/svelte/icons/check";
     import LoaderIcon from "@lucide/svelte/icons/loader-circle";
+    import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import { describeState } from "$lib/utils/item-state";
     import { formatBytes } from "$lib/helpers";
+    import { cn } from "$lib/utils";
     import PlayIcon from "@lucide/svelte/icons/play";
     import { openPlayer } from "$lib/stores/player.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
@@ -265,9 +267,19 @@
                                                 </Badge>
                                             {/if}
                                             {#if release.is_preferred && !release.is_active}
+                                                <!--
+                                                    "Selected", not
+                                                    "downloading": picking a
+                                                    release queues it with the
+                                                    provider, which may sit in
+                                                    a swarm for hours before a
+                                                    byte is transferred. The
+                                                    item badge says what is
+                                                    actually happening.
+                                                -->
                                                 <Badge
                                                     class="border-0 bg-blue-600/90 text-[10px] text-white">
-                                                    Selected, downloading
+                                                    Selected
                                                 </Badge>
                                             {/if}
                                             {#if release.is_blacklisted}
@@ -275,6 +287,49 @@
                                                     variant="outline"
                                                     class="text-muted-foreground/70 text-[10px]">
                                                     Rejected earlier
+                                                </Badge>
+                                            {/if}
+                                            <!--
+                                                What the indexer claimed at
+                                                scrape time. A release with no
+                                                seeders is the single best
+                                                predictor of a download that
+                                                never starts, so it is called
+                                                out rather than shown as a
+                                                neutral number -- and an
+                                                indexer that reported nothing
+                                                is left blank rather than
+                                                rendered as zero.
+                                            -->
+                                            {#if release.seeders !== null && release.seeders !== undefined}
+                                                <Badge
+                                                    variant="outline"
+                                                    class={cn(
+                                                        "font-mono text-[10px]",
+                                                        release.seeders === 0
+                                                            ? "border-red-500/40 text-red-500"
+                                                            : "text-muted-foreground/80"
+                                                    )}>
+                                                    {release.seeders} seed{release.seeders === 1
+                                                        ? ""
+                                                        : "s"}
+                                                    {#if release.leechers !== null && release.leechers !== undefined}
+                                                        / {release.leechers} leech
+                                                    {/if}
+                                                </Badge>
+                                            {/if}
+                                            {#if release.size}
+                                                <Badge
+                                                    variant="outline"
+                                                    class="text-muted-foreground/80 font-mono text-[10px]">
+                                                    {formatBytes(release.size)}
+                                                </Badge>
+                                            {/if}
+                                            {#if release.indexer}
+                                                <Badge
+                                                    variant="outline"
+                                                    class="text-muted-foreground/80 text-[10px]">
+                                                    {release.indexer}
                                                 </Badge>
                                             {/if}
                                             <span class="text-muted-foreground/60 font-mono text-[10px]">
@@ -311,10 +366,21 @@
                                                 disabled={selecting !== null}>
                                                 {#if selecting === release.infohash}
                                                     <LoaderIcon class="size-3 animate-spin" />
+                                                {:else if release.is_blacklisted}
+                                                    <RotateCcwIcon class="size-3" />
                                                 {:else}
                                                     <DownloadIcon class="size-3" />
                                                 {/if}
-                                                Use this
+                                                <!--
+                                                    Same action either way: the
+                                                    backend un-rejects before
+                                                    queueing. Only the wording
+                                                    changes, because "use this"
+                                                    on a release marked
+                                                    "rejected earlier" reads as
+                                                    though it would fail.
+                                                -->
+                                                {release.is_blacklisted ? "Retry" : "Use this"}
                                             </Button>
                                         </form>
                                     {/if}
@@ -323,9 +389,10 @@
                         </div>
 
                         <p class="text-muted-foreground/70 text-xs">
-                            Sizes are not shown because Riven does not record one for a release it
-                            has not downloaded yet. Choosing a release replaces the current download
-                            and keeps the rest of this list.
+                            Seeders, size and indexer are what the indexer claimed when this title
+                            was scraped, not a live reading. Releases Riven gave up on stay listed
+                            so you can retry them; choosing one replaces the current download and
+                            keeps the rest of this list.
                         </p>
                     </div>
                 {/if}
