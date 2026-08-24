@@ -35,6 +35,8 @@
         resolution: string | null;
         size: number | null;
         views: number | null;
+        hd: boolean;
+        relevance: number | null;
     }
 
     interface Props {
@@ -65,7 +67,7 @@
 
         try {
             const response = await fetch(
-                `/api/v1/direct/search?query=${encodeURIComponent(title)}&limit=20`
+                `/api/v1/direct/search?query=${encodeURIComponent(title)}&limit=2`
             );
             if (!response.ok) throw new Error(`Search returned ${response.status}`);
 
@@ -163,13 +165,12 @@
                     </Button>
                 </div>
             {:else if results.length}
-                <div
-                    class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {#each results as result (`${result.site}:${result.video_id}`)}
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {#each results as result, index (`${result.site}:${result.video_id}`)}
                         <button
                             type="button"
                             onclick={() => play(result)}
-                            class="group focus-visible:ring-ring border-border/60 hover:border-primary/50 flex flex-col overflow-hidden rounded-lg border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+                            class="group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
                             <div class="bg-muted relative aspect-video w-full overflow-hidden">
                                 {#if result.thumbnail}
                                     <img
@@ -186,17 +187,23 @@
                                 </div>
                                 {#if formatDuration(result.duration)}
                                     <span
-                                        class="absolute right-1.5 bottom-1.5 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-white tabular-nums">
+                                        class="absolute right-2 bottom-2 rounded bg-black/75 px-2 py-0.5 font-mono text-xs text-white tabular-nums">
                                         {formatDuration(result.duration)}
+                                    </span>
+                                {/if}
+                                {#if index === 0}
+                                    <span
+                                        class="bg-primary text-primary-foreground absolute top-2 left-2 rounded px-2 py-0.5 text-[11px] font-semibold">
+                                        Best match
                                     </span>
                                 {/if}
                             </div>
 
-                            <div class="flex min-w-0 flex-1 flex-col gap-1.5 p-2">
-                                <p class="line-clamp-2 text-xs leading-snug font-medium">
+                            <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3">
+                                <p class="line-clamp-2 text-sm leading-relaxed font-medium">
                                     {result.title}
                                 </p>
-                                <div class="mt-auto flex flex-wrap items-center gap-1">
+                                <div class="mt-auto flex flex-wrap items-center gap-1.5">
                                     <Badge variant="secondary" class="text-[11px]">
                                         {result.site_name}
                                     </Badge>
@@ -211,6 +218,8 @@
                                         <Badge variant="outline" class="font-mono text-[11px]">
                                             {result.resolution}
                                         </Badge>
+                                    {:else if result.hd}
+                                        <Badge variant="outline" class="text-[11px]">HD</Badge>
                                     {/if}
                                     {#if result.size}
                                         <Badge variant="outline" class="font-mono text-[11px]">
@@ -225,7 +234,7 @@
             {/if}
 
             {#if Object.keys(siteErrors).length}
-                <p class="text-muted-foreground mt-3 text-xs">
+                <p class="text-muted-foreground mt-4 text-xs">
                     Could not reach: {Object.keys(siteErrors).join(", ")}
                 </p>
             {/if}
