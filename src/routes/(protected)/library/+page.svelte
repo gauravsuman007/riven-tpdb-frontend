@@ -25,6 +25,7 @@
     import { goto, invalidateAll } from "$app/navigation";
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
+    import CollectionsShelf from "$lib/components/collections-shelf.svelte";
     import { cn } from "$lib/utils";
 
     let { data }: PageProps = $props();
@@ -198,6 +199,8 @@
                 <input type="hidden" name="limit" value={$formData.limit} />
             </form>
         </header>
+
+        <CollectionsShelf collections={data.collections} />
 
         <!-- Content Grid -->
         {#if data.totalItems > 0}

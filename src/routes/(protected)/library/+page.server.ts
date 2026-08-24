@@ -7,6 +7,7 @@ import { superValidate } from "sveltekit-superforms";
 import * as dateUtils from "$lib/utils/date";
 import { createScopedLogger } from "$lib/logger";
 import { stateBadge } from "$lib/utils/item-state";
+import { listCollections } from "$lib/collections";
 
 const logger = createScopedLogger("library-page-server");
 
@@ -119,7 +120,16 @@ export const load: PageServerLoad = async (event) => {
         error(500, "Failed to fetch items");
     }
 
+    // Collections are an addition to this page, so a failure here returns an
+    // empty shelf rather than taking the library down with it.
+    const collections = await listCollections({
+        baseUrl: event.locals.backendUrl,
+        apiKey: event.locals.apiKey,
+        fetch: event.fetch
+    });
+
     return {
+        collections,
         items: itemsResponse.data
             ? transformItems(itemsResponse.data.items as unknown as RivenLibraryItem[])
             : [],
