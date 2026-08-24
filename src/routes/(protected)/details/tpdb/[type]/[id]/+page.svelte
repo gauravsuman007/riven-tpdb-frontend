@@ -249,7 +249,7 @@
                     releases below are about getting it into the library, which
                     is a slower and different intention.
                 -->
-                <DirectSearch title={item.title} />
+                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
 
                 <!--
                     Candidate releases: every release the scrapers found for

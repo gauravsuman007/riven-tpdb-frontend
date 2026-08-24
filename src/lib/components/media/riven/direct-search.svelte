@@ -40,11 +40,22 @@
     }
 
     interface Props {
-        /** Used as the search term, and shown in the player's title bar. */
+        /** Shown in the trigger and the player's title bar. */
         title: string;
+        /**
+         * Riven item id, when the title is in the library. Passed in
+         * preference to the raw title so the backend can read the cast and
+         * studio: the sites rarely carry the exact scene under the exact name,
+         * and a credited performer in an upload's title is what tells the
+         * right series apart from unrelated clips.
+         *
+         * Absent for a title that has not been added yet, which still gets a
+         * search -- just one matched on the title alone.
+         */
+        itemId?: number | null;
     }
 
-    let { title }: Props = $props();
+    let { title, itemId = null }: Props = $props();
 
     let open = $state(false);
     let loading = $state(false);
@@ -53,12 +64,24 @@
     let siteErrors = $state<Record<string, string>>({});
     let failure = $state<string | null>(null);
 
-    const bySite = $derived.by(() => {
-        const counts = new Map<string, number>();
+    /**
+     * Results grouped into one row per site.
+     *
+     * A single ranked list hid which site a result came from until you read
+     * the badge, and made a site that returned nothing indistinguishable from
+     * one that was never searched. Row order follows the best result each site
+     * produced, so the strongest source is still at the top.
+     */
+    const rows = $derived.by(() => {
+        const grouped = new Map<string, { name: string; items: DirectResult[] }>();
         for (const result of results) {
-            counts.set(result.site_name, (counts.get(result.site_name) ?? 0) + 1);
+            const row = grouped.get(result.site) ?? { name: result.site_name, items: [] };
+            row.items.push(result);
+            grouped.set(result.site, row);
         }
-        return [...counts.entries()];
+        return [...grouped.entries()]
+            .map(([site, row]) => ({ site, ...row }))
+            .sort((a, b) => (b.items[0]?.relevance ?? 0) - (a.items[0]?.relevance ?? 0));
     });
 
     async function search() {
@@ -67,7 +90,9 @@
 
         try {
             const response = await fetch(
-                `/api/v1/direct/search?query=${encodeURIComponent(title)}&limit=2`
+                itemId
+                    ? `/api/v1/direct/search?item_id=${itemId}&limit=3`
+                    : `/api/v1/direct/search?query=${encodeURIComponent(title)}&limit=3`
             );
             if (!response.ok) throw new Error(`Search returned ${response.status}`);
 
@@ -123,8 +148,8 @@
                 {#if loading}
                     Searching&hellip;
                 {:else if searched}
-                    {results.length} found{#if bySite.length}
-                        &middot; {bySite.map(([name, n]) => `${name} ${n}`).join(", ")}{/if}
+                    {results.length} found{#if rows.length}
+                        &middot; {rows.map((r) => `${r.name} ${r.items.length}`).join(", ")}{/if}
                 {:else}
                     Search streaming sites and play without downloading
                 {/if}
@@ -164,71 +189,90 @@
                         Search again
                     </Button>
                 </div>
-            {:else if results.length}
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {#each results as result, index (`${result.site}:${result.video_id}`)}
-                        <button
-                            type="button"
-                            onclick={() => play(result)}
-                            class="group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
-                            <div class="bg-muted relative aspect-video w-full overflow-hidden">
-                                {#if result.thumbnail}
-                                    <img
-                                        src={result.thumbnail}
-                                        alt=""
-                                        loading="lazy"
-                                        referrerpolicy="no-referrer"
-                                        class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" />
-                                {/if}
-                                <div
-                                    class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
-                                    <PlayIcon
-                                        class="size-8 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                                </div>
-                                {#if formatDuration(result.duration)}
-                                    <span
-                                        class="absolute right-2 bottom-2 rounded bg-black/75 px-2 py-0.5 font-mono text-xs text-white tabular-nums">
-                                        {formatDuration(result.duration)}
-                                    </span>
-                                {/if}
-                                {#if index === 0}
-                                    <span
-                                        class="bg-primary text-primary-foreground absolute top-2 left-2 rounded px-2 py-0.5 text-[11px] font-semibold">
-                                        Best match
-                                    </span>
-                                {/if}
+            {:else if rows.length}
+                <div class="flex flex-col gap-6">
+                    {#each rows as row (row.site)}
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-baseline gap-2">
+                                <h4 class="text-sm font-semibold">{row.name}</h4>
+                                <span class="text-muted-foreground text-xs">
+                                    top {row.items.length}
+                                </span>
                             </div>
 
-                            <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3">
-                                <p class="line-clamp-2 text-sm leading-relaxed font-medium">
-                                    {result.title}
-                                </p>
-                                <div class="mt-auto flex flex-wrap items-center gap-1.5">
-                                    <Badge variant="secondary" class="text-[11px]">
-                                        {result.site_name}
-                                    </Badge>
-                                    <!--
-                                        Resolution and size are only shown when
-                                        the site actually reported them. Most
-                                        sites only advertise a vague "HD" badge,
-                                        and printing that as "1080p" would be a
-                                        claim the data does not support.
-                                    -->
-                                    {#if result.resolution}
-                                        <Badge variant="outline" class="font-mono text-[11px]">
-                                            {result.resolution}
-                                        </Badge>
-                                    {:else if result.hd}
-                                        <Badge variant="outline" class="text-[11px]">HD</Badge>
-                                    {/if}
-                                    {#if result.size}
-                                        <Badge variant="outline" class="font-mono text-[11px]">
-                                            {formatBytes(result.size)}
-                                        </Badge>
-                                    {/if}
-                                </div>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {#each row.items as result, index (`${result.site}:${result.video_id}`)}
+                                    <button
+                                        type="button"
+                                        onclick={() => play(result)}
+                                        class="group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+                                        <div
+                                            class="bg-muted relative aspect-video w-full overflow-hidden">
+                                            {#if result.thumbnail}
+                                                <img
+                                                    src={result.thumbnail}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    referrerpolicy="no-referrer"
+                                                    class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                                            {/if}
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
+                                                <PlayIcon
+                                                    class="size-8 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                            </div>
+                                            {#if formatDuration(result.duration)}
+                                                <span
+                                                    class="absolute right-2 bottom-2 rounded bg-black/75 px-2 py-0.5 font-mono text-xs text-white tabular-nums">
+                                                    {formatDuration(result.duration)}
+                                                </span>
+                                            {/if}
+                                            {#if index === 0}
+                                                <span
+                                                    class="bg-primary text-primary-foreground absolute top-2 left-2 rounded px-2 py-0.5 text-[11px] font-semibold">
+                                                    Best match
+                                                </span>
+                                            {/if}
+                                        </div>
+
+                                        <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3">
+                                            <p
+                                                class="line-clamp-2 text-sm leading-relaxed font-medium">
+                                                {result.title}
+                                            </p>
+                                            <div class="mt-auto flex flex-wrap items-center gap-1.5">
+                                                <!--
+                                                    Resolution and size only where the
+                                                    site actually reported them. Most
+                                                    advertise a vague "HD" badge that
+                                                    covers 720p through 4K, and printing
+                                                    that as a resolution would be a claim
+                                                    the data cannot support.
+                                                -->
+                                                {#if result.resolution}
+                                                    <Badge
+                                                        variant="outline"
+                                                        class="font-mono text-[11px]">
+                                                        {result.resolution}
+                                                    </Badge>
+                                                {:else if result.hd}
+                                                    <Badge variant="outline" class="text-[11px]">
+                                                        HD
+                                                    </Badge>
+                                                {/if}
+                                                {#if result.size}
+                                                    <Badge
+                                                        variant="outline"
+                                                        class="font-mono text-[11px]">
+                                                        {formatBytes(result.size)}
+                                                    </Badge>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    </button>
+                                {/each}
                             </div>
-                        </button>
+                        </div>
                     {/each}
                 </div>
             {/if}
