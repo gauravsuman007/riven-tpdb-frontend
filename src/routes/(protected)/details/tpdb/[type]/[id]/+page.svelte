@@ -272,15 +272,19 @@
             </div>
         </div>
 
-        {#if data.similar.length}
-            <div class="flex flex-col gap-4">
-                <h2 class="text-foreground text-2xl font-bold tracking-tight">Related on TPDB</h2>
-                <div class="divide-border/60 flex flex-col divide-y">
-                    {#each data.similar as related (related.id)}
-                        <MediaRowItem item={related} href={relatedHref(related)} />
-                    {/each}
+        {#await data.streamed.similar then similar}
+            {#if similar.length}
+                <div class="flex flex-col gap-4">
+                    <h2 class="text-foreground text-2xl font-bold tracking-tight">
+                        Related on TPDB
+                    </h2>
+                    <div class="divide-border/60 flex flex-col divide-y">
+                        {#each similar as related (related.id)}
+                            <MediaRowItem item={related} href={relatedHref(related)} />
+                        {/each}
+                    </div>
                 </div>
-            </div>
-        {/if}
+            {/if}
+        {/await}
     </div>
 </PageShell>

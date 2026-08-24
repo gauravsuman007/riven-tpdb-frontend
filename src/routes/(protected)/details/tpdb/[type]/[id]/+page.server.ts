@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from "./$types";
 import providers from "$lib/providers";
 import { transformTPDBList } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
+import { attachLibraryStates } from "$lib/server/library-state";
 
 /**
  * Detail page for a TPDB title.
@@ -141,7 +142,15 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         tpdbUuid,
         collected,
         libraryState,
-        similar: transformTPDBList(resolvedSimilar, resolvedType)
+        // Streamed, not awaited. The related row is below the fold and each
+        // TPDB call is charged against a 2-per-second limit, so blocking first
+        // paint on it made the page feel slow for content nobody had scrolled
+        // to yet.
+        streamed: {
+            similar: Promise.resolve(transformTPDBList(resolvedSimilar, resolvedType)).then(
+                (items) => attachLibraryStates(items, auth)
+            )
+        }
     };
 };
 
