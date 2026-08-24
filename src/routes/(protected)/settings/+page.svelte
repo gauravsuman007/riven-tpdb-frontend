@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { ActionData, PageData } from "./$types";
-    import { Form, Field, SubmitButton, HiddenIdPrefixInput, setFormContext } from "@sjsf/form";
+    import { Form, Field, HiddenIdPrefixInput, setFormContext, setValue } from "@sjsf/form";
+    import { page } from "$app/state";
     import { createMeta, setupSvelteKitForm } from "@sjsf/sveltekit/client";
     import * as defaults from "$lib/components/settings/form-defaults";
     import IndexerPicker from "$lib/components/settings/indexer-picker.svelte";
@@ -10,6 +11,10 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
     import { buildSecretUiSchema } from "$lib/components/settings/secret-ui-schema";
+    import { Button } from "$lib/components/ui/button/index.js";
+    import LoaderIcon from "@lucide/svelte/icons/loader-circle";
+    import CheckIcon from "@lucide/svelte/icons/check";
+    import SaveIcon from "@lucide/svelte/icons/save";
 
     setShadcnContext();
 
@@ -21,6 +26,22 @@
     // getter so the form reads it lazily rather than capturing the first value.
     const uiSchema = $derived(buildSecretUiSchema((data as any)?.form?.initialValue));
 
+    // "saving" while the request is in flight, "saved" briefly afterwards. The
+    // button is the only place a save is visible, so it has to say all three
+    // states -- previously it said "Submit" throughout and a save that worked
+    // looked identical to one that never fired.
+    let saveState = $state<"idle" | "saving" | "saved">("idle");
+    let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function settle(next: "idle" | "saved") {
+        clearTimeout(savedTimer);
+        saveState = next;
+
+        if (next === "saved") {
+            savedTimer = setTimeout(() => (saveState = "idle"), 2500);
+        }
+    }
+
     // @ts-expect-error - Schema is provided by page data
     const { form } = setupSvelteKitForm(meta, {
         ...defaults,
@@ -30,14 +51,55 @@
         icons,
         delayedMs: 500,
         timeoutMs: 30000,
+        // On success the SvelteKit integration calls HTMLFormElement.reset().
+        // Svelte 5 currently re-applies its bindings on the reset event, so
+        // this is not today's bug -- measured, not assumed. It is still wrong
+        // for this form: it is a view of stored settings, not an entry form to
+        // be emptied after submitting, and relying on that Svelte behaviour to
+        // save us is not something to leave to chance.
+        reset: false,
         onSuccess: (result) => {
             if (result.type === "success") {
+                // Snap every control back to what the backend actually stored.
+                //
+                // The integration calls invalidateAll() before this runs, so
+                // `page.data` is already refreshed -- but the form captures its
+                // initial value once at setup and never re-reads it, so the
+                // widgets can drift from the saved settings and stay drifted
+                // until a manual reload. This makes the stored value the single
+                // source of truth after every save, whatever the controls were
+                // showing a moment earlier.
+                const stored = (page.data as any)?.form?.initialValue;
+
+                if (stored) setValue(form, structuredClone(stored));
+
+                settle("saved");
                 toast.success("Settings saved");
             } else {
-                toast.error("Failed to save settings");
+                settle("idle");
+                // Name the fields that blocked the save. A rejected save
+                // restores the form to the submitted value, which on its own
+                // looks indistinguishable from a save that silently undid
+                // itself -- the user needs to know *what* to fix and on which
+                // tab, not just that something went wrong.
+                const errors = (result as any)?.data?.form?.errors ?? [];
+                const described = errors
+                    .slice(0, 3)
+                    .map((e: any) => `${(e.path ?? []).join(".") || "form"}: ${e.message}`);
+
+                toast.error(errors.length ? "Settings not saved" : "Failed to save settings", {
+                    description: described.length
+                        ? described.join("\n") +
+                          (errors.length > described.length
+                              ? `\n...and ${errors.length - described.length} more`
+                              : "")
+                        : undefined,
+                    duration: 8000
+                });
             }
         },
         onFailure: () => {
+            settle("idle");
             toast.error("Something went wrong while saving settings");
         }
     });
@@ -128,7 +190,18 @@
         </div>
 
         <div class="settings-form">
-            <Form attributes={{ method: "POST" }}>
+            <!--
+                `onSubmit` is not available here: the SvelteKit integration
+                reserves it. The native submit event fires first either way,
+                which is all the button needs to show progress.
+            -->
+            <Form
+                attributes={{
+                    method: "POST",
+                    onsubmit: () => {
+                        saveState = "saving";
+                    }
+                }}>
                 <!-- Carries the id prefix the server needs to parse the
                      submitted FormData; BasicForm renders this internally. -->
                 <HiddenIdPrefixInput {form} />
@@ -168,8 +241,22 @@
                 {/each}
 
                 <div
-                    class="border-border/60 bg-background/80 sticky bottom-0 mt-8 border-t py-4 backdrop-blur-md">
-                    <SubmitButton />
+                    class="border-border/60 bg-background/80 sticky bottom-0 mt-8 flex items-center gap-3 border-t py-4 backdrop-blur-md">
+                    <Button type="submit" disabled={saveState === "saving"} class="min-w-32">
+                        {#if saveState === "saving"}
+                            <LoaderIcon class="mr-2 size-4 animate-spin" />
+                            Saving
+                        {:else if saveState === "saved"}
+                            <CheckIcon class="mr-2 size-4" />
+                            Saved
+                        {:else}
+                            <SaveIcon class="mr-2 size-4" />
+                            Save
+                        {/if}
+                    </Button>
+                    <p class="text-muted-foreground text-xs">
+                        Saves every tab, not just the one on screen.
+                    </p>
                 </div>
             </Form>
         </div>
