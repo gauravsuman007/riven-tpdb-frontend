@@ -1,15 +1,19 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
+import { stateBadge } from "$lib/utils/item-state";
 
 interface BackendItem {
     id: string | number;
     tmdb_id?: string;
     tvdb_id?: string;
+    tpdb_id?: string;
+    parent_ids?: { tpdb_id?: string; tvdb_id?: string; tmdb_id?: string };
     title: string;
     poster_path?: string;
     type: string;
     year?: number;
     aired_at?: string;
+    state?: string;
 }
 
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -48,12 +52,19 @@ export const GET: RequestHandler = async ({ locals, url }) => {
         const items = (data.items || []).map((item: BackendItem) => {
             const hasAbsolutePoster = item.poster_path?.startsWith("http");
 
-            // Determine correct ID and Indexer
-            // Always prefer TMDB ID when available (needed for ratings API)
+            // Determine correct ID and Indexer.
+            // Adult items are keyed on TPDB and carry no TMDB/TVDB id at all,
+            // so they must be checked first -- otherwise they fell through to
+            // the `riven` indexer, whose details route resolves a TMDB id and
+            // 404s when there is none. That was every item in this row.
             let id: string | number;
             let indexer: string;
+            const tpdbId = item.tpdb_id ?? item.parent_ids?.tpdb_id ?? null;
 
-            if (item.tmdb_id) {
+            if (tpdbId) {
+                id = tpdbId;
+                indexer = "tpdb";
+            } else if (item.tmdb_id) {
                 id = parseInt(item.tmdb_id, 10);
                 indexer = "tmdb";
             } else if (item.tvdb_id) {
@@ -81,7 +92,12 @@ export const GET: RequestHandler = async ({ locals, url }) => {
                     : null,
                 media_type: item.type === "show" ? "tv" : item.type,
                 year: item.year || (item.aired_at ? new Date(item.aired_at).getFullYear() : "N/A"),
-                riven_id: item.id // Keep internal ID if needed
+                tpdb_uuid: tpdbId,
+                riven_id: item.id, // Keep internal ID if needed
+                // Carried so the card can show status and offer playback, the
+                // same as the library grid does.
+                state: item.state ?? null,
+                badge: stateBadge(item.state)
             };
         });
 
