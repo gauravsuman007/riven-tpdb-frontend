@@ -10,7 +10,9 @@ import {
     panBounds,
     pinchDistance,
     project,
+    twoFingerTransform,
     zoomAt,
+    type GestureStart,
     type Transform,
     type Viewport
 } from "../zoom";
@@ -222,6 +224,100 @@ console.log("\nnon-finite input");
     check(
         "a transform that already went bad does not poison the next gesture",
         Number.isFinite(recovered.scale) && Number.isFinite(recovered.offsetX)
+    );
+}
+
+console.log("\ntwo-finger gesture: zoom and pan are one transform");
+{
+    const max = coverScale(tallView, 1920, 1080);
+    const start: GestureStart = { scale: 1, midX: 200, midY: 400, offsetX: 0, offsetY: 0 };
+
+    // Fingers spread without moving their midpoint: pure zoom.
+    const zoomed = twoFingerTransform(
+        tallView, start, { x: 200, y: 400 }, 2, max, 1920, 1080
+    );
+    check("spreading the fingers zooms in", near(zoomed.scale, 2), String(zoomed.scale));
+
+    // Fingers keep their spacing but slide across: pure pan.
+    const panned = twoFingerTransform(
+        tallView,
+        { scale: 2, midX: 200, midY: 400, offsetX: 0, offsetY: 0 },
+        { x: 260, y: 400 },
+        1,
+        max,
+        1920,
+        1080
+    );
+    check("sliding both fingers pans without changing zoom", near(panned.scale, 2));
+    check(
+        "and pans by exactly the distance they travelled",
+        near(panned.offsetX, 60),
+        String(panned.offsetX)
+    );
+
+    // Doing both at once must not drift.
+    const both = twoFingerTransform(
+        tallView, start, { x: 260, y: 420 }, 2.5, max, 1920, 1080
+    );
+    const contentX = (start.midX - 200 - start.offsetX) / start.scale;
+    const contentY = (start.midY - 400 - start.offsetY) / start.scale;
+    const landed = project(tallView, both, contentX, contentY);
+    check(
+        "zooming and panning together keeps the content under the fingers",
+        near(landed.x, 260, 0.01),
+        `x landed at ${landed.x.toFixed(2)}, fingers at 260`
+    );
+
+    // Pan is still bounded by the picture.
+    const shoved = twoFingerTransform(
+        tallView,
+        { scale: 2, midX: 200, midY: 400, offsetX: 0, offsetY: 0 },
+        { x: 99999, y: 400 },
+        1,
+        max,
+        1920,
+        1080
+    );
+    const limit = panBounds(tallView, { scale: 2, offsetX: 0, offsetY: 0 }, 1920, 1080);
+    check("two-finger pan is bounded like any other", near(shoved.offsetX, limit.x));
+
+    check(
+        "pinching below fit cannot escape the floor",
+        near(
+            twoFingerTransform(tallView, start, { x: 200, y: 400 }, 0.1, max, 1920, 1080).scale,
+            MIN_SCALE
+        )
+    );
+    check(
+        "spreading past cover stops at cover",
+        near(
+            twoFingerTransform(tallView, start, { x: 200, y: 400 }, 99, max, 1920, 1080).scale,
+            max
+        )
+    );
+    check(
+        "a zero-distance pinch does not produce NaN",
+        (() => {
+            const t = twoFingerTransform(
+                tallView, start, { x: 200, y: 400 }, NaN, max, 1920, 1080
+            );
+            return Number.isFinite(t.scale) && Number.isFinite(t.offsetX);
+        })()
+    );
+    check(
+        "a corrupt start scale does not poison the result",
+        (() => {
+            const t = twoFingerTransform(
+                tallView,
+                { scale: 0, midX: 200, midY: 400, offsetX: 0, offsetY: 0 },
+                { x: 200, y: 400 },
+                2,
+                max,
+                1920,
+                1080
+            );
+            return Number.isFinite(t.scale) && Number.isFinite(t.offsetX);
+        })()
     );
 }
 

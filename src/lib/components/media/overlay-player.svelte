@@ -9,14 +9,17 @@
      * keep working underneath.
      *
      * Gestures, and why each exists:
-     *   - pinch (2 touches)  : the primary mobile gesture, anchored on the
-     *                          midpoint between the fingers so the content
-     *                          under them stays put
-     *   - drag while zoomed  : pans the cropped picture
-     *   - horizontal swipe   : seeks, at a rate that follows the swipe's own
+     *   - two fingers        : zoom and pan together, anchored on the midpoint
+     *                          between them so the content under the fingers
+     *                          stays put. Pan is part of this gesture, not a
+     *                          separate one-finger mode
+     *   - one finger, across : seeks, at a rate that follows the swipe's own
      *                          momentum, so one gesture covers both a nudge
      *                          and a jump across the film. Fullscreen only,
-     *                          and only at fit, where there is nothing to pan
+     *                          but available at any zoom level -- the picture
+     *                          is moved with two fingers, so one is free
+     *   - mouse drag         : pans while zoomed. A mouse has no second
+     *                          finger, so it keeps the one-pointer pan
      *   - double tap/click   : toggles between fit and fill
      *   - wheel              : desktop zoom, anchored on the pointer
      *
@@ -41,7 +44,9 @@
         coverScale,
         midpoint,
         pinchDistance,
+        twoFingerTransform,
         zoomAt as computeZoom,
+        type GestureStart,
         type Transform,
         type Viewport
     } from "$lib/utils/zoom";
@@ -96,7 +101,9 @@
     let pointers = new Map<number, { x: number; y: number }>();
     let pinchStartDistance = $state(0);
     let panStart = $state<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-    let pinchStartScale = 0;
+    // Everything the two-finger gesture needs to map its start state onto the
+    // current fingers in one step, rather than accumulating per move.
+    let pinchStart: GestureStart | null = null;
     let lastTap = 0;
 
     const target = $derived(player.current);
@@ -233,19 +240,55 @@
         clampOffsets();
     }
 
+    function applyTwoFinger(centre: { x: number; y: number }, ratio: number) {
+        const view = viewport();
+        if (!view || !pinchStart) return;
+
+        apply(
+            twoFingerTransform(
+                view,
+                pinchStart,
+                centre,
+                ratio,
+                maxScale(),
+                videoWidth,
+                videoHeight
+            )
+        );
+    }
+
+    /** Drop a seek in progress without applying it. */
+    function abandonSeek() {
+        seekStart = null;
+        seekSamples = [];
+        seeking = false;
+        seekOffset = 0;
+    }
+
     function onPointerDown(event: PointerEvent) {
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
         if (pointers.size === 2) {
             const [a, b] = [...pointers.values()];
+            const centre = midpoint(a, b);
+
             pinchStartDistance = pinchDistance(a, b);
-            pinchStartScale = scale;
+            pinchStart = {
+                scale,
+                midX: centre.x,
+                midY: centre.y,
+                offsetX,
+                offsetY
+            };
             panStart = null;
-        } else if (pointers.size === 1 && scale > MIN_SCALE) {
+
+            // A second finger means the gesture was never a seek. Abandon it
+            // rather than committing whatever the first finger had accumulated.
+            abandonSeek();
+        } else if (pointers.size === 1 && event.pointerType === "mouse" && scale > MIN_SCALE) {
+            // A mouse has no second pointer, so it keeps one-button panning.
             panStart = { x: event.clientX, y: event.clientY, offsetX, offsetY };
         } else if (pointers.size === 1 && canSeek() && !onControlBar(event)) {
-            // At fit there is nothing to pan, so a single-finger drag is free
-            // to mean something else.
             seekStart = { x: event.clientX, y: event.clientY, time: video?.currentTime ?? 0 };
             seekSamples = [{ x: event.clientX, t: event.timeStamp }];
             seekOffset = 0;
@@ -263,14 +306,14 @@
 
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-        if (pointers.size === 2 && pinchStartDistance > 0) {
+        if (pointers.size === 2 && pinchStartDistance > 0 && pinchStart) {
             const [a, b] = [...pointers.values()];
             const centre = midpoint(a, b);
             const ratio = pinchDistance(a, b) / pinchStartDistance;
 
             // Prevent the browser treating this as a page pinch-zoom.
             event.preventDefault();
-            zoomAt(pinchStartScale * ratio, centre.x, centre.y);
+            applyTwoFinger(centre, ratio);
             return;
         }
 
@@ -281,6 +324,9 @@
             clampOffsets();
             return;
         }
+
+        // Once zoomed, a one-finger swipe is still a seek: panning moved to
+        // two fingers precisely so this stays available.
 
         if (seekStart && pointers.size === 1) {
             const totalX = event.clientX - seekStart.x;
@@ -318,7 +364,10 @@
     function endPointer(event: PointerEvent) {
         pointers.delete(event.pointerId);
 
-        if (pointers.size < 2) pinchStartDistance = 0;
+        if (pointers.size < 2) {
+            pinchStartDistance = 0;
+            pinchStart = null;
+        }
         if (pointers.size === 0) {
             panStart = null;
             commitSeek();
@@ -391,9 +440,15 @@
         showControls();
     }
 
-    /** True where a horizontal drag should scrub rather than do nothing. */
+    /**
+     * True where a one-finger horizontal drag should scrub.
+     *
+     * Zoom level is deliberately not part of this. Panning lives on two
+     * fingers, so seeking stays on one at every zoom level -- a swipe should
+     * not silently change meaning because the picture happens to be zoomed.
+     */
     function canSeek(): boolean {
-        return isFullscreen && scale <= MIN_SCALE && !!video && Number.isFinite(video.duration);
+        return isFullscreen && !!video && Number.isFinite(video.duration);
     }
 
     /**
@@ -685,7 +740,7 @@
             bind:this={stage}
             class="relative flex-1 touch-none overflow-hidden"
             role="application"
-            aria-label="Video, pinch or scroll to zoom"
+            aria-label="Video: swipe across to seek, pinch with two fingers to zoom and pan"
             onpointerdown={onPointerDown}
             onpointermove={onPointerMove}
             onpointerup={onPointerUp}

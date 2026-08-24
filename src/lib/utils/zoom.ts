@@ -195,6 +195,56 @@ export function project(
     };
 }
 
+/** Everything a two-finger gesture records when it starts. */
+export interface GestureStart {
+    scale: number;
+    /** Midpoint between the fingers, in client coordinates. */
+    midX: number;
+    midY: number;
+    offsetX: number;
+    offsetY: number;
+}
+
+/**
+ * Map a two-finger gesture's start state onto where the fingers are now.
+ *
+ * Zoom and pan are one transform rather than a zoom followed by a translate:
+ * the content point that sat under the starting midpoint is placed back under
+ * the current midpoint at the new scale. Composing two steps drifts, because
+ * each clamps independently and the intermediate can be pinned at an edge.
+ */
+export function twoFingerTransform(
+    view: Viewport,
+    start: GestureStart,
+    centre: { x: number; y: number },
+    ratio: number,
+    maxScale = SCALE_CEILING,
+    videoWidth = 0,
+    videoHeight = 0
+): Transform {
+    const centreX = view.left + view.width / 2;
+    const centreY = view.top + view.height / 2;
+    const base = Number.isFinite(start.scale) && start.scale > 0 ? start.scale : MIN_SCALE;
+
+    // Content coordinates of whatever was under the fingers at the start.
+    const contentX = (start.midX - centreX - start.offsetX) / base;
+    const contentY = (start.midY - centreY - start.offsetY) / base;
+
+    const next = clamp(base * ratio, MIN_SCALE, clamp(maxScale, MIN_SCALE, SCALE_CEILING));
+
+    return clampTransform(
+        view,
+        {
+            scale: next,
+            offsetX: centre.x - centreX - contentX * next,
+            offsetY: centre.y - centreY - contentY * next
+        },
+        maxScale,
+        videoWidth,
+        videoHeight
+    );
+}
+
 export function pinchDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
