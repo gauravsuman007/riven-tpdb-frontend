@@ -15,8 +15,8 @@ html[data-theme="darkmatter"] {
     --accent-foreground: oklch(0.8109 0 0);
     --destructive: oklch(0.45 0.18 25);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.252 0 0);
-    --input: oklch(0.252 0 0);
+    --border: oklch(0.4950 0 0);
+    --input: oklch(0.4950 0 0);
     --ring: oklch(0.7214 0.1337 49.9802);
     --chart-1: oklch(0.594 0.0443 196.0233);
     --chart-2: oklch(0.7214 0.1337 49.9802);

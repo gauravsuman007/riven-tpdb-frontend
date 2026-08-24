@@ -34,7 +34,7 @@ html[data-theme="catppuccin"] {
 
     /* Overlay0: #6c7086 */
     --border: oklch(0.552 0.045 275.5);
-    --input: oklch(0.354 0.042 275.5);
+    --input: oklch(0.4980 0.042 275.5);
     --ring: oklch(0.779 0.127 301.2);
 
     /* Chart 1: Mauve */

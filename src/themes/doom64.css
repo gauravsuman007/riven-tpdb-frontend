@@ -15,8 +15,8 @@ html[data-theme="doom64"] {
     --accent-foreground: oklch(0 0 0);
     --destructive: oklch(0.7839 0.1719 68.0943);
     --destructive-foreground: oklch(0 0 0);
-    --border: oklch(0.4091 0 0);
-    --input: oklch(0.4091 0 0);
+    --border: oklch(0.5580 0 0);
+    --input: oklch(0.5580 0 0);
     --ring: oklch(0.6083 0.209 27.0276);
     --chart-1: oklch(0.6083 0.209 27.0276);
     --chart-2: oklch(0.6423 0.1467 133.0145);

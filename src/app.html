@@ -6,9 +6,15 @@
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <!--
+            Every theme this app ships is dark. Saying so does two things:
+            browsers render their own widgets (scrollbars, autofill, date
+            pickers) in dark rather than light, and extensions like Dark Reader
+            detect that the site already has a dark theme and leave it alone
+            instead of applying a second inversion on top of the first.
+        -->
+        <meta name="color-scheme" content="dark" />
         %sveltekit.head%
     </head>
 

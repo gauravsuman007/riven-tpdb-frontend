@@ -15,8 +15,8 @@ html[data-theme="bubblegum"] {
     --accent-foreground: oklch(0.9306 0.0197 349.0785);
     --destructive: oklch(0.6702 0.1806 350.3599);
     --destructive-foreground: oklch(0.2497 0.0305 234.1628);
-    --border: oklch(0.3907 0.0399 242.2181);
-    --input: oklch(0.3093 0.0305 232.0027);
+    --border: oklch(0.5620 0.0399 242.218);
+    --input: oklch(0.5610 0.0305 232.003);
     --ring: oklch(0.6998 0.0896 201.8672);
     --chart-1: oklch(0.6998 0.0896 201.8672);
     --chart-2: oklch(0.7794 0.0803 4.133);

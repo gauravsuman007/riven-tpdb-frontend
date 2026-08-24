@@ -15,8 +15,8 @@ html[data-theme="mochamousse"] {
     --accent-foreground: oklch(0.2721 0.0141 48.1783);
     --destructive: oklch(0.6875 0.142 21.4566);
     --destructive-foreground: oklch(0.2721 0.0141 48.1783);
-    --border: oklch(0.4063 0.0255 40.3627);
-    --input: oklch(0.4063 0.0255 40.3627);
+    --border: oklch(0.5970 0.0255 40.3627);
+    --input: oklch(0.5970 0.0255 40.3627);
     --ring: oklch(0.7272 0.0539 52.332);
     --chart-1: oklch(0.7272 0.0539 52.332);
     --chart-2: oklch(0.7473 0.0387 80.5476);

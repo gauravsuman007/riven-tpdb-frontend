@@ -7,6 +7,15 @@
 @source "../node_modules/@sjsf/shadcn4-theme/dist";
 /* @source "../node_modules/@sjsf-lab/shadcn-extras-theme/dist"; */
 
+/*
+    Declared in CSS as well as in the <meta> tag, because the meta tag is only
+    consulted before stylesheets load. This is what makes native form controls
+    and scrollbars render dark.
+*/
+:root {
+    color-scheme: dark;
+}
+
 @theme {
     --font-sans: "Oxanium", sans-serif;
     --font-serif: "Merriweather", serif;

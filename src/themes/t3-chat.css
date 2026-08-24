@@ -15,8 +15,8 @@ html[data-theme="t3-chat"] {
     --accent-foreground: oklch(0.9647 0.0091 341.8035);
     --destructive: oklch(0.6258 0.2224 20.6119);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.3286 0.0154 343.4461);
-    --input: oklch(0.3387 0.0195 332.8347);
+    --border: oklch(0.5540 0.0154 343.446);
+    --input: oklch(0.5550 0.0195 332.835);
     --ring: oklch(0.5916 0.218 0.5844);
     --chart-1: oklch(0.5316 0.1409 355.1999);
     --chart-2: oklch(0.5633 0.1912 306.8561);

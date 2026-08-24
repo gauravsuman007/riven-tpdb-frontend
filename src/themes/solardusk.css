@@ -15,8 +15,8 @@ html[data-theme="solardusk"] {
     --accent-foreground: oklch(0.9232 0.0026 48.7171);
     --destructive: oklch(0.5771 0.2152 27.325);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.3741 0.0087 67.5582);
-    --input: oklch(0.3741 0.0087 67.5582);
+    --border: oklch(0.5450 0.0087 67.5582);
+    --input: oklch(0.5450 0.0087 67.5582);
     --ring: oklch(0.7049 0.1867 47.6044);
     --chart-1: oklch(0.7049 0.1867 47.6044);
     --chart-2: oklch(0.6847 0.1479 237.3225);
