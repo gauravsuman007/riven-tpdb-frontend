@@ -30,20 +30,20 @@
     // button is the only place a save is visible, so it has to say all three
     // states -- previously it said "Submit" throughout and a save that worked
     // looked identical to one that never fired.
-    let saveState = $state<"idle" | "saving" | "saved">("idle");
+    let justSaved = $state(false);
     let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function settle(next: "idle" | "saved") {
+    function settle(next: boolean) {
         clearTimeout(savedTimer);
-        saveState = next;
+        justSaved = next;
 
-        if (next === "saved") {
-            savedTimer = setTimeout(() => (saveState = "idle"), 2500);
+        if (next) {
+            savedTimer = setTimeout(() => (justSaved = false), 2500);
         }
     }
 
     // @ts-expect-error - Schema is provided by page data
-    const { form } = setupSvelteKitForm(meta, {
+    const { form, request } = setupSvelteKitForm(meta, {
         ...defaults,
         get uiSchema() {
             return uiSchema;
@@ -73,10 +73,10 @@
 
                 if (stored) setValue(form, structuredClone(stored));
 
-                settle("saved");
+                settle(true);
                 toast.success("Settings saved");
             } else {
-                settle("idle");
+                settle(false);
                 // Name the fields that blocked the save. A rejected save
                 // restores the form to the submitted value, which on its own
                 // looks indistinguishable from a save that silently undid
@@ -99,10 +99,17 @@
             }
         },
         onFailure: () => {
-            settle("idle");
+            settle(false);
             toast.error("Something went wrong while saving settings");
         }
     });
+
+    // "Saving" comes from the integration's own request task rather than a
+    // submit listener: the form's `attributes` are spread onto the <form>
+    // element, so adding an `onsubmit` there overrides the handler that
+    // enhances the submission and silently drops the form back to a native
+    // POST.
+    const saveState = $derived(request.isProcessed ? "saving" : justSaved ? "saved" : "idle");
 
     setFormContext(form);
 
@@ -191,17 +198,16 @@
 
         <div class="settings-form">
             <!--
-                `onSubmit` is not available here: the SvelteKit integration
-                reserves it. The native submit event fires first either way,
-                which is all the button needs to show progress.
+                Nothing but `method` goes in `attributes`. These are spread
+                onto the <form> element and would override the integration's
+                own `onsubmit`, which is what calls preventDefault and posts
+                the form value as JSON. Overriding it makes the browser submit
+                natively instead: the flat root.* fields get posted, the server
+                takes a parser branch the enhanced path never uses, and the
+                save fails with a full page reload that looks exactly like the
+                form quietly resetting itself.
             -->
-            <Form
-                attributes={{
-                    method: "POST",
-                    onsubmit: () => {
-                        saveState = "saving";
-                    }
-                }}>
+            <Form attributes={{ method: "POST" }}>
                 <!-- Carries the id prefix the server needs to parse the
                      submitted FormData; BasicForm renders this internally. -->
                 <HiddenIdPrefixInput {form} />
