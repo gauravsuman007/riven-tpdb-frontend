@@ -3,6 +3,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Checkbox } from "$lib/components/ui/checkbox/index.js";
     import type { Stream } from "$lib/types";
+    import ReleaseMeta from "./release-meta.svelte";
 
     interface Props {
         stream: Stream;
@@ -78,6 +79,19 @@
                     {#if stream.is_cached}
                         <Badge class="bg-chart-1 text-primary-foreground">Cached</Badge>
                     {/if}
+                    <!--
+                        Choosing a release here is the same decision as choosing
+                        one on the detail page, so it gets the same numbers: how
+                        many peers are actually seeding it, how big it is, and
+                        which indexer vouched for it. Without them the only
+                        signal was a rank computed from the filename.
+                    -->
+                    <ReleaseMeta
+                        seeders={stream.seeders}
+                        leechers={stream.leechers}
+                        size={stream.size}
+                        indexer={stream.indexer}
+                        textClass="text-xs" />
                 </div>
             </div>
         </Card.Content>

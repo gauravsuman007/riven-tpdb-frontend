@@ -10,6 +10,10 @@
     import CheckIcon from "@lucide/svelte/icons/check";
     import LoaderIcon from "@lucide/svelte/icons/loader-circle";
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
+    import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+    import LayersIcon from "@lucide/svelte/icons/layers";
+    import * as Collapsible from "$lib/components/ui/collapsible/index.js";
+    import ReleaseMeta from "$lib/components/media/riven/release-meta.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
@@ -34,6 +38,20 @@
     // Infohash of the release currently being switched to, so only that row
     // shows a spinner while the whole list disables.
     let selecting = $state<string | null>(null);
+
+    // Collapsed by default: the candidate list only matters when something has
+    // gone wrong, and it is long enough to bury the cast and tags underneath it.
+    let releasesOpen = $state(false);
+
+    // Null rather than 0 when no indexer reported a seeder count at all --
+    // "0 with seeders" would read as "everything here is dead", which is a
+    // different and much worse claim than "nobody told us".
+    const seededCount = $derived(
+        releases.some((r) => r.seeders !== null && r.seeders !== undefined)
+            ? releases.filter((r) => (r.seeders ?? 0) > 0).length
+            : null
+    );
+    const rejectedCount = $derived(releases.filter((r) => r.is_blacklisted).length);
 
     // Playable means a file is actually mounted, not merely that the item
     // reached Completed -- the VFS entry is what the stream endpoint reads.
@@ -232,42 +250,64 @@
                     say "not that one, this one".
                 -->
                 {#if releases.length}
-                    <div class="mt-2 flex flex-col gap-2">
-                        <div class="flex flex-wrap items-baseline justify-between gap-2">
-                            <p
-                                class="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                                Candidate releases
-                            </p>
-                            <p class="text-muted-foreground/70 text-xs">
-                                {releases.length} found by the scrapers
-                            </p>
-                        </div>
+                    <Collapsible.Root bind:open={releasesOpen} class="mt-2">
+                        <!--
+                            Collapsed by default. The list is long, technical,
+                            and irrelevant until something has gone wrong -- but
+                            when it is wanted it is wanted badly, so the trigger
+                            is styled in the primary colour like Play rather
+                            than as another muted heading, and it carries the
+                            counts that say whether opening it is worth it.
+                        -->
+                        <Collapsible.Trigger
+                            class="border-primary/30 bg-primary/10 hover:bg-primary/20 focus-visible:ring-ring flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+                            <LayersIcon class="text-primary size-4 shrink-0" />
+                            <span class="min-w-0 flex-1">
+                                <span class="text-primary block text-sm font-semibold">
+                                    Candidate releases
+                                </span>
+                                <span class="text-muted-foreground block text-xs">
+                                    {releases.length} found{#if seededCount !== null}, {seededCount}
+                                        with seeders{/if}{#if rejectedCount}
+                                        &middot; {rejectedCount} rejected{/if}
+                                </span>
+                            </span>
+                            <ChevronDownIcon
+                                class={cn(
+                                    "text-primary size-4 shrink-0 transition-transform duration-200",
+                                    releasesOpen && "rotate-180"
+                                )} />
+                        </Collapsible.Trigger>
 
-                        <div class="divide-border/40 flex flex-col divide-y">
-                            {#each releases as release (release.infohash)}
-                                <div
-                                    class="flex flex-col gap-2 py-2 sm:flex-row sm:items-start sm:gap-3">
-                                    <div class="flex shrink-0 gap-1.5">
-                                        <Badge
-                                            variant={release.resolution ? "secondary" : "outline"}
-                                            class="shrink-0 font-mono text-xs">
-                                            {release.resolution ?? "?"}
-                                        </Badge>
-                                    </div>
-
-                                    <div class="min-w-0 flex-1">
-                                        <p class="text-muted-foreground text-xs break-all">
-                                            {release.raw_title}
-                                        </p>
-                                        <div class="mt-1 flex flex-wrap items-center gap-2">
-                                            {#if release.is_active}
+                        <Collapsible.Content>
+                            <div class="flex flex-col gap-2 pt-2">
+                                <div class="divide-border/40 flex flex-col divide-y">
+                                    {#each releases as release (release.infohash)}
+                                        <div
+                                            class="flex flex-col gap-2 py-2 sm:flex-row sm:items-start sm:gap-3">
+                                            <div class="flex shrink-0 gap-1.5">
                                                 <Badge
-                                                    class="border-0 bg-green-600/90 text-[10px] text-white">
-                                                    Downloaded
+                                                    variant={release.resolution
+                                                        ? "secondary"
+                                                        : "outline"}
+                                                    class="shrink-0 font-mono text-xs">
+                                                    {release.resolution ?? "?"}
                                                 </Badge>
-                                            {/if}
-                                            {#if release.is_preferred && !release.is_active}
-                                                <!--
+                                            </div>
+
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-muted-foreground text-xs break-all">
+                                                    {release.raw_title}
+                                                </p>
+                                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                                    {#if release.is_active}
+                                                        <Badge
+                                                            class="border-0 bg-green-600/90 text-[10px] text-white">
+                                                            Downloaded
+                                                        </Badge>
+                                                    {/if}
+                                                    {#if release.is_preferred && !release.is_active}
+                                                        <!--
                                                     "Selected", not
                                                     "downloading": picking a
                                                     release queues it with the
@@ -277,101 +317,71 @@
                                                     item badge says what is
                                                     actually happening.
                                                 -->
-                                                <Badge
-                                                    class="border-0 bg-blue-600/90 text-[10px] text-white">
-                                                    Selected
-                                                </Badge>
-                                            {/if}
-                                            {#if release.is_blacklisted}
-                                                <Badge
-                                                    variant="outline"
-                                                    class="text-muted-foreground/70 text-[10px]">
-                                                    Rejected earlier
-                                                </Badge>
-                                            {/if}
-                                            <!--
-                                                What the indexer claimed at
-                                                scrape time. A release with no
-                                                seeders is the single best
-                                                predictor of a download that
-                                                never starts, so it is called
-                                                out rather than shown as a
-                                                neutral number -- and an
-                                                indexer that reported nothing
-                                                is left blank rather than
-                                                rendered as zero.
-                                            -->
-                                            {#if release.seeders !== null && release.seeders !== undefined}
-                                                <Badge
-                                                    variant="outline"
-                                                    class={cn(
-                                                        "font-mono text-[10px]",
-                                                        release.seeders === 0
-                                                            ? "border-red-500/40 text-red-500"
-                                                            : "text-muted-foreground/80"
-                                                    )}>
-                                                    {release.seeders} seed{release.seeders === 1
-                                                        ? ""
-                                                        : "s"}
-                                                    {#if release.leechers !== null && release.leechers !== undefined}
-                                                        / {release.leechers} leech
+                                                        <Badge
+                                                            class="border-0 bg-blue-600/90 text-[10px] text-white">
+                                                            Selected
+                                                        </Badge>
                                                     {/if}
-                                                </Badge>
-                                            {/if}
-                                            {#if release.size}
-                                                <Badge
-                                                    variant="outline"
-                                                    class="text-muted-foreground/80 font-mono text-[10px]">
-                                                    {formatBytes(release.size)}
-                                                </Badge>
-                                            {/if}
-                                            {#if release.indexer}
-                                                <Badge
-                                                    variant="outline"
-                                                    class="text-muted-foreground/80 text-[10px]">
-                                                    {release.indexer}
-                                                </Badge>
-                                            {/if}
-                                            <span class="text-muted-foreground/60 font-mono text-[10px]">
-                                                rank {release.rank}
-                                            </span>
-                                        </div>
-                                    </div>
+                                                    {#if release.is_blacklisted}
+                                                        <Badge
+                                                            variant="outline"
+                                                            class="text-muted-foreground/70 text-[10px]">
+                                                            Rejected earlier
+                                                        </Badge>
+                                                    {/if}
+                                                    <!--
+                                                Same component as the manual
+                                                scrape results, so a release
+                                                reads identically wherever the
+                                                choice is being made.
+                                            -->
+                                                    <ReleaseMeta
+                                                        seeders={release.seeders}
+                                                        leechers={release.leechers}
+                                                        size={release.size}
+                                                        indexer={release.indexer} />
+                                                    <span
+                                                        class="text-muted-foreground/60 font-mono text-[10px]">
+                                                        rank {release.rank}
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                    {#if !release.is_active && libraryState?.riven_id}
-                                        <form
-                                            method="POST"
-                                            action="?/selectRelease"
-                                            use:enhance={() => {
-                                                selecting = release.infohash;
-                                                return async ({ update }) => {
-                                                    await update();
-                                                    selecting = null;
-                                                };
-                                            }}
-                                            class="shrink-0">
-                                            <input
-                                                type="hidden"
-                                                name="rivenId"
-                                                value={libraryState.riven_id} />
-                                            <input
-                                                type="hidden"
-                                                name="infohash"
-                                                value={release.infohash} />
-                                            <Button
-                                                type="submit"
-                                                size="sm"
-                                                variant="outline"
-                                                class="h-7 w-full text-xs sm:w-auto"
-                                                disabled={selecting !== null}>
-                                                {#if selecting === release.infohash}
-                                                    <LoaderIcon class="size-3 animate-spin" />
-                                                {:else if release.is_blacklisted}
-                                                    <RotateCcwIcon class="size-3" />
-                                                {:else}
-                                                    <DownloadIcon class="size-3" />
-                                                {/if}
-                                                <!--
+                                            {#if !release.is_active && libraryState?.riven_id}
+                                                <form
+                                                    method="POST"
+                                                    action="?/selectRelease"
+                                                    use:enhance={() => {
+                                                        selecting = release.infohash;
+                                                        return async ({ update }) => {
+                                                            await update();
+                                                            selecting = null;
+                                                        };
+                                                    }}
+                                                    class="shrink-0">
+                                                    <input
+                                                        type="hidden"
+                                                        name="rivenId"
+                                                        value={libraryState.riven_id} />
+                                                    <input
+                                                        type="hidden"
+                                                        name="infohash"
+                                                        value={release.infohash} />
+                                                    <Button
+                                                        type="submit"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        class="h-7 w-full text-xs sm:w-auto"
+                                                        disabled={selecting !== null}>
+                                                        {#if selecting === release.infohash}
+                                                            <LoaderIcon
+                                                                class="size-3 animate-spin" />
+                                                        {:else if release.is_blacklisted}
+                                                            <RotateCcwIcon class="size-3" />
+                                                        {:else}
+                                                            <DownloadIcon class="size-3" />
+                                                        {/if}
+                                                        <!--
                                                     Same action either way: the
                                                     backend un-rejects before
                                                     queueing. Only the wording
@@ -380,21 +390,25 @@
                                                     "rejected earlier" reads as
                                                     though it would fail.
                                                 -->
-                                                {release.is_blacklisted ? "Retry" : "Use this"}
-                                            </Button>
-                                        </form>
-                                    {/if}
+                                                        {release.is_blacklisted
+                                                            ? "Retry"
+                                                            : "Use this"}
+                                                    </Button>
+                                                </form>
+                                            {/if}
+                                        </div>
+                                    {/each}
                                 </div>
-                            {/each}
-                        </div>
 
-                        <p class="text-muted-foreground/70 text-xs">
-                            Seeders, size and indexer are what the indexer claimed when this title
-                            was scraped, not a live reading. Releases Riven gave up on stay listed
-                            so you can retry them; choosing one replaces the current download and
-                            keeps the rest of this list.
-                        </p>
-                    </div>
+                                <p class="text-muted-foreground/70 text-xs">
+                                    Seeders, size and indexer are what the indexer claimed when this
+                                    title was scraped, not a live reading. Releases Riven gave up on
+                                    stay listed so you can retry them; choosing one replaces the
+                                    current download and keeps the rest of this list.
+                                </p>
+                            </div>
+                        </Collapsible.Content>
+                    </Collapsible.Root>
                 {/if}
 
                 {#if collected}

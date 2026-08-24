@@ -7,7 +7,13 @@ export interface Stream {
     parsed_data: ParsedTitleData;
     is_cached: boolean;
     magnet: string;
-    size: number;
+    // What the indexer reported. Null means it did not say -- which for
+    // seeders is meaningfully different from saying zero, so these stay
+    // nullable rather than defaulting.
+    seeders?: number | null;
+    leechers?: number | null;
+    size?: number | null;
+    indexer?: string | null;
     [key: string]: unknown;
 }
 

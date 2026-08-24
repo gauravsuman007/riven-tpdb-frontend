@@ -75,12 +75,7 @@ const localAccessSession = async (event: Parameters<Handle>[0]["event"]) => {
               .get()
         : // No name configured: the oldest admin, so which account gets picked
           // does not change as users are added.
-          db
-              .select()
-              .from(user)
-              .where(eq(user.role, "admin"))
-              .orderBy(user.createdAt)
-              .get();
+          db.select().from(user).where(eq(user.role, "admin")).orderBy(user.createdAt).get();
 
     if (!account) {
         logger.error(
