@@ -48,7 +48,7 @@
 </svelte:head>
 
 <PageShell
-    class="bg-background relative mt-0 flex min-h-screen flex-col overflow-x-hidden p-0 md:mt-0 md:p-0">
+    class="bg-background relative mt-0 flex min-h-dvh flex-col overflow-x-hidden p-0 pb-24 md:mt-0 md:p-0">
     <!-- Immersive Background -->
     <div class="pointer-events-none fixed inset-0 z-0">
         <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>

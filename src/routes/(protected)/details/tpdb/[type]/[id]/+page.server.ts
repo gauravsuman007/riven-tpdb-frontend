@@ -180,6 +180,37 @@ export const actions: Actions = {
         return { collected: true };
     },
 
+    /**
+     * Download a specific release instead of the one Riven picked.
+     *
+     * The backend un-blacklists it and clears the current download, keeping the
+     * candidate list intact so the choice survives.
+     */
+    selectRelease: async ({ request, fetch, locals }) => {
+        const form = await request.formData();
+        const rivenId = Number(form.get("rivenId"));
+        const infohash = String(form.get("infohash") || "");
+
+        if (!rivenId || !infohash) return fail(400, { message: "Missing release" });
+
+        const { error: err } = await providers.riven.POST(
+            "/api/v1/items/{item_id}/streams/{infohash}/select",
+            {
+                baseUrl: locals.backendUrl,
+                headers: { "x-api-key": locals.apiKey },
+                fetch,
+                params: { path: { item_id: rivenId, infohash } }
+            }
+        );
+
+        if (err) {
+            logger.error("Release selection failed", err);
+            return fail(502, { message: "Could not select that release" });
+        }
+
+        return { selected: infohash };
+    },
+
     /** Queue the title in Riven so it gets scraped and downloaded. */
     request: async ({ request, fetch, locals }) => {
         const form = await request.formData();

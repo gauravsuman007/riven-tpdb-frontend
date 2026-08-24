@@ -147,7 +147,8 @@
     <!-- Pop-out Menu -->
     <div
         transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
-        class="fixed right-4 bottom-24 z-50 flex w-72 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl md:hidden">
+        class="fixed right-4 z-50 flex w-72 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl md:hidden"
+        style="bottom: calc(6rem + env(safe-area-inset-bottom))">
         <div class="p-3">
             {#if user}
                 <div class="mb-4 flex items-center justify-between px-2">

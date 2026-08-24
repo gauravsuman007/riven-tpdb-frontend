@@ -39,7 +39,8 @@
 
 <div
     transition:fly={{ y: 20, duration: 400, easing: cubicOut }}
-    class="fixed right-0 bottom-6 left-0 z-[60] flex justify-center px-4 md:hidden">
+    class="fixed right-0 left-0 z-[60] flex justify-center px-4 md:hidden"
+    style="bottom: calc(1.5rem + env(safe-area-inset-bottom))">
     <!-- Unified Pill Container -->
     <div
         class="flex h-11 w-full max-w-md items-center gap-2 rounded-full border border-white/5 bg-white/5 p-1 pl-4 shadow-lg backdrop-blur-xl transition-all duration-300 focus-within:border-white/10 focus-within:bg-black/40 focus-within:ring-1 focus-within:ring-white/20 hover:bg-white/10">

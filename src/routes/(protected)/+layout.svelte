@@ -60,7 +60,7 @@
 <Toaster richColors closeButton />
 
 <div
-    class="bg-background relative grid h-screen w-screen grid-cols-1 overflow-hidden md:grid-cols-[auto_1fr]">
+    class="bg-background relative grid h-dvh w-screen grid-cols-1 overflow-hidden md:grid-cols-[auto_1fr]">
     <Sidebar user={data.user} />
     <main class="relative overflow-hidden">
         <div

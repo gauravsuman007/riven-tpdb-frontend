@@ -565,6 +565,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item_id}/streams/{infohash}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select a release for download
+         * @description Pin a specific candidate release. The downloader will try it ahead of its own quality ordering, replacing whatever is currently downloaded.
+         */
+        post: operations["select_item_stream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item_id}/streams/{stream_id}/blacklist": {
         parameters: {
             query?: never;
@@ -826,6 +846,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scrape/indexers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Prowlarr Indexers
+         * @description Indexers configured in Prowlarr, for choosing which to search
+         */
+        get: operations["list_prowlarr_indexers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/schema": {
         parameters: {
             query?: never;
@@ -1010,14 +1050,63 @@ export interface paths {
          * Stream File
          * @description Stream a file directly from the provider.
          *
-         *     Args:
-         *         item_id: The ID of the MediaItem to stream.
-         *         request: The FastAPI request object.
-         *
-         *     Returns:
-         *         A StreamingResponse for the file content.
+         *     The URL is resolved through `playback_url` rather than read straight off the
+         *     MediaEntry, and a rejection from the provider triggers exactly one re-mint
+         *     before giving up. Stored links expire, and for providers that mint links per
+         *     request the stored value is not even a fetchable URL -- previously both
+         *     cases surfaced as a flat 502 with no attempt to recover.
          */
         get: operations["stream_file_api_v1_stream_file__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stream/playback_info/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Playback Info
+         * @description Describe what the file actually contains, so the client can choose a mode.
+         *
+         *     The previous player asked the browser whether it supported HEVC and never
+         *     looked at the file, which sent every Firefox viewer down the transcoding
+         *     path regardless of what they were playing. The decision belongs here, on
+         *     real codec data, with the client confirming direct play against its own
+         *     canPlayType.
+         */
+        get: operations["get_playback_info_api_v1_stream_playback_info__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stream/remux/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Remux
+         * @description Progressive fragmented-MP4 remux for files whose video is already playable.
+         *
+         *     Only the audio is re-encoded and the container is rebuilt, so this costs a
+         *     fraction of a full transcode. `t` seeks, since a fragmented stream cannot be
+         *     range-requested.
+         */
+        get: operations["stream_remux_api_v1_stream_remux__item_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1033,7 +1122,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Hls Playlist */
+        /**
+         * Get Hls Playlist
+         * @description A static VOD playlist derived from the file's real duration.
+         *
+         *     Segments are a fixed length because the encoder is told to force keyframes
+         *     at exactly those boundaries, so what this advertises is what the session
+         *     actually produces.
+         */
         get: operations["get_hls_playlist_api_v1_stream_hls__item_id__index_m3u8_get"];
         put?: never;
         post?: never;
@@ -1050,11 +1146,38 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Hls Segment */
+        /**
+         * Get Hls Segment
+         * @description Serve one segment from the item's running transcode session.
+         *
+         *     The session is persistent: the old implementation started a new ffmpeg for
+         *     every segment, each one re-opening the remote debrid URL and seeking from
+         *     the beginning of the file.
+         */
         get: operations["get_hls_segment_api_v1_stream_hls__item_id__segment__seq__ts_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stream/hls/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop Hls Session
+         * @description Tear down an item's session when the player closes.
+         */
+        delete: operations["stop_hls_session_api_v1_stream_hls__item_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2505,13 +2628,18 @@ export interface components {
         };
         /**
          * LibraryStream
-         * @description A release found for an item but not yet downloaded.
+         * @description A release found for an item.
          *
          *     There is no size here because Riven does not record one: indexers report
          *     sizes inconsistently and the value is not stored on the stream, so claiming
          *     a size would mean inventing it.
          */
         LibraryStream: {
+            /**
+             * Infohash
+             * @description Infohash, used to select this release
+             */
+            infohash: string;
             /**
              * Raw Title
              * @description Release title as the indexer gave it
@@ -2529,9 +2657,19 @@ export interface components {
             rank: number;
             /**
              * Is Active
-             * @description Whether this is the release Riven settled on
+             * @description Whether this is the release that was actually downloaded
              */
             is_active: boolean;
+            /**
+             * Is Preferred
+             * @description Whether the user pinned this release
+             */
+            is_preferred: boolean;
+            /**
+             * Is Blacklisted
+             * @description Whether this release was rejected and will be skipped
+             */
+            is_blacklisted: boolean;
         };
         /** ListrrModel */
         ListrrModel: {
@@ -2729,6 +2867,27 @@ export interface components {
             parsed_at?: string | null;
             /** Probed At */
             probed_at?: string | null;
+        };
+        /**
+         * MediaProbe
+         * @description What ffprobe could tell us about the file.
+         */
+        MediaProbe: {
+            /**
+             * Duration
+             * @default 0
+             */
+            duration: number;
+            /** Video Codec */
+            video_codec?: string | null;
+            /** Audio Codec */
+            audio_codec?: string | null;
+            /** Container */
+            container?: string | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
         };
         /**
          * MediaTypeEnum
@@ -2969,6 +3128,25 @@ export interface components {
              */
             ids: number[];
         };
+        /**
+         * PlaybackInfo
+         * @description What the client needs in order to choose a playback mode itself.
+         *
+         *     `mode` is the server's recommendation; the client is expected to confirm
+         *     `direct` against its own `canPlayType`, because codec support genuinely
+         *     differs between browsers and only the browser knows for sure.
+         */
+        PlaybackInfo: {
+            /** Item Id */
+            item_id: number;
+            probe: components["schemas"]["MediaProbe"];
+            /** Mode */
+            mode: string;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** PlexLibraryModel */
         PlexLibraryModel: {
             /**
@@ -3079,6 +3257,50 @@ export interface components {
              * @default 60
              */
             limiter_seconds: number;
+            /**
+             * Indexer Ids
+             * @description Prowlarr indexer ids to search. Empty means search all of them, which is slow when many are configured.
+             */
+            indexer_ids?: number[];
+        };
+        /**
+         * ProwlarrIndexer
+         * @description One indexer Prowlarr has configured.
+         */
+        ProwlarrIndexer: {
+            /**
+             * Id
+             * @description Prowlarr indexer id
+             */
+            id: number;
+            /**
+             * Name
+             * @description Indexer name
+             */
+            name: string;
+            /**
+             * Enabled
+             * @description Whether Prowlarr has it enabled
+             */
+            enabled: boolean;
+            /**
+             * Protocol
+             * @description usenet or torrent
+             */
+            protocol: string;
+        };
+        /** ProwlarrIndexersResponse */
+        ProwlarrIndexersResponse: {
+            /**
+             * Indexers
+             * @description Configured indexers
+             */
+            indexers: components["schemas"]["ProwlarrIndexer"][];
+            /**
+             * Selected
+             * @description Currently selected ids; empty means all are searched
+             */
+            selected: number[];
         };
         /**
          * QualityRankModel
@@ -3827,6 +4049,31 @@ export interface components {
              * @default https://api.theporndb.net
              */
             api_base_url: string;
+            /**
+             * Cache Enabled
+             * @description Cache TPDB API responses
+             * @default true
+             */
+            cache_enabled: boolean;
+            /**
+             * Cache Dir
+             * Format: path
+             * @description Directory for the TPDB response cache. Put it on fast local storage; it holds small JSON files, not media.
+             * @default /riven/data/tpdb_cache
+             */
+            cache_dir: string;
+            /**
+             * Cache Max Size Mb
+             * @description Maximum size of the TPDB response cache in MB. Least recently used entries are evicted once this is exceeded.
+             * @default 250
+             */
+            cache_max_size_mb: number;
+            /**
+             * Cache Ttl Seconds
+             * @description How long a cached TPDB response stays fresh, in seconds. 0 disables expiry and relies on the size limit alone.
+             * @default 300
+             */
+            cache_ttl_seconds: number;
         };
         /**
          * TpdbMovie
@@ -5322,6 +5569,49 @@ export interface operations {
             };
         };
     };
+    select_item_stream: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description The ID of the media item */
+                item_id: number;
+                /** @description Infohash of the release to download */
+                infohash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     blacklist_item_stream: {
         parameters: {
             query?: {
@@ -5868,6 +6158,37 @@ export interface operations {
             };
         };
     };
+    list_prowlarr_indexers: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrIndexersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_settings_schema: {
         parameters: {
             query?: {
@@ -6319,13 +6640,90 @@ export interface operations {
             };
         };
     };
+    get_playback_info_api_v1_stream_playback_info__item_id__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackInfo"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_remux_api_v1_stream_remux__item_id__get: {
+        parameters: {
+            query?: {
+                t?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_hls_playlist_api_v1_stream_hls__item_id__index_m3u8_get: {
         parameters: {
             query?: {
-                pix_fmt?: string | null;
-                profile?: string | null;
-                level?: string | null;
-                resolution?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -6366,10 +6764,6 @@ export interface operations {
     get_hls_segment_api_v1_stream_hls__item_id__segment__seq__ts_get: {
         parameters: {
             query?: {
-                pix_fmt?: string | null;
-                profile?: string | null;
-                level?: string | null;
-                resolution?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -6388,6 +6782,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_hls_session_api_v1_stream_hls__item_id__delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Not found */

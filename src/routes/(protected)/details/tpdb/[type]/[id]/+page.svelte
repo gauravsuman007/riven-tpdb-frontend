@@ -29,6 +29,10 @@
     const files = $derived(libraryState?.files ?? []);
     const releases = $derived(libraryState?.streams ?? []);
 
+    // Infohash of the release currently being switched to, so only that row
+    // shows a spinner while the whole list disables.
+    let selecting = $state<string | null>(null);
+
     // Playable means a file is actually mounted, not merely that the item
     // reached Completed -- the VFS entry is what the stream endpoint reads.
     const playable = $derived(files.some((file) => file.available_in_vfs));
@@ -219,42 +223,109 @@
                 {/if}
 
                 <!--
-                    Candidate releases, shown while an item is still being
-                    worked on. Riven records no size for a release it has not
-                    downloaded, so only what it actually parsed appears here.
+                    Candidate releases: every release the scrapers found for
+                    this title. Shown whether or not something is downloaded,
+                    because swapping to a different release is the whole point
+                    of the list -- hiding it once one succeeded left no way to
+                    say "not that one, this one".
                 -->
-                {#if !files.length && releases.length}
+                {#if releases.length}
                     <div class="mt-2 flex flex-col gap-2">
-                        <p
-                            class="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                            Candidate releases
-                        </p>
-                        <div class="flex flex-col gap-1">
-                            {#each releases.slice(0, 5) as release (release.raw_title)}
-                                <div class="flex items-start gap-2 text-xs">
-                                    {#if release.resolution}
+                        <div class="flex flex-wrap items-baseline justify-between gap-2">
+                            <p
+                                class="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
+                                Candidate releases
+                            </p>
+                            <p class="text-muted-foreground/70 text-xs">
+                                {releases.length} found by the scrapers
+                            </p>
+                        </div>
+
+                        <div class="divide-border/40 flex flex-col divide-y">
+                            {#each releases as release (release.infohash)}
+                                <div
+                                    class="flex flex-col gap-2 py-2 sm:flex-row sm:items-start sm:gap-3">
+                                    <div class="flex shrink-0 gap-1.5">
                                         <Badge
-                                            variant="secondary"
+                                            variant={release.resolution ? "secondary" : "outline"}
                                             class="shrink-0 font-mono text-xs">
-                                            {release.resolution}
+                                            {release.resolution ?? "?"}
                                         </Badge>
-                                    {:else}
-                                        <Badge variant="outline" class="shrink-0 font-mono text-xs">
-                                            ?
-                                        </Badge>
+                                    </div>
+
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-muted-foreground text-xs break-all">
+                                            {release.raw_title}
+                                        </p>
+                                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                                            {#if release.is_active}
+                                                <Badge
+                                                    class="border-0 bg-green-600/90 text-[10px] text-white">
+                                                    Downloaded
+                                                </Badge>
+                                            {/if}
+                                            {#if release.is_preferred && !release.is_active}
+                                                <Badge
+                                                    class="border-0 bg-blue-600/90 text-[10px] text-white">
+                                                    Selected, downloading
+                                                </Badge>
+                                            {/if}
+                                            {#if release.is_blacklisted}
+                                                <Badge
+                                                    variant="outline"
+                                                    class="text-muted-foreground/70 text-[10px]">
+                                                    Rejected earlier
+                                                </Badge>
+                                            {/if}
+                                            <span class="text-muted-foreground/60 font-mono text-[10px]">
+                                                rank {release.rank}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {#if !release.is_active && libraryState?.riven_id}
+                                        <form
+                                            method="POST"
+                                            action="?/selectRelease"
+                                            use:enhance={() => {
+                                                selecting = release.infohash;
+                                                return async ({ update }) => {
+                                                    await update();
+                                                    selecting = null;
+                                                };
+                                            }}
+                                            class="shrink-0">
+                                            <input
+                                                type="hidden"
+                                                name="rivenId"
+                                                value={libraryState.riven_id} />
+                                            <input
+                                                type="hidden"
+                                                name="infohash"
+                                                value={release.infohash} />
+                                            <Button
+                                                type="submit"
+                                                size="sm"
+                                                variant="outline"
+                                                class="h-7 w-full text-xs sm:w-auto"
+                                                disabled={selecting !== null}>
+                                                {#if selecting === release.infohash}
+                                                    <LoaderIcon class="size-3 animate-spin" />
+                                                {:else}
+                                                    <DownloadIcon class="size-3" />
+                                                {/if}
+                                                Use this
+                                            </Button>
+                                        </form>
                                     {/if}
-                                    <span class="text-muted-foreground min-w-0 break-all">
-                                        {release.raw_title}
-                                        {#if release.is_active}
-                                            <span class="text-primary">· selected</span>
-                                        {/if}
-                                    </span>
                                 </div>
                             {/each}
                         </div>
+
                         <p class="text-muted-foreground/70 text-xs">
                             Sizes are not shown because Riven does not record one for a release it
-                            has not downloaded yet.
+                            has not downloaded yet. Choosing a release replaces the current download
+                            and keeps the rest of this list.
                         </p>
                     </div>
                 {/if}

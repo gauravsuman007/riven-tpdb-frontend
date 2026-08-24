@@ -127,16 +127,12 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <div class="md:hidden">
-                <NotificationCenter class="bg-background/60 rounded-xl backdrop-blur-md" />
-            </div>
-
-            <Button
-                variant="ghost"
-                class="bg-background/60 size-10 rounded-xl backdrop-blur-md md:hidden"
-                onclick={() => SidebarStore.toggle()}>
-                <Menu class="size-5" />
-            </Button>
+            <!--
+                Mobile controls used to live here, marked md:hidden inside a
+                header that is itself `hidden md:flex` -- so they were hidden
+                above the breakpoint by their own class and below it by their
+                parent, and could never render. MobileNav carries them instead.
+            -->
         </div>
     </div>
 </header>

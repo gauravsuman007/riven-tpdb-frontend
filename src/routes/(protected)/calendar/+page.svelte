@@ -22,6 +22,7 @@
         item_id: number;
         tvdb_id: string;
         tmdb_id: string;
+        tpdb_id?: string | null;
         show_title: string;
         item_type: string;
         aired_at: string;
@@ -73,6 +74,11 @@
 
     function itemUrl(item: EntertainmentItem): string | undefined {
         const mediaType = item.item_type === "movie" ? "movie" : "tv";
+
+        // Adult titles carry no TMDB or TVDB id, so checking those first left
+        // every one of them without a link at all.
+        if (item.tpdb_id) return resolve(`/details/tpdb/${mediaType}/${item.tpdb_id}`);
+
         if (mediaType === "tv") {
             // For TV items, prefer TVDB ID to skip TMDB→TVDB resolution
             if (item.tvdb_id)
