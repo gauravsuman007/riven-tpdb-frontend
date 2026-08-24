@@ -25,7 +25,15 @@
          * The overlay owns the gestures; this component owns the element.
          */
         element?: HTMLVideoElement;
-        /** Whether the native control bar is shown. The overlay hides it. */
+        /**
+         * Whether the browser's own control bar is shown.
+         *
+         * The overlay passes false and draws its own. The native bar carries a
+         * fullscreen button that fullscreens the *video element*, and Android
+         * browsers present that with their own zoom-to-fill, cropping the
+         * frame -- which no page CSS can override. Not offering the button is
+         * the only reliable way to keep fullscreen on the overlay's terms.
+         */
         controls?: boolean;
     }
 
@@ -45,7 +53,7 @@
         itemId,
         class: className = "",
         element = $bindable(),
-        controls = true
+        controls = false
     }: VideoPlayerProps = $props();
 
     let videoElement: HTMLVideoElement | undefined = $state();
@@ -215,6 +223,8 @@
             onerror={onVideoError}
             {controls}
             autoplay
+            controlslist="nofullscreen noremoteplayback nodownload"
+            disablepictureinpicture
             class="h-full w-full rounded-lg bg-black object-contain"
             playsinline>
         </video>

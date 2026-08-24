@@ -27,6 +27,10 @@
     import { player } from "$lib/stores/player.svelte";
     import VideoPlayer from "./video-player.svelte";
     import XIcon from "@lucide/svelte/icons/x";
+    import PlayIcon from "@lucide/svelte/icons/play";
+    import PauseIcon from "@lucide/svelte/icons/pause";
+    import Volume2Icon from "@lucide/svelte/icons/volume-2";
+    import VolumeXIcon from "@lucide/svelte/icons/volume-x";
     import MaximizeIcon from "@lucide/svelte/icons/maximize";
     import MinimizeIcon from "@lucide/svelte/icons/minimize";
     import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
@@ -77,6 +81,15 @@
     let controlsVisible = $state(true);
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Playback state, mirrored from the element because the control bar is
+    // ours now rather than the browser's.
+    let paused = $state(true);
+    let muted = $state(false);
+    let currentTime = $state(0);
+    let duration = $state(0);
+    let buffered = $state(0);
+    let scrubbing = $state(false);
+
     // Gesture bookkeeping. `pinchStartDistance` and `panStart` are reactive
     // because the transform reads them to disable its transition mid-gesture --
     // an eased transform would lag the fingers.
@@ -91,8 +104,12 @@
     /** How long the chrome stays up after the last interaction, in fullscreen. */
     const CONTROLS_HIDE_MS = 3000;
 
-    /** Height reserved for the UA's own control bar at the bottom of the stage. */
-    const NATIVE_CONTROLS_PX = 88;
+    /**
+     * Height reserved for this component's own control bar at the bottom of
+     * the stage, so a drag that starts on the scrubber is not also read as a
+     * swipe-seek.
+     */
+    const CONTROLS_BAND_PX = 96;
 
     // Position preview shown while a swipe is in flight.
     const seekPreview = $derived.by(() => {
@@ -226,7 +243,7 @@
             panStart = null;
         } else if (pointers.size === 1 && scale > MIN_SCALE) {
             panStart = { x: event.clientX, y: event.clientY, offsetX, offsetY };
-        } else if (pointers.size === 1 && canSeek() && !onNativeControls(event)) {
+        } else if (pointers.size === 1 && canSeek() && !onControlBar(event)) {
             // At fit there is nothing to pan, so a single-finger drag is free
             // to mean something else.
             seekStart = { x: event.clientX, y: event.clientY, time: video?.currentTime ?? 0 };
@@ -309,21 +326,69 @@
     }
 
     /**
-     * Is this pointer landing on the browser's own control bar?
+     * Is this pointer landing on the control bar rather than the picture?
      *
-     * The native scrubber is also dragged horizontally, so without this a drag
-     * on it would scrub *and* run this component's seek, fighting each other.
-     * The bar is drawn by the UA and cannot be hit-tested, so its height is
-     * approximated generously -- over-reserving costs a strip of the picture
-     * for gestures, under-reserving costs correctness.
+     * The scrubber is also dragged horizontally, so without this a drag on it
+     * would scrub *and* run the swipe-seek, fighting each other.
      */
-    function onNativeControls(event: PointerEvent): boolean {
+    function onControlBar(event: PointerEvent): boolean {
         if (!controlsVisible) return false;
 
         const view = viewport();
         if (!view) return false;
 
-        return event.clientY > view.top + view.height - NATIVE_CONTROLS_PX;
+        return event.clientY > view.top + view.height - CONTROLS_BAND_PX;
+    }
+
+    function togglePlay() {
+        if (!video) return;
+
+        if (video.paused) video.play().catch(() => {});
+        else video.pause();
+
+        showControls();
+    }
+
+    function toggleMute() {
+        if (!video) return;
+
+        video.muted = !video.muted;
+        muted = video.muted;
+        showControls();
+    }
+
+    /** Mirror the element's state into the component. */
+    function syncPlayback() {
+        if (!video) return;
+
+        paused = video.paused;
+        muted = video.muted;
+        duration = Number.isFinite(video.duration) ? video.duration : 0;
+
+        // While scrubbing, the readout follows the finger, not the element --
+        // otherwise it snaps back on every timeupdate mid-drag.
+        if (!scrubbing && !seeking) currentTime = video.currentTime;
+
+        try {
+            buffered = video.buffered.length
+                ? video.buffered.end(video.buffered.length - 1)
+                : 0;
+        } catch {
+            // `buffered` throws while the media is still being set up.
+            buffered = 0;
+        }
+    }
+
+    /** Seek from a click or drag anywhere along the scrubber. */
+    function scrubTo(event: PointerEvent, bar: HTMLElement) {
+        if (!video || !duration) return;
+
+        const rect = bar.getBoundingClientRect();
+        const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
+
+        currentTime = clampTime(ratio * duration, duration);
+        video.currentTime = currentTime;
+        showControls();
     }
 
     /** True where a horizontal drag should scrub rather than do nothing. */
@@ -411,6 +476,19 @@
     }
 
     function syncFullscreen() {
+        // If the video element itself somehow entered fullscreen -- a stray
+        // native affordance, a gesture on some Android builds -- hand it back
+        // and fullscreen the overlay instead. The browser presents fullscreen
+        // video with its own zoom-to-fill, which crops the frame and cannot be
+        // overridden from the page.
+        if (video && document.fullscreenElement === video) {
+            document.exitFullscreen().then(
+                () => container?.requestFullscreen().catch(() => {}),
+                () => {}
+            );
+            return;
+        }
+
         isFullscreen = !!document.fullscreenElement;
 
         // Entering fullscreen changes the stage aspect, so the ceiling moves.
@@ -432,6 +510,25 @@
         if (event.key === "Escape" && !document.fullscreenElement) close();
         if (event.key === "f") toggleFullscreen();
         if (event.key === "0") reset();
+        if (event.key === "m") toggleMute();
+
+        // The native control bar is gone, so its keyboard behaviour has to be
+        // provided here.
+        if (event.key === " " || event.key === "k") {
+            event.preventDefault();
+            togglePlay();
+        }
+
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            if (!video) return;
+
+            event.preventDefault();
+            video.currentTime = clampTime(
+                video.currentTime + (event.key === "ArrowRight" ? 10 : -10),
+                video.duration
+            );
+            showControls();
+        }
     }
 
     $effect(() => {
@@ -449,13 +546,27 @@
         if (!video) return;
 
         const element = video;
+        const playbackEvents = [
+            "loadedmetadata",
+            "durationchange",
+            "timeupdate",
+            "progress",
+            "play",
+            "pause",
+            "volumechange"
+        ];
+
         element.addEventListener("loadedmetadata", syncMetadata);
         element.addEventListener("resize", syncMetadata);
+        for (const name of playbackEvents) element.addEventListener(name, syncPlayback);
+
         syncMetadata();
+        syncPlayback();
 
         return () => {
             element.removeEventListener("loadedmetadata", syncMetadata);
             element.removeEventListener("resize", syncMetadata);
+            for (const name of playbackEvents) element.removeEventListener(name, syncPlayback);
         };
     });
 
@@ -589,11 +700,7 @@
                     ? 'none'
                     : 'transform 120ms ease-out'};">
                 {#key target.itemId}
-                    <VideoPlayer
-                        itemId={target.itemId}
-                        bind:element={video}
-                        controls={controlsVisible}
-                        class="h-full w-full" />
+                    <VideoPlayer itemId={target.itemId} bind:element={video} class="h-full w-full" />
                 {/key}
             </div>
 
@@ -616,14 +723,103 @@
                 </div>
             {/if}
 
-            {#if scale > MIN_SCALE && controlsVisible}
-                <button
-                    type="button"
-                    onclick={reset}
-                    class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white backdrop-blur transition-opacity duration-300">
-                    Reset zoom
-                </button>
-            {/if}
+            <!--
+                Our own control bar, because the browser's carries a fullscreen
+                button that fullscreens the *video element*, and Android
+                presents that with a zoom-to-fill the page cannot override --
+                which is what was cropping the frame.
+            -->
+            <div
+                class="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-4 pt-8 pb-4 transition-opacity duration-300 {controlsVisible
+                    ? 'opacity-100'
+                    : 'pointer-events-none opacity-0'}">
+                {#if scale > MIN_SCALE}
+                    <button
+                        type="button"
+                        onclick={reset}
+                        class="self-center rounded-full bg-white/10 px-3 py-1 text-xs text-white backdrop-blur">
+                        Reset zoom
+                    </button>
+                {/if}
+
+                <!-- Scrubber -->
+                <div
+                    role="slider"
+                    tabindex="0"
+                    aria-label="Seek"
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(duration)}
+                    aria-valuenow={Math.round(currentTime)}
+                    aria-valuetext={formatTime(currentTime)}
+                    class="group relative h-6 cursor-pointer touch-none"
+                    onpointerdown={(e) => {
+                        scrubbing = true;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        scrubTo(e, e.currentTarget);
+                    }}
+                    onpointermove={(e) => {
+                        if (scrubbing) scrubTo(e, e.currentTarget);
+                    }}
+                    onpointerup={(e) => {
+                        scrubbing = false;
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                    }}
+                    onpointercancel={() => (scrubbing = false)}
+                    onkeydown={(e) => {
+                        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                        e.preventDefault();
+                        if (!video) return;
+                        video.currentTime = clampTime(
+                            video.currentTime + (e.key === "ArrowRight" ? 10 : -10),
+                            video.duration
+                        );
+                    }}>
+                    <div class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20">
+                        <div
+                            class="absolute inset-y-0 left-0 rounded-full bg-white/25"
+                            style="width: {duration ? (buffered / duration) * 100 : 0}%">
+                        </div>
+                        <div
+                            class="bg-primary absolute inset-y-0 left-0 rounded-full"
+                            style="width: {duration ? (currentTime / duration) * 100 : 0}%">
+                        </div>
+                    </div>
+                    <div
+                        class="bg-primary absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow transition-transform group-hover:scale-125"
+                        style="left: {duration ? (currentTime / duration) * 100 : 0}%">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onclick={togglePlay}
+                        aria-label={paused ? "Play" : "Pause"}
+                        class="rounded-lg p-1.5 text-white/90 hover:bg-white/10 hover:text-white">
+                        {#if paused}
+                            <PlayIcon class="size-6" />
+                        {:else}
+                            <PauseIcon class="size-6" />
+                        {/if}
+                    </button>
+
+                    <button
+                        type="button"
+                        onclick={toggleMute}
+                        aria-label={muted ? "Unmute" : "Mute"}
+                        class="rounded-lg p-1.5 text-white/90 hover:bg-white/10 hover:text-white">
+                        {#if muted}
+                            <VolumeXIcon class="size-5" />
+                        {:else}
+                            <Volume2Icon class="size-5" />
+                        {/if}
+                    </button>
+
+                    <p class="font-mono text-xs text-white/70 tabular-nums">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 {/if}

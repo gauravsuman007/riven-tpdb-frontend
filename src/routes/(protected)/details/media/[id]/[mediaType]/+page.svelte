@@ -1191,7 +1191,13 @@
             </Dialog.Header>
             <div class="aspect-video w-full">
                 {#if showVideoPlayer && rivenId}
-                    <VideoPlayer itemId={rivenId} class="h-full w-full" />
+                    <!--
+                        This dialog has no gesture layer of its own, so it keeps
+                        the browser's control bar. `controls` now defaults to
+                        false for the overlay player's sake, so it is stated
+                        here rather than inherited.
+                    -->
+                    <VideoPlayer itemId={rivenId} controls class="h-full w-full" />
                 {/if}
             </div>
         </Dialog.Content>
