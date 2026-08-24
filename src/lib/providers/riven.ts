@@ -1740,6 +1740,7 @@ export interface components {
             imdb_id?: string | null;
             /** Tpdb Id */
             tpdb_id?: string | null;
+            adultempire_id?: string | null;
             /** Ranking Overrides */
             ranking_overrides?: {
                 [key: string]: string[];
@@ -5466,7 +5467,8 @@ export interface operations {
         parameters: {
             query: {
                 /** @description TPDB uuids to look up. Ids not in the library are omitted. */
-                tpdb_ids: string[];
+                tpdb_ids?: string[] | null;
+                adultempire_ids?: string[] | null;
                 /** @description Include per-file details and candidate releases. A detail page wants these; a poster grid does not. */
                 detailed?: boolean;
                 api_key?: string | null;
@@ -6150,6 +6152,7 @@ export interface operations {
                 imdb_id?: string | null;
                 /** @description The TPDB UUID of the media item */
                 tpdb_id?: string | null;
+                adultempire_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;
                 /** @description Custom title to use for scraping (not persisted) */
@@ -6210,6 +6213,7 @@ export interface operations {
                 imdb_id?: string | null;
                 /** @description The TPDB UUID of the media item */
                 tpdb_id?: string | null;
+                adultempire_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;
                 api_key?: string | null;

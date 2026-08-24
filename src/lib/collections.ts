@@ -39,11 +39,30 @@ export interface CollectionEntry {
     winner: boolean;
     tpdb_id: string | null;
     tpdb_kind: string | null;
-    match_state: "pending" | "matched" | "unmatched" | "skipped";
+    /** Source-native identity, for catalogues that need no TPDB lookup. */
+    external_source: string | null;
+    external_id: string | null;
+    /** Position in a ranked listing; null for unordered collections. */
+    rank: number | null;
+    /** Audience score on the source's own scale (Adult Empire rates out of 5). */
+    rating: number | null;
+    duration_minutes: number | null;
+    match_state: "pending" | "matched" | "unmatched" | "skipped" | "self_sourced";
     poster_path: string | null;
     requested: boolean;
+    /** Requestable as it stands — has either a TPDB id or a source id. */
+    actionable: boolean;
     media_item_id: number | null;
     state: string | null;
+}
+
+export interface BrochureShelf {
+    key: string;
+    name: string;
+    description: string | null;
+    refreshed_at: string | null;
+    total: number;
+    entries: CollectionEntry[];
 }
 
 export interface CollectionDetail extends CollectionSummary {
@@ -102,6 +121,28 @@ export async function getCollection(
 
     const suffix = query.size ? `?${query}` : "";
     return get<CollectionDetail>(`/collections/${encodeURIComponent(key)}${suffix}`, options);
+}
+
+/**
+ * Every brochure shelf with its top entries, in one request.
+ *
+ * Served whole rather than a request per row: four shelves would otherwise be
+ * four round trips before the page paints.
+ */
+export async function getBrochure(options: FetchOptions, perShelf = 24): Promise<BrochureShelf[]> {
+    return (
+        (await get<BrochureShelf[]>(
+            `/collections/brochure/shelves?per_shelf=${perShelf}`,
+            options
+        )) ?? []
+    );
+}
+
+export async function getEntry(
+    entryId: number,
+    options: FetchOptions
+): Promise<CollectionEntry | null> {
+    return get<CollectionEntry>(`/collections/entries/${entryId}`, options);
 }
 
 export async function requestEntry(

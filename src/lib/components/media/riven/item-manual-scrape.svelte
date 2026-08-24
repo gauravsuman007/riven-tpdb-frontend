@@ -64,6 +64,13 @@
         externalId: string;
         /** TPDB uuid, for titles sourced from ThePornDB rather than TMDB. */
         tpdbId?: string | null;
+        /**
+         * Adult Empire product id, for brochure titles. These carry no TPDB
+         * id at all, and the backend resolves one to a transient item built
+         * from the cached brochure entry -- so candidates can be listed before
+         * the title has ever been requested.
+         */
+        adultempireId?: string | null;
         mediaType: "tv" | "movie";
         variant?:
             | "ghost"
@@ -84,6 +91,7 @@
         itemId,
         externalId,
         tpdbId = null,
+        adultempireId = null,
         mediaType,
         variant = "ghost",
         size = "sm",
@@ -385,6 +393,7 @@
             if (itemId)
                 queryParams.item_id = parseFileId(itemId); // Ensure int
             else if (tpdbId) queryParams.tpdb_id = tpdbId;
+            else if (adultempireId) queryParams.adultempire_id = adultempireId;
             else if (externalId) {
                 if (mediaType === "movie") queryParams.tmdb_id = externalId;
                 if (mediaType === "tv") queryParams.tvdb_id = externalId;
@@ -584,6 +593,8 @@
 
         if (tpdbId) {
             params.tpdb_id = tpdbId;
+        } else if (adultempireId) {
+            params.adultempire_id = adultempireId;
         } else if (externalId) {
             if (mediaType === "movie") params.tmdb_id = externalId;
             if (mediaType === "tv") params.tvdb_id = externalId;
