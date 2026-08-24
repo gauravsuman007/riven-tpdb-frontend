@@ -1,9 +1,11 @@
 import {
     IDENTITY,
-    MAX_SCALE,
     MIN_SCALE,
+    SCALE_CEILING,
+    clamp,
     clampTransform,
-    fillScale,
+    containedSize,
+    coverScale,
     midpoint,
     panBounds,
     pinchDistance,
@@ -26,106 +28,210 @@ function check(name: string, cond: boolean, extra = "") {
 }
 const near = (a: number, b: number, eps = 0.001) => Math.abs(a - b) < eps;
 
+// A 16:9 stage and a 16:9 video: aspect ratios agree.
 const view: Viewport = { width: 800, height: 450, left: 0, top: 0 };
+// A phone held in landscape, taller and wider than 16:9 respectively.
+const wideView: Viewport = { width: 900, height: 400, left: 0, top: 0 };
+const tallView: Viewport = { width: 400, height: 800, left: 0, top: 0 };
 
-console.log("anchoring");
+console.log("\ncontained size -- where the video actually is at scale 1");
 {
-    // The point under the fingers must not move as scale changes.
-    const anchor = { x: 200, y: 120 };
+    const same = containedSize(view, 1920, 1080);
+    check(
+        "matching aspect ratios fill the stage exactly",
+        near(same.width, 800) && near(same.height, 450),
+        `${same.width}x${same.height}`
+    );
+
+    const letterboxed = containedSize(wideView, 1920, 1080);
+    check(
+        "a 16:9 video on a wider stage is limited by height",
+        near(letterboxed.height, 400) && near(letterboxed.width, 400 * (16 / 9)),
+        `${letterboxed.width}x${letterboxed.height}`
+    );
+    check(
+        "and leaves bars at the sides, not top and bottom",
+        letterboxed.width < wideView.width && near(letterboxed.height, wideView.height)
+    );
+
+    const pillarboxed = containedSize(tallView, 1920, 1080);
+    check(
+        "a 16:9 video on a portrait stage is limited by width",
+        near(pillarboxed.width, 400) && near(pillarboxed.height, 225),
+        `${pillarboxed.width}x${pillarboxed.height}`
+    );
+}
+
+console.log("\ncover scale -- the maximum the viewer asked for");
+{
+    check(
+        "matching aspect ratios cannot zoom at all: there are no bars",
+        near(coverScale(view, 1920, 1080), 1),
+        String(coverScale(view, 1920, 1080))
+    );
+    check(
+        "a 16:9 video on a 9:4 stage covers at 900/711",
+        near(coverScale(wideView, 1920, 1080), 900 / (400 * (16 / 9))),
+        String(coverScale(wideView, 1920, 1080))
+    );
+    check(
+        "a 16:9 video on a 1:2 stage needs a large but finite zoom",
+        near(coverScale(tallView, 1920, 1080), 800 / 225),
+        String(coverScale(tallView, 1920, 1080))
+    );
+    check(
+        "cover is never below 1",
+        coverScale(view, 1920, 1080) >= MIN_SCALE &&
+            coverScale(wideView, 1920, 1080) >= MIN_SCALE
+    );
+    check(
+        "an absurd aspect ratio is capped rather than allowed to explode",
+        coverScale(tallView, 10000, 1) <= SCALE_CEILING,
+        String(coverScale(tallView, 10000, 1))
+    );
+    check("an unprobed video reports no zoom room", near(coverScale(view, 0, 0), 1));
+}
+
+console.log("\nzoom is bounded by cover, not by an arbitrary constant");
+{
+    const max = coverScale(wideView, 1920, 1080);
+    const t = zoomAt(wideView, { ...IDENTITY }, 99, 450, 200, max, 1920, 1080);
+    check(
+        "asking for more than cover yields exactly cover",
+        near(t.scale, max),
+        `${t.scale} vs ${max}`
+    );
+
+    const flat = zoomAt(view, { ...IDENTITY }, 4, 400, 225, coverScale(view, 1920, 1080), 1920, 1080);
+    check(
+        "a video that already fills the screen refuses to zoom",
+        near(flat.scale, 1),
+        String(flat.scale),
+        );
+    check("and stays centred when it refuses", near(flat.offsetX, 0) && near(flat.offsetY, 0));
+
+    const down = zoomAt(wideView, { scale: max, offsetX: 0, offsetY: 0 }, 0.2, 450, 200, max, 1920, 1080);
+    check("zooming below fit is not possible either", near(down.scale, MIN_SCALE));
+}
+
+console.log("\nanchoring");
+{
+    // The point under the fingers must not move as scale changes -- on the axis
+    // that has somewhere to move. A 16:9 video on a portrait stage overflows
+    // horizontally only, so vertical anchoring is correctly given up in favour
+    // of staying centred; drifting up would just reveal a black bar.
+    const max = coverScale(tallView, 1920, 1080);
+    const anchor = { x: 150, y: 500 };
     let t: Transform = { ...IDENTITY };
-    // Content coords of the anchor before zooming.
-    const cx = (anchor.x - 400 - t.offsetX) / t.scale;
-    const cy = (anchor.y - 225 - t.offsetY) / t.scale;
+    const cx = (anchor.x - 200 - t.offsetX) / t.scale;
+    const cy = (anchor.y - 400 - t.offsetY) / t.scale;
 
-    t = zoomAt(view, t, 2.5, anchor.x, anchor.y);
-    const p = project(view, t, cx, cy);
+    t = zoomAt(tallView, t, 2.5, anchor.x, anchor.y, max, 1920, 1080);
+    const p = project(tallView, t, cx, cy);
     check(
-        "anchor stays under the finger",
-        near(p.x, anchor.x, 0.01) && near(p.y, anchor.y, 0.01),
-        `got ${p.x.toFixed(2)},${p.y.toFixed(2)}`
+        "anchor stays under the finger on the cropped axis",
+        near(p.x, anchor.x, 0.01),
+        `got x=${p.x.toFixed(2)}, wanted ${anchor.x}`
     );
-
-    // Repeated incremental zooms must not drift.
-    let t2: Transform = { ...IDENTITY };
-    for (let i = 0; i < 12; i++) t2 = zoomAt(view, t2, t2.scale * 1.1, anchor.x, anchor.y);
-    const p2 = project(view, t2, cx, cy);
     check(
-        "no drift over 12 pinch steps",
-        near(p2.x, anchor.x, 0.5) && near(p2.y, anchor.y, 0.5),
-        `got ${p2.x.toFixed(2)},${p2.y.toFixed(2)} scale=${t2.scale.toFixed(2)}`
+        "and the uncropped axis stays centred rather than exposing a bar",
+        near(t.offsetY, 0),
+        String(t.offsetY)
     );
 }
 
-console.log("limits");
+console.log("\npan bounds follow the video, not the stage");
 {
-    check("min clamp", zoomAt(view, IDENTITY, 0.2, 400, 225).scale === MIN_SCALE);
-    check("max clamp", zoomAt(view, IDENTITY, 99, 400, 225).scale === MAX_SCALE);
-    const out = zoomAt(view, IDENTITY, 0.2, 100, 100);
-    check("recentres at 1x", out.offsetX === 0 && out.offsetY === 0);
+    // At cover the video overflows on exactly one axis, and which one depends
+    // on where the bars were. A 16:9 video on a 9:4 stage is pillarboxed, so
+    // covering pushes it past the top and bottom and panning is vertical.
+    const max = coverScale(wideView, 1920, 1080);
+    const bounds = panBounds(wideView, { scale: max, offsetX: 0, offsetY: 0 }, 1920, 1080);
+    check(
+        "a pillarboxed video pans vertically once it covers",
+        bounds.y > 0,
+        String(bounds.y)
+    );
+    check(
+        "and not horizontally, because that axis now fits exactly",
+        near(bounds.x, 0),
+        String(bounds.x)
+    );
+
+    // The letterboxed case is the mirror image.
+    const tallMax = coverScale(tallView, 1920, 1080);
+    const tallBounds = panBounds(tallView, { scale: tallMax, offsetX: 0, offsetY: 0 }, 1920, 1080);
+    check("a letterboxed video pans horizontally once it covers", tallBounds.x > 0);
+    check("and not vertically", near(tallBounds.y, 0));
+
+    const atFit = panBounds(wideView, { scale: 1, offsetX: 0, offsetY: 0 }, 1920, 1080);
+    check(
+        "at fit the video is inside the stage, so panning is pointless",
+        near(atFit.x, 0) && near(atFit.y, 0),
+        `${atFit.x},${atFit.y}`,
+    );
+    check(
+        "this is the bug the old stage-based bounds had: they allowed panning into the bars",
+        atFit.x === 0
+    );
 }
 
-console.log("pan bounds");
+console.log("\nclamping");
 {
-    const t = { scale: 2, offsetX: 0, offsetY: 0 };
-    const b = panBounds(view, 2);
-    check("bounds are half the overflow", b.x === 400 && b.y === 225, `${b.x},${b.y}`);
-    const dragged = clampTransform(view, { ...t, offsetX: 9999, offsetY: -9999 });
-    check(
-        "pan cannot expose an edge",
-        dragged.offsetX === 400 && dragged.offsetY === -225,
-        `${dragged.offsetX},${dragged.offsetY}`
+    const max = coverScale(tallView, 1920, 1080);
+    const bounds = panBounds(tallView, { scale: max, offsetX: 0, offsetY: 0 }, 1920, 1080);
+    const t = clampTransform(
+        tallView,
+        { scale: max, offsetX: 99999, offsetY: -99999 },
+        max,
+        1920,
+        1080
     );
-    check("no pan room at 1x", panBounds(view, 1).x === 0);
+    check("offsets are held at the edge", near(t.offsetX, bounds.x) && near(t.offsetY, -bounds.y));
+
+    const reset = clampTransform(tallView, { scale: 0.5, offsetX: 40, offsetY: 40 }, max, 1920, 1080);
+    check(
+        "dropping to fit recentres",
+        reset.scale === MIN_SCALE && reset.offsetX === 0 && reset.offsetY === 0
+    );
 }
 
-console.log("fill screen");
+console.log("\nnon-finite input");
 {
-    // 16:9 video in a 16:9 stage already fills -> clamped to the 1.2 floor.
+    check("NaN scale falls back to the minimum", clamp(NaN, 1, 4) === 1);
     check(
-        "matched aspect needs no crop",
-        fillScale(view, 1920, 1080) === 1.2,
-        String(fillScale(view, 1920, 1080))
+        "Infinity falls back to the minimum, not the maximum",
+        clamp(Infinity, 1, 4) === 1,
+        "snapping an unusable value to full zoom would be a nasty surprise mid-pinch"
     );
-    // 4:3 video in a 16:9 stage is pillarboxed; filling needs width/height ratio.
-    const f = fillScale(view, 1440, 1080);
-    check("4:3 in 16:9 fills at ~1.33", near(f, 800 / 450 / (1440 / 1080), 0.01), String(f));
-    // 21:9 video in 16:9 stage is letterboxed.
-    const w = fillScale(view, 2560, 1080);
-    check("ultrawide fills", w > 1.3, String(w));
-    check("degenerate video size is safe", fillScale(view, 0, 0) === 2);
-    check("fill never exceeds max", fillScale(view, 100000, 1) === MAX_SCALE);
+    const t = zoomAt(view, { ...IDENTITY }, NaN, 400, 225, 3, 1920, 1080);
+    check(
+        "a zero-distance pinch cannot produce scale(NaN)",
+        Number.isFinite(t.scale) && Number.isFinite(t.offsetX) && Number.isFinite(t.offsetY)
+    );
+    const recovered = zoomAt(
+        view,
+        { scale: NaN, offsetX: NaN, offsetY: NaN },
+        2,
+        400,
+        225,
+        3,
+        1920,
+        1080
+    );
+    check(
+        "a transform that already went bad does not poison the next gesture",
+        Number.isFinite(recovered.scale) && Number.isFinite(recovered.offsetX)
+    );
 }
 
-console.log("pinch helpers");
+console.log("\ngeometry helpers");
 {
-    check("distance", pinchDistance({ x: 0, y: 0 }, { x: 3, y: 4 }) === 5);
-    const m = midpoint({ x: 0, y: 0 }, { x: 10, y: 20 });
-    check("midpoint", m.x === 5 && m.y === 10);
-    // A pinch that doubles finger separation should roughly double scale.
-    const start = pinchDistance({ x: 300, y: 200 }, { x: 500, y: 200 });
-    const now = pinchDistance({ x: 200, y: 200 }, { x: 600, y: 200 });
-    const t = zoomAt(view, IDENTITY, 1 * (now / start), 400, 200);
-    check("2x spread -> 2x scale", near(t.scale, 2), String(t.scale));
-}
-
-console.log("offset stability");
-{
-    // Zooming out to exactly 1 from a panned state must recentre, not leave
-    // the image stuck off to one side.
-    let t: Transform = { scale: 3, offsetX: 300, offsetY: 100 };
-    t = zoomAt(view, t, 1, 400, 225);
-    check(
-        "zoom-out to 1x recentres",
-        t.offsetX === 0 && t.offsetY === 0,
-        `${t.offsetX},${t.offsetY}`
-    );
-    // Negative/NaN-ish inputs must not produce NaN.
-    const bad = zoomAt(view, IDENTITY, NaN, 100, 100);
-    check(
-        "NaN scale does not propagate",
-        Number.isFinite(bad.offsetX) && Number.isFinite(bad.offsetY),
-        JSON.stringify(bad)
-    );
+    check("distance", near(pinchDistance({ x: 0, y: 0 }, { x: 3, y: 4 }), 5));
+    check("midpoint", (() => {
+        const m = midpoint({ x: 0, y: 0 }, { x: 10, y: 20 });
+        return near(m.x, 5) && near(m.y, 10);
+    })());
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

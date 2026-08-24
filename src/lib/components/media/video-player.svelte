@@ -20,6 +20,13 @@
     interface VideoPlayerProps {
         itemId: number;
         class?: string;
+        /**
+         * Exposed so the overlay can drive seeking and read the frame size.
+         * The overlay owns the gestures; this component owns the element.
+         */
+        element?: HTMLVideoElement;
+        /** Whether the native control bar is shown. The overlay hides it. */
+        controls?: boolean;
     }
 
     interface PlaybackInfo {
@@ -34,9 +41,19 @@
         };
     }
 
-    let { itemId, class: className = "" }: VideoPlayerProps = $props();
+    let {
+        itemId,
+        class: className = "",
+        element = $bindable(),
+        controls = true
+    }: VideoPlayerProps = $props();
 
     let videoElement: HTMLVideoElement | undefined = $state();
+
+    // Publish the element upwards as soon as it exists.
+    $effect(() => {
+        element = videoElement;
+    });
     let hls: Hls | undefined;
     let error = $state<string | null>(null);
     let mode = $state<string | null>(null);
@@ -187,12 +204,18 @@
 {:else}
     <div class="relative {className}">
         <!-- svelte-ignore a11y_media_has_caption -->
+        <!--
+            object-contain is stated rather than left to the UA default so the
+            frame is never cropped at rest: the overlay's zoom model treats
+            scale 1 as "the whole frame is visible", and a cover-fitted element
+            would silently break that contract.
+        -->
         <video
             bind:this={videoElement}
             onerror={onVideoError}
-            controls
+            {controls}
             autoplay
-            class="h-full w-full rounded-lg bg-black"
+            class="h-full w-full rounded-lg bg-black object-contain"
             playsinline>
         </video>
         {#if loading}
