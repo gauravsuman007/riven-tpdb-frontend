@@ -51,3 +51,25 @@ export const GET: RequestHandler = async ({ params, locals, fetch, url }) => {
         error(502, "Failed to proxy HLS");
     }
 };
+
+/**
+ * Tear the item's transcode session down when the player closes, rather than
+ * leaving an ffmpeg process and its temp dir to time out on their own.
+ */
+export const DELETE: RequestHandler = async ({ params, locals, fetch }) => {
+    const { itemId } = params;
+
+    if (!itemId) error(400, "Invalid parameters");
+
+    try {
+        await fetch(`${locals.backendUrl}/api/v1/stream/hls/${itemId}`, {
+            method: "DELETE",
+            headers: { "x-api-key": locals.apiKey }
+        });
+    } catch (e) {
+        // Best effort: the backend reaps idle sessions anyway.
+        console.error("Failed to stop HLS session:", e);
+    }
+
+    return new Response(null, { status: 204 });
+};

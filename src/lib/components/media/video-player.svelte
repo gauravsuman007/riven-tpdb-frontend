@@ -1,4 +1,19 @@
 <script lang="ts">
+    /**
+     * Chooses how to play a file, based on what the file actually contains.
+     *
+     * The previous implementation asked the *browser* whether it could decode
+     * HEVC and never looked at the file. Firefox supports no HEVC, so Firefox
+     * transcoded everything -- including the plain H.264/AAC MP4s that make up
+     * this library and that it plays natively. That is the "transcode error".
+     *
+     * Now the backend probes the file and reports its real codecs; the browser
+     * is asked about *those*, via canPlayType. Three outcomes:
+     *
+     *   direct    -- stream the file as-is, full native seeking
+     *   remux     -- keep the video, rebuild audio/container (cheap)
+     *   transcode -- re-encode via HLS (last resort, expensive)
+     */
     import { onMount, onDestroy } from "svelte";
     import Hls from "hls.js";
 
@@ -7,84 +22,185 @@
         class?: string;
     }
 
+    interface PlaybackInfo {
+        mode: "direct" | "remux" | "transcode";
+        mime_type: string | null;
+        reason: string;
+        probe: {
+            duration: number;
+            video_codec: string | null;
+            audio_codec: string | null;
+            container: string | null;
+        };
+    }
+
     let { itemId, class: className = "" }: VideoPlayerProps = $props();
 
     let videoElement: HTMLVideoElement | undefined = $state();
-    let hls: Hls;
+    let hls: Hls | undefined;
     let error = $state<string | null>(null);
+    let mode = $state<string | null>(null);
+    let loading = $state(true);
 
-    // Direct stream URL (Original method)
-    const directUrl = `/api/stream/${itemId}`;
-    // HLS Proxy URL
-    const hlsParams = new URLSearchParams({
-        pix_fmt: "yuv420p",
-        profile: "high",
-        level: "4.1"
-        // resolution: '1920x1080' // Optional: Uncomment to force 1080p
-    });
-    const hlsUrl = `/api/stream/${itemId}/hls/index.m3u8?${hlsParams.toString()}`;
+    // Derived, not const: the overlay player reuses one instance across
+    // titles, so these have to follow the id rather than freeze on first mount.
+    const directUrl = $derived(`/api/stream/${itemId}`);
+    const remuxUrl = $derived(`/api/stream/${itemId}/remux`);
+    const hlsUrl = $derived(`/api/stream/${itemId}/hls/index.m3u8`);
 
-    function needsHls(): boolean {
-        // Simple check: Create a dummy video and ask if it plays HEVC
-        if (typeof document === "undefined") return false;
-        const v = document.createElement("video");
-        // Check for HEVC support (hvc1/hev1)
-        const canPlay =
-            v.canPlayType('video/mp4; codecs="hvc1"') || v.canPlayType('video/mp4; codecs="hev1"');
+    /** Can this browser decode what the backend says is in the file? */
+    function browserCanPlay(mimeType: string | null): boolean {
+        if (!mimeType || typeof document === "undefined") return false;
 
-        // If browser says "probably" or "maybe", we try direct play.
-        // If "", we assume it can't play it and switch to HLS.
-        return canPlay === "";
+        const probe = document.createElement("video");
+        // "probably" and "maybe" both mean "try it"; "" means it cannot.
+        return probe.canPlayType(mimeType) !== "";
     }
 
-    onMount(() => {
-        if (needsHls()) {
-            console.log("HEVC not supported. Switching to HLS transcoding.");
-            if (Hls.isSupported()) {
-                hls = new Hls({
-                    // Download up to 60 seconds ahead (default is 30)
-                    maxBufferLength: 60,
-                    // Keep up to 2 minutes in memory
-                    maxMaxBufferLength: 120,
-                    // Start prefetching the next segment even if the current one is still processing
-                    maxLoadingDelay: 4
-                });
-                hls.loadSource(hlsUrl);
-                if (videoElement) {
-                    hls.attachMedia(videoElement);
-                }
+    function startDirect() {
+        mode = "direct";
+        if (videoElement) videoElement.src = directUrl;
+    }
 
-                hls.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) {
-                        console.error("HLS Fatal Error:", data);
-                        error = "Transcoding failed";
-                    }
-                });
+    function startRemux() {
+        mode = "remux";
+        if (videoElement) videoElement.src = remuxUrl;
+    }
+
+    function startHls() {
+        mode = "transcode";
+
+        // Safari plays HLS natively and does it better than hls.js can.
+        if (videoElement?.canPlayType("application/vnd.apple.mpegurl")) {
+            videoElement.src = hlsUrl;
+            return;
+        }
+
+        if (!Hls.isSupported()) {
+            error = "This browser cannot play the transcoded stream.";
+            return;
+        }
+
+        hls = new Hls({
+            maxBufferLength: 60,
+            maxMaxBufferLength: 120,
+            // Segments are produced on demand by a live ffmpeg session, so the
+            // first request for one can legitimately take a while. The old
+            // defaults gave up long before the transcoder had answered.
+            manifestLoadingTimeOut: 30_000,
+            fragLoadingTimeOut: 90_000,
+            fragLoadingMaxRetry: 4
+        });
+
+        hls.loadSource(hlsUrl);
+        if (videoElement) hls.attachMedia(videoElement);
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (!data.fatal) return;
+
+            // Network and media errors are usually recoverable -- a segment
+            // arrived late, or the session restarted after a seek. Only give up
+            // once hls.js itself says it cannot continue.
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                hls?.startLoad();
+                return;
             }
-        } else {
-            console.log("HEVC supported. Using Direct Play.");
-            if (videoElement) {
-                videoElement.src = directUrl;
+
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                hls?.recoverMediaError();
+                return;
             }
+
+            console.error("HLS fatal error:", data);
+            error = "Playback failed while transcoding this file.";
+        });
+    }
+
+    onMount(async () => {
+        try {
+            const response = await fetch(`/api/stream/${itemId}/playback_info`);
+
+            if (!response.ok) throw new Error(`playback_info returned ${response.status}`);
+
+            const info: PlaybackInfo = await response.json();
+            console.log(`Playback mode: ${info.mode} -- ${info.reason}`);
+
+            // The backend recommends; the browser decides, because only it
+            // knows what it can actually decode.
+            if (info.mode === "direct" && browserCanPlay(info.mime_type)) {
+                startDirect();
+            } else if (info.mode === "direct") {
+                // Backend thought it was fine, this browser disagrees.
+                console.log("Browser rejected the file's codecs; transcoding instead.");
+                startHls();
+            } else if (info.mode === "remux") {
+                startRemux();
+            } else {
+                startHls();
+            }
+        } catch (e) {
+            // Probing is an optimisation, not a requirement. If it fails, try
+            // the cheap path and let the media element report a real error.
+            console.error("Could not determine playback mode:", e);
+            startDirect();
+        } finally {
+            loading = false;
         }
     });
 
     onDestroy(() => {
-        if (hls) hls.destroy();
+        hls?.destroy();
+
+        // Free the ffmpeg session rather than waiting for it to idle out.
+        if (mode === "transcode" && typeof fetch !== "undefined") {
+            fetch(`/api/stream/${itemId}/hls/index.m3u8`, { method: "DELETE" }).catch(() => {});
+        }
     });
+
+    function onVideoError() {
+        const code = videoElement?.error?.code;
+
+        // The element could not decode what we handed it. If we were direct
+        // playing, escalate rather than showing a dead player.
+        if (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+            if (mode === "direct") {
+                console.log("Direct play failed to decode; falling back to remux.");
+                startRemux();
+                return;
+            }
+
+            if (mode === "remux") {
+                console.log("Remux failed to decode; falling back to transcoding.");
+                startHls();
+                return;
+            }
+        }
+
+        error = "This file could not be played.";
+    }
 </script>
 
 {#if error}
-    <div class="flex h-full w-full items-center justify-center rounded-lg bg-red-500/20 p-8">
-        <p class="text-red-500">{error}</p>
+    <div class="flex h-full w-full items-center justify-center rounded-lg bg-red-500/10 p-8">
+        <p class="text-center text-sm text-red-400">{error}</p>
     </div>
 {:else}
     <div class="relative {className}">
+        <!-- svelte-ignore a11y_media_has_caption -->
         <video
             bind:this={videoElement}
+            onerror={onVideoError}
             controls
+            autoplay
             class="h-full w-full rounded-lg bg-black"
             playsinline>
         </video>
+        {#if loading}
+            <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div
+                    class="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white">
+                </div>
+            </div>
+        {/if}
     </div>
 {/if}
