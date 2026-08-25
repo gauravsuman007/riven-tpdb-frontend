@@ -36,9 +36,6 @@ export const load: PageServerLoad = async (event) => {
         first place. A bookmark, a shared link, or the back button all land
         here through `load`, not through those actions.
     */
-    // TEMP DEBUG: remove once the redirect is confirmed working.
-    console.log("[brochure debug]", { id: entry.id, tpdb_id: entry.tpdb_id, entry });
-
     if (entry.tpdb_id) {
         redirect(303, entryHref(entry));
     }
