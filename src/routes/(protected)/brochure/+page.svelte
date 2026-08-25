@@ -12,15 +12,22 @@
 -->
 <script lang="ts">
     import type { PageProps } from "./$types";
+    import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
+    import { Button } from "$lib/components/ui/button/index.js";
+    import BookOpenIcon from "@lucide/svelte/icons/book-open";
     import PageShell from "$lib/components/page-shell.svelte";
     import StarIcon from "@lucide/svelte/icons/star";
     import CheckIcon from "@lucide/svelte/icons/check";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 
-    let { data }: PageProps = $props();
+    let { data, form }: PageProps = $props();
 
     const totalTitles = $derived(data.shelves.reduce((sum, shelf) => sum + shelf.total, 0));
+
+    // The form result covers the moment just after enabling, before the first
+    // sync has produced anything to show.
+    const enabled = $derived(data.status.enabled || form?.enabled === true);
 </script>
 
 <svelte:head>
@@ -49,12 +56,45 @@
             </div>
         </header>
 
-        {#if !data.shelves.length}
+        {#if !enabled}
+            <!--
+                Off by default, and switched on from here rather than only from
+                Settings. Adult Empire is read one page per second by a named
+                crawler, so the first sync takes a couple of minutes; saying so
+                is better than a button that appears to do nothing.
+            -->
+            <div class="flex flex-col items-center gap-4 py-24 text-center">
+                <BookOpenIcon class="size-10 text-white/50" aria-hidden="true" />
+                <p class="max-w-lg text-zinc-300">
+                    Adult Empire's ranked listings — all-time bestsellers, current bestsellers,
+                    trending and new releases — as rows you can browse.
+                </p>
+                <p class="max-w-lg font-mono text-xs text-zinc-400">
+                    The listings are read one page per second, so the first sync takes a couple of
+                    minutes. Covers and rank appear first; ratings, studio and cast arrive on a
+                    second pass, one request per title. Nothing is downloaded — a title enters your
+                    library only when you request it from its own page.
+                </p>
+
+                <form method="POST" action="?/enable" use:enhance>
+                    <input type="hidden" name="enabled" value="true" />
+                    <Button type="submit" size="lg">
+                        <BookOpenIcon class="mr-2 size-4" />
+                        Fetch Adult Empire listings
+                    </Button>
+                </form>
+
+                {#if form?.message}
+                    <p class="text-destructive text-xs">{form.message}</p>
+                {/if}
+            </div>
+        {:else if !data.shelves.length}
             <div class="flex flex-col items-center gap-3 py-24 text-center">
-                <p class="text-zinc-300">The brochure has not been synced yet.</p>
+                <p class="text-zinc-300">Reading the listings…</p>
                 <p class="max-w-md font-mono text-xs text-zinc-400">
-                    Enable it under Settings → Content → Brochure. The first sync reads the ranked
-                    listings; ratings and cast fill in afterwards.
+                    The brochure is switched on but the first sync has not landed yet. Covers appear
+                    a shelf at a time; ratings and cast fill in afterwards. You can also change how
+                    much it reads under Settings → Content → Brochure.
                 </p>
             </div>
         {:else}

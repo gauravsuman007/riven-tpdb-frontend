@@ -266,6 +266,30 @@ export async function setAvnEnabled(enabled: boolean, options: FetchOptions) {
     );
 }
 
+export interface BrochureStatus {
+    enabled: boolean;
+    /** Titles mirrored so far — tells "switched off" from "not synced yet". */
+    total: number;
+}
+
+export async function getBrochureStatus(options: FetchOptions): Promise<BrochureStatus> {
+    return (
+        (await get<BrochureStatus>("/collections/brochure/status", options)) ?? {
+            enabled: false,
+            total: 0
+        }
+    );
+}
+
+/** Same two-effect switch as {@link setAvnEnabled}: saves *and* reschedules. */
+export async function setBrochureEnabled(enabled: boolean, options: FetchOptions) {
+    return send<{ enabled: boolean; message: string }>(
+        `/collections/brochure/enable?enabled=${enabled}`,
+        "POST",
+        options
+    );
+}
+
 export async function createCollection(name: string, options: FetchOptions, description?: string) {
     return send<CollectionSummary>("/collections", "POST", options, { name, description });
 }

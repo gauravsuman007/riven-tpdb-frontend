@@ -139,7 +139,13 @@
                 "tracemalloc"
             ]
         },
-        { id: "tpdb", label: "TPDB", sections: ["tpdb", "content", "indexer"] },
+        { id: "tpdb", label: "TPDB", sections: ["tpdb", "indexer"] },
+        // Its own tab rather than a sub-section of TPDB. `content` holds the
+        // brochure, the AVN corpus, user collections and the TPDB
+        // subscriptions -- four independent things, and pages elsewhere point
+        // users at "Settings -> Content", which was a dead end while it was
+        // buried under TPDB.
+        { id: "content", label: "Content", sections: ["content"] },
         { id: "scraping", label: "Scraping", sections: ["scraping", "ranking"] },
         { id: "downloaders", label: "Downloaders", sections: ["downloaders"] },
         { id: "library", label: "Library", sections: ["filesystem", "stream", "updaters"] },
