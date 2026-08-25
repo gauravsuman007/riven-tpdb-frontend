@@ -711,12 +711,13 @@
             const idParams = getScrapeParams();
             Object.assign(queryParams, idParams);
 
-            const { data, error: err } = await providers.riven.POST(
-                "/api/v1/scrape/start_session",
-                {
-                    params: { query: queryParams }
-                }
-            );
+            const {
+                data,
+                error: err,
+                response
+            } = await providers.riven.POST("/api/v1/scrape/start_session", {
+                params: { query: queryParams }
+            });
 
             if (data) {
                 const sData = data;
@@ -750,6 +751,15 @@
                 toast.success("Session started successfully!");
                 await handleSelectAllFiles();
                 // No longer need to check step, handleSelectAllFiles will move to step 3
+            } else if (response?.status === 409) {
+                /*
+                    Not cached, so the torrent has no file list to pick from
+                    yet. That is the common case for adult releases, not an
+                    edge one, so it must not read as a failure: pin the release
+                    and let the normal pipeline fetch it, exactly as the
+                    "switch to this release" button does.
+                */
+                await queueUncachedRelease(magnet);
             } else {
                 const errorMsg =
                     (err as { detail?: string; message?: string })?.detail ||
@@ -765,6 +775,48 @@
         } finally {
             loading = false;
         }
+    }
+
+    /**
+     * Download a release the debrid service does not hold yet.
+     *
+     * Addressed by infohash rather than the magnet: the backend rebuilds the
+     * release from the candidate list it already produced, so the browser
+     * never describes a release back to it.
+     */
+    async function queueUncachedRelease(magnet: string) {
+        const infohash = magnet.split("btih:")[1]?.split("&")[0];
+
+        if (!infohash) {
+            error = "Could not read the release id";
+            toast.error(error);
+            return;
+        }
+
+        // Called through the frontend's own /api/v1 proxy rather than the
+        // generated client: providers/riven.ts is regenerated from the running
+        // backend's OpenAPI schema, so a new endpoint is not in it yet.
+        const query = Object.entries({ infohash, ...getScrapeParams() })
+            .filter(([, value]) => value !== undefined && value !== null)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+            .join("&");
+
+        const response = await fetch(`/api/v1/scrape/queue_release?${query}`, {
+            method: "POST"
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const errorMsg = payload.detail ?? `Could not queue that release (${response.status})`;
+            error = errorMsg;
+            toast.error(errorMsg);
+            return;
+        }
+
+        toast.success(payload.message ?? "Queued");
+        open = false;
+        resetFlow();
+        await invalidateAll();
     }
 
     async function handleFetchStreams() {
