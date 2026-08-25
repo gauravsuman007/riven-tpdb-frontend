@@ -25,6 +25,22 @@ export const load: PageServerLoad = async (event) => {
     }
 
     /*
+        A resolved title has no library state to show here any more: its
+        MediaItem carries a tpdb_id and no adultempire_id, so the lookup below
+        (keyed on the storefront id) would find nothing and the page would
+        look like the title had vanished from the library. Send the user to
+        its real page instead of rendering that.
+
+        This is the redirect that actually matters -- the ones on the request
+        and manual-scrape actions only cover navigating *to* this page in the
+        first place. A bookmark, a shared link, or the back button all land
+        here through `load`, not through those actions.
+    */
+    if (entry.tpdb_id) {
+        redirect(303, entryHref(entry));
+    }
+
+    /*
         Same endpoint and same detail form the TPDB page uses, so this page can
         render files, candidate releases and a Play button identically. Keyed on
         the Adult Empire id, which is the only id a brochure title has until the
@@ -67,24 +83,11 @@ export const actions: Actions = {
         }
 
         /*
-            Requesting resolves the title against TPDB, so by now it usually
-            has a TPDB id and a richer page of its own. Send the user there --
-            staying put would leave them looking at the storefront's thinner
-            copy of a title that is now in the library.
-
-            Re-read rather than trusting the request response: the id is
-            written onto the entry during resolution.
+            No redirect here: `use:enhance`'s default behaviour re-runs `load`
+            on success, and `load` above already sends a resolved entry to its
+            real page. Duplicating that decision here is exactly the kind of
+            two-copies-of-one-boundary this change is meant to remove.
         */
-        const resolved = await getEntry(entryId, {
-            baseUrl: event.locals.backendUrl,
-            apiKey: event.locals.apiKey,
-            fetch: event.fetch
-        });
-
-        if (resolved?.tpdb_id) {
-            redirect(303, entryHref(resolved));
-        }
-
         return { message: result.message, requested: true };
     }
 };

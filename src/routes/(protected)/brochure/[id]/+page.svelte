@@ -10,8 +10,7 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
     import { enhance } from "$app/forms";
-    import { goto, invalidateAll } from "$app/navigation";
-    import { entryHref } from "$lib/collections";
+    import { invalidateAll } from "$app/navigation";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -57,20 +56,13 @@
     const playable = $derived(files.some((file: any) => file.available_in_vfs));
 
     /*
-        Scraping a brochure title resolves it against TPDB as a side effect, so
-        by the time the dialog closes this page may have been superseded by a
-        real library page. Re-read first -- the id is written to the entry
-        server-side, so nothing here knows about it yet.
+        Scraping a brochure title resolves it against TPDB as a side effect.
+        invalidateAll() re-runs this route's `load`, and `load` already
+        redirects a resolved entry to its real page -- so there is nothing
+        left to decide here.
     */
     async function leaveIfResolved() {
         await invalidateAll();
-
-        const resolved = data.entry;
-
-        if (resolved?.tpdb_id) {
-            // eslint-disable-next-line svelte/no-navigation-without-resolve -- entryHref resolves the typed route itself
-            await goto(entryHref(resolved));
-        }
     }
 
     const runtime = $derived(
