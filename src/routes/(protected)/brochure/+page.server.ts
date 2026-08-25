@@ -1,6 +1,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
 import { getBrochure, getBrochureStatus, setBrochureEnabled } from "$lib/collections";
+import { listStudios } from "$lib/studios";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -18,12 +19,18 @@ export const load: PageServerLoad = async (event) => {
         own: the brochure is either switched off or switched on and waiting for
         its first sync, and those need very different things said about them.
     */
-    const [shelves, status] = await Promise.all([
+    /*
+        Saved studios only. The full directory is a hundred names and belongs
+        on its own page -- putting it here would bury the two or three studios
+        the user actually follows under ninety-seven they do not.
+    */
+    const [shelves, status, studios] = await Promise.all([
         getBrochure(options, 24),
-        getBrochureStatus(options)
+        getBrochureStatus(options),
+        listStudios(options, { saved: true })
     ]);
 
-    return { shelves, status };
+    return { shelves, status, studios };
 };
 
 export const actions: Actions = {

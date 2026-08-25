@@ -21,6 +21,8 @@
     import StarIcon from "@lucide/svelte/icons/star";
     import CheckIcon from "@lucide/svelte/icons/check";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+    import BuildingIcon from "@lucide/svelte/icons/building-2";
+    import PlusIcon from "@lucide/svelte/icons/plus";
 
     let { data, form }: PageProps = $props();
 
@@ -100,6 +102,93 @@
             </div>
         {:else}
             <div class="flex flex-col gap-12 pb-20">
+                <!--
+                    Studios the user follows, above the ranked shelves. This is
+                    the curated part of the page and it is short; the full
+                    hundred-studio directory lives on its own page behind
+                    "Browse all".
+                -->
+                <section class="flex flex-col gap-4">
+                    <div class="flex items-end justify-between gap-4">
+                        <div class="space-y-1">
+                            <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                                Studios
+                            </h2>
+                            <p class="text-sm text-zinc-400">
+                                Top sellers and trending titles, per studio.
+                            </p>
+                        </div>
+                        <a
+                            href={resolve("/studios")}
+                            class="flex shrink-0 items-center gap-1.5 font-mono text-xs text-zinc-300 transition-colors hover:text-white">
+                            Browse all
+                            <ChevronRightIcon class="size-4" aria-hidden="true" />
+                        </a>
+                    </div>
+
+                    {#if data.studios.length}
+                        <ul
+                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
+                            {#each data.studios as studio (studio.id)}
+                                <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
+                                    <a
+                                        href={resolve(`/studios/${studio.id}`)}
+                                        class="group flex flex-col gap-2 focus-visible:outline-none">
+                                        <div
+                                            class="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-zinc-900 p-3 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
+                                            <!--
+                                                Adult Empire has no studio
+                                                artwork at all; the logo is
+                                                TPDB's and is missing for the
+                                                studios it does not carry, so
+                                                the name is a real fallback
+                                                rather than a placeholder.
+                                            -->
+                                            {#if studio.logo_path}
+                                                <img
+                                                    src={studio.logo_path}
+                                                    alt={studio.name}
+                                                    loading="lazy"
+                                                    class="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-105" />
+                                            {:else}
+                                                <span
+                                                    class="text-center font-serif text-sm text-white/80">
+                                                    {studio.name}
+                                                </span>
+                                            {/if}
+                                        </div>
+
+                                        <div class="space-y-0.5">
+                                            <p
+                                                class="truncate text-sm text-white/90 group-hover:text-white">
+                                                {studio.name}
+                                            </p>
+                                            {#if studio.title_count}
+                                                <p class="truncate font-mono text-xs text-zinc-400">
+                                                    {studio.title_count.toLocaleString()} titles
+                                                </p>
+                                            {/if}
+                                        </div>
+                                    </a>
+                                </li>
+                            {/each}
+                        </ul>
+                    {:else}
+                        <div
+                            class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/20 py-12 text-center">
+                            <BuildingIcon class="size-8 text-white/40" aria-hidden="true" />
+                            <p class="max-w-md text-sm text-zinc-300">
+                                No studios saved yet. Add some to see their top sellers and trending
+                                titles here.
+                            </p>
+                            <Button href={resolve("/studios")} variant="secondary" size="sm">
+                                <PlusIcon class="mr-2 size-4" aria-hidden="true" />
+                                Add studios
+                            </Button>
+                        </div>
+                    {/if}
+                </section>
+
                 {#each data.shelves as shelf (shelf.key)}
                     <section class="flex flex-col gap-4">
                         <div class="flex items-end justify-between gap-4">
