@@ -185,3 +185,127 @@ export function groupByCategory(entries: CollectionEntry[]): [string, Collection
 
     return [...groups.entries()];
 }
+
+export interface AvnYear {
+    year: number;
+    /** Null while the ceremony's collection has not been built yet. */
+    key: string | null;
+    name: string;
+    status: "ready" | "fetching";
+    total: number;
+    matched: number;
+    requested: number;
+    entries: CollectionEntry[];
+}
+
+export interface AvnOverview {
+    enabled: boolean;
+    years: AvnYear[];
+    /** Entry counts per match state across every year. */
+    progress: Record<string, number>;
+}
+
+/**
+ * Every AVN ceremony year, newest first.
+ *
+ * Years the corpus has not reached yet come back with `status: "fetching"` and
+ * no entries, rather than being omitted — a page that grows downwards while a
+ * sync runs reads as breakage, not as progress.
+ */
+export async function getAvnOverview(options: FetchOptions, perYear = 18): Promise<AvnOverview> {
+    return (
+        (await get<AvnOverview>(`/collections/avn/overview?per_year=${perYear}`, options)) ?? {
+            enabled: false,
+            years: [],
+            progress: {}
+        }
+    );
+}
+
+async function send<T>(
+    path: string,
+    method: "POST" | "DELETE",
+    { baseUrl, apiKey, fetch }: FetchOptions,
+    body?: unknown
+): Promise<{ ok: boolean; message: string; data: T | null }> {
+    try {
+        const response = await fetch(`${baseUrl}/api/v1${path}`, {
+            method,
+            headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body)
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            return {
+                ok: false,
+                message: payload.detail ?? `Request failed (${response.status})`,
+                data: null
+            };
+        }
+
+        return { ok: true, message: payload.message ?? "Done", data: payload as T };
+    } catch (err) {
+        logger.error(`${method} ${path} threw: ${err}`);
+        return { ok: false, message: "Could not reach the backend", data: null };
+    }
+}
+
+/**
+ * Turn the AVN corpus job on or off.
+ *
+ * This both saves the setting and re-registers the scheduled job, so the switch
+ * on the AVN page and the one in Settings are the same switch.
+ */
+export async function setAvnEnabled(enabled: boolean, options: FetchOptions) {
+    return send<{ enabled: boolean; message: string }>(
+        `/collections/avn/enable?enabled=${enabled}`,
+        "POST",
+        options
+    );
+}
+
+export async function createCollection(name: string, options: FetchOptions, description?: string) {
+    return send<CollectionSummary>("/collections", "POST", options, { name, description });
+}
+
+export interface AddToCollectionBody {
+    tpdb_id?: string | null;
+    tpdb_kind?: string;
+    media_item_id?: number | null;
+    entry_id?: number | null;
+    new_collection_name?: string | null;
+}
+
+/**
+ * Add one title to a user collection. Pass the key `"new"` together with
+ * `new_collection_name` to create the collection and add in one round trip.
+ *
+ * Adding never requests the title — a collection is what you are interested in,
+ * the library is what you own.
+ */
+export async function addToCollection(
+    key: string,
+    body: AddToCollectionBody,
+    options: FetchOptions
+) {
+    return send<CollectionEntry>(
+        `/collections/${encodeURIComponent(key)}/items`,
+        "POST",
+        options,
+        body
+    );
+}
+
+export async function removeFromCollection(key: string, entryId: number, options: FetchOptions) {
+    return send<{ message: string }>(
+        `/collections/${encodeURIComponent(key)}/items/${entryId}`,
+        "DELETE",
+        options
+    );
+}
+
+export async function deleteCollection(key: string, options: FetchOptions) {
+    return send<{ message: string }>(`/collections/${encodeURIComponent(key)}`, "DELETE", options);
+}

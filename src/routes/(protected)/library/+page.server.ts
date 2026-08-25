@@ -120,13 +120,22 @@ export const load: PageServerLoad = async (event) => {
         error(500, "Failed to fetch items");
     }
 
-    // Collections are an addition to this page, so a failure here returns an
-    // empty shelf rather than taking the library down with it.
-    const collections = await listCollections({
-        baseUrl: event.locals.backendUrl,
-        apiKey: event.locals.apiKey,
-        fetch: event.fetch
-    });
+    /*
+        The user's own collections only. Source-built catalogues (AVN,
+        Adult Empire) live on their own pages -- forty award years in this row
+        would bury the two or three lists the user actually made.
+
+        An addition to this page, so a failure here returns an empty shelf
+        rather than taking the library down with it.
+    */
+    const collections = await listCollections(
+        {
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        },
+        "user"
+    );
 
     return {
         collections,

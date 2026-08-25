@@ -1,6 +1,11 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail, redirect } from "@sveltejs/kit";
-import { getCollection, requestEntry } from "$lib/collections";
+import {
+    deleteCollection,
+    getCollection,
+    removeFromCollection,
+    requestEntry
+} from "$lib/collections";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -56,5 +61,53 @@ export const actions: Actions = {
         }
 
         return { message: result.message };
+    },
+
+    /**
+     * Remove one title from a user collection.
+     *
+     * Local only, and only for user collections -- a source-built catalogue is
+     * rebuilt on every sync, so removing a row from one would achieve nothing.
+     * The backend rejects those; this action just surfaces the reason.
+     */
+    remove: async (event) => {
+        const data = await event.request.formData();
+        const entryId = Number(data.get("entryId"));
+
+        if (!Number.isFinite(entryId)) {
+            return fail(400, { message: "Missing entry id" });
+        }
+
+        const result = await removeFromCollection(event.params.key, entryId, {
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        });
+
+        if (!result.ok) {
+            return fail(409, { message: result.message });
+        }
+
+        return { message: result.message };
+    },
+
+    /**
+     * Delete the collection itself.
+     *
+     * Nothing leaves the library: entries are catalogue rows, so a title that
+     * was requested from this collection stays exactly where it is.
+     */
+    destroy: async (event) => {
+        const result = await deleteCollection(event.params.key, {
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        });
+
+        if (!result.ok) {
+            return fail(409, { message: result.message });
+        }
+
+        return redirect(303, "/library");
     }
 };

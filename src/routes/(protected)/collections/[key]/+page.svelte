@@ -24,10 +24,17 @@
     import Check from "@lucide/svelte/icons/check";
     import CircleSlash from "@lucide/svelte/icons/circle-slash";
     import Loader2 from "@lucide/svelte/icons/loader-2";
+    import Bookmark from "@lucide/svelte/icons/bookmark";
+    import Trash2 from "@lucide/svelte/icons/trash-2";
+    import X from "@lucide/svelte/icons/x";
 
     let { data }: PageProps = $props();
 
     const grouped = $derived(groupByCategory(data.collection.entries));
+
+    // A user collection is editable; a source-built catalogue is rebuilt on
+    // every sync, so offering to edit one would be a lie.
+    const editable = $derived(data.collection.source === "user");
 
     // With nominees switched off every entry is a winner, which makes both the
     // "winners only" filter and the per-row trophy pure noise.
@@ -62,7 +69,11 @@
         <header class="flex flex-col justify-between gap-6 pt-32 md:flex-row md:items-end md:pt-0">
             <div class="space-y-2">
                 <div class="flex items-center gap-3">
-                    <Trophy class="text-primary h-7 w-7" aria-hidden="true" />
+                    {#if editable}
+                        <Bookmark class="text-primary h-7 w-7" aria-hidden="true" />
+                    {:else}
+                        <Trophy class="text-primary h-7 w-7" aria-hidden="true" />
+                    {/if}
                     <h1
                         class="font-serif text-4xl font-medium tracking-tight text-white/90 md:text-6xl">
                         {data.collection.name}
@@ -100,6 +111,15 @@
                     onclick={() => toggleFilter("matched")}>
                     Matched only
                 </Button>
+
+                {#if editable}
+                    <form method="POST" action="?/destroy" use:enhance>
+                        <Button type="submit" variant="outline">
+                            <Trash2 class="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete collection
+                        </Button>
+                    </form>
+                {/if}
             </div>
         </header>
 
@@ -145,7 +165,7 @@
                                             <Check class="h-3.5 w-3.5" aria-hidden="true" />
                                             {entry.state ?? "In library"}
                                         </span>
-                                    {:else if entry.match_state === "matched"}
+                                    {:else if entry.actionable}
                                         <form
                                             method="POST"
                                             action="?/request"
@@ -202,6 +222,42 @@
                                             <CircleSlash class="h-3.5 w-3.5" aria-hidden="true" />
                                             No TPDB match
                                         </span>
+                                    {/if}
+
+                                    {#if editable}
+                                        <!--
+                                            Removes the entry from this list
+                                            only. A title already in the library
+                                            stays there -- the collection never
+                                            owned it.
+                                        -->
+                                        <form
+                                            method="POST"
+                                            action="?/remove"
+                                            use:enhance={() => {
+                                                return async ({ result, update }) => {
+                                                    if (result.type === "failure") {
+                                                        toast.error(
+                                                            String(
+                                                                result.data?.message ??
+                                                                    "Could not remove"
+                                                            )
+                                                        );
+                                                    }
+
+                                                    await update({ reset: false });
+                                                };
+                                            }}>
+                                            <input type="hidden" name="entryId" value={entry.id} />
+                                            <Button
+                                                type="submit"
+                                                size="icon"
+                                                variant="ghost"
+                                                title="Remove from this collection"
+                                                aria-label={`Remove ${entry.title} from this collection`}>
+                                                <X class="h-3.5 w-3.5" aria-hidden="true" />
+                                            </Button>
+                                        </form>
                                     {/if}
                                 </li>
                             {/each}

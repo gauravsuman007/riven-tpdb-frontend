@@ -17,6 +17,7 @@
     import Search from "@lucide/svelte/icons/search";
     import Library from "@lucide/svelte/icons/library";
     import BookOpen from "@lucide/svelte/icons/book-open";
+    import Trophy from "@lucide/svelte/icons/trophy";
     import User from "@lucide/svelte/icons/user";
     import { getContext } from "svelte";
     import Tooltip from "./tooltip.svelte";
@@ -30,6 +31,7 @@
         { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { href: "/library", icon: Library, label: "Library" },
         { href: "/brochure", icon: BookOpen, label: "Brochure" },
+        { href: "/avn", icon: Trophy, label: "AVN" },
         { href: "/explore", icon: Search, label: "Explore" },
         { href: "/calendar", icon: CalendarDays, label: "Calendar" },
         { href: "/auth", icon: User, label: "Profile" },

@@ -14,6 +14,7 @@
     import LayersIcon from "@lucide/svelte/icons/layers";
     import * as Collapsible from "$lib/components/ui/collapsible/index.js";
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import ReleaseMeta from "$lib/components/media/riven/release-meta.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { formatBytes } from "$lib/helpers";
@@ -181,6 +182,15 @@
                         mediaType="movie"
                         variant="outline"
                         size="default" />
+
+                    <!--
+                        Local collections, which are a different thing from the
+                        TPDB collection below: these are named lists in Riven,
+                        while TPDB has exactly one flat collection per account.
+                    -->
+                    <AddToCollection
+                        tpdbId={data.tpdbUuid}
+                        tpdbKind={data.type === "tv" ? "scene" : "movie"} />
 
                     {#if data.numericId}
                         <form method="POST" action="?/collect" use:enhance>

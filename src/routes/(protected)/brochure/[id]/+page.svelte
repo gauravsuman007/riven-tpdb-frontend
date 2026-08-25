@@ -15,6 +15,7 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { openPlayer } from "$lib/stores/player.svelte";
     import { formatBytes } from "$lib/helpers";
@@ -158,6 +159,15 @@
 
                     <!-- Direct site search matches on the title alone. -->
                     <DirectSearch title={entry.title} itemId={libraryState?.riven_id ?? null} />
+
+                    <!--
+                        Adding this title to a collection makes the backend look
+                        it up on TPDB, so it lands in the collection with the
+                        same artwork and ids a TPDB title arrives with. If TPDB
+                        has no record it is added on Adult Empire's metadata
+                        alone, which is enough to scrape and play it.
+                    -->
+                    <AddToCollection entryId={entry.id} />
                 </div>
 
                 {#if status}
