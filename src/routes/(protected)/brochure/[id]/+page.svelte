@@ -10,6 +10,8 @@
 <script lang="ts">
     import type { PageProps } from "./$types";
     import { enhance } from "$app/forms";
+    import { goto, invalidateAll } from "$app/navigation";
+    import { entryHref } from "$lib/collections";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -53,6 +55,23 @@
     // Playable means a file is actually mounted, not merely that the item
     // reached Completed -- the VFS entry is what the stream endpoint reads.
     const playable = $derived(files.some((file: any) => file.available_in_vfs));
+
+    /*
+        Scraping a brochure title resolves it against TPDB as a side effect, so
+        by the time the dialog closes this page may have been superseded by a
+        real library page. Re-read first -- the id is written to the entry
+        server-side, so nothing here knows about it yet.
+    */
+    async function leaveIfResolved() {
+        await invalidateAll();
+
+        const resolved = data.entry;
+
+        if (resolved?.tpdb_id) {
+            // eslint-disable-next-line svelte/no-navigation-without-resolve -- entryHref resolves the typed route itself
+            await goto(entryHref(resolved));
+        }
+    }
 
     const runtime = $derived(
         entry.duration_minutes
@@ -165,7 +184,8 @@
                         itemId={libraryState?.riven_id ?? null}
                         mediaType="movie"
                         variant="outline"
-                        size="default" />
+                        size="default"
+                        onClosed={leaveIfResolved} />
 
                     <!-- Direct site search matches on the title alone. -->
                     <DirectSearch title={entry.title} itemId={libraryState?.riven_id ?? null} />

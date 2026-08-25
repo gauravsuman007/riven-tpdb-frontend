@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail, redirect } from "@sveltejs/kit";
-import { getEntry, requestEntry } from "$lib/collections";
+import { entryHref, getEntry, requestEntry } from "$lib/collections";
 import providers from "$lib/providers";
 
 export const load: PageServerLoad = async (event) => {
@@ -64,6 +64,25 @@ export const actions: Actions = {
 
         if (!result.ok) {
             return fail(409, { message: result.message });
+        }
+
+        /*
+            Requesting resolves the title against TPDB, so by now it usually
+            has a TPDB id and a richer page of its own. Send the user there --
+            staying put would leave them looking at the storefront's thinner
+            copy of a title that is now in the library.
+
+            Re-read rather than trusting the request response: the id is
+            written onto the entry during resolution.
+        */
+        const resolved = await getEntry(entryId, {
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        });
+
+        if (resolved?.tpdb_id) {
+            redirect(303, entryHref(resolved));
         }
 
         return { message: result.message, requested: true };

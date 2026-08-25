@@ -7,6 +7,7 @@ running backend. Regenerate it and these calls can move over; until then the
 shapes below are maintained by hand against `routers/secure/collections.py`.
 */
 
+import { resolve } from "$app/paths";
 import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("collections");
@@ -332,4 +333,34 @@ export async function removeFromCollection(key: string, entryId: number, options
 
 export async function deleteCollection(key: string, options: FetchOptions) {
     return send<{ message: string }>(`/collections/${encodeURIComponent(key)}`, "DELETE", options);
+}
+
+
+/**
+ * Where a catalogue entry's card should point.
+ *
+ * Once a storefront title has been resolved against TPDB it is an ordinary
+ * library title, and the brochure page has nothing left to add -- the TPDB
+ * detail page shows the same metadata plus the library state, files and
+ * releases. Sending the user to the brochure page at that point would show
+ * them the poorer of the two.
+ *
+ * Entries TPDB has no match for keep their brochure page, which is the only
+ * place their metadata exists.
+ */
+export function entryHref(entry: {
+    id: number;
+    tpdb_id?: string | null;
+    tpdb_kind?: string | null;
+}): string {
+    // Resolved through the typed route ids rather than built as a string, so
+    // a renamed route breaks the build instead of producing a dead link.
+    if (!entry.tpdb_id) {
+        return resolve("/(protected)/brochure/[id]", { id: String(entry.id) });
+    }
+
+    return resolve("/(protected)/details/tpdb/[type]/[id]", {
+        type: entry.tpdb_kind === "scene" ? "tv" : "movie",
+        id: entry.tpdb_id
+    });
 }

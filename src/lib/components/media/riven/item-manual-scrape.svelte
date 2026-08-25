@@ -83,6 +83,12 @@
         size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg" | undefined;
         class?: string;
         seasons?: SeasonInfo[];
+        /**
+         * Called when the dialog closes. A brochure title is resolved against
+         * TPDB as a side effect of scraping it, so the page that opened this
+         * may need to send the user somewhere better than where they are.
+         */
+        onClosed?: () => void;
         children?: Snippet;
     }
 
@@ -96,10 +102,17 @@
         variant = "ghost",
         size = "sm",
         seasons = [],
+        onClosed,
         ...restProps
     }: Props = $props();
 
     let open = $state(false);
+
+    // Fires on every close, however it happened -- the X, Escape, a click
+    // outside, or finishing a download -- so the caller cannot miss one.
+    $effect(() => {
+        if (open) return () => onClosed?.();
+    });
     let step = $state(1);
     let tabValue = $state<"search" | "auto">("search");
     let loading = $state(false);

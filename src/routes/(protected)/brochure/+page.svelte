@@ -14,6 +14,7 @@
     import type { PageProps } from "./$types";
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
+    import { entryHref } from "$lib/collections";
     import { Button } from "$lib/components/ui/button/index.js";
     import BookOpenIcon from "@lucide/svelte/icons/book-open";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -121,7 +122,7 @@
                             {#each shelf.entries as entry (entry.id)}
                                 <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
                                     <a
-                                        href={resolve(`/brochure/${entry.id}`)}
+                                        href={entryHref(entry)}
                                         class="group flex flex-col gap-2 focus-visible:outline-none">
                                         <div
                                             class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
