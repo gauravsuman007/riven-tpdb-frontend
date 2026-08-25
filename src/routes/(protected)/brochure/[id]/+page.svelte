@@ -17,6 +17,7 @@
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
     import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import { describeState } from "$lib/utils/item-state";
+    import { liveState } from "$lib/utils/live-state.svelte";
     import { openPlayer } from "$lib/stores/player.svelte";
     import { formatBytes } from "$lib/helpers";
     import DownloadIcon from "@lucide/svelte/icons/download";
@@ -39,6 +40,15 @@
     const status = $derived(libraryState ? describeState(libraryState.state) : null);
 
     const files = $derived(libraryState?.files ?? []);
+
+    // Keep the button in step with the pipeline: a request that has just been
+    // made has no library row yet, and one that is downloading changes state
+    // every few seconds. Without this the button reads whatever was true at
+    // first paint until the page is reloaded.
+    liveState(
+        () => status,
+        () => requested && !libraryState
+    );
 
     // Playable means a file is actually mounted, not merely that the item
     // reached Completed -- the VFS entry is what the stream endpoint reads.

@@ -17,6 +17,7 @@
     import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import ReleaseMeta from "$lib/components/media/riven/release-meta.svelte";
     import { describeState } from "$lib/utils/item-state";
+    import { liveState } from "$lib/utils/live-state.svelte";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
     import PlayIcon from "@lucide/svelte/icons/play";
@@ -33,6 +34,14 @@
     const libraryState = $derived(data.libraryState ?? null);
     const requested = $derived(!!libraryState || (form as any)?.requested === true);
     const status = $derived(libraryState ? describeState(libraryState.state) : null);
+
+    // Same live refresh as the brochure page, for the same reason: the state
+    // shown must be the state the pipeline is actually in, not the one it was
+    // in when the page loaded.
+    liveState(
+        () => status,
+        () => requested && !libraryState
+    );
 
     const files = $derived(libraryState?.files ?? []);
     const releases = $derived(libraryState?.streams ?? []);
