@@ -8,7 +8,7 @@
     for this catalogue is common -- this is the difference between watching it
     and not.
 
-    Collapsed until asked for, because each search hits five sites live and
+    Collapsed until asked for, because each search hits eight sites live and
     takes a few seconds. Nothing runs on page load.
 -->
 <script lang="ts">
@@ -65,13 +65,19 @@
     let failure = $state<string | null>(null);
 
     /**
-     * Sites shown ahead of the rest regardless of relevance -- the backend
-     * ranks them first for the same reason (bigger catalogue, a documented
-     * API instead of scraped HTML), and the row order here has to agree with
-     * it or the same search would look differently prioritised depending on
-     * which list you looked at.
+     * Tiers a site's row sorts by ahead of relevance -- has to match the
+     * backend's `DirectScraperService.SITE_TIERS` exactly, or the same search
+     * would look differently prioritised depending on which list you looked
+     * at. A site not listed here falls back to tier 2, same as the backend.
      */
-    const PRIORITY_SITES = new Set(["tnaflix", "eporner"]);
+    const SITE_TIERS: Record<string, number> = {
+        tnaflix: 0,
+        eporner: 0,
+        hqporner: 1,
+        paradisehill: 1,
+        tubepornclassic: 1
+    };
+    const siteTier = (site: string) => SITE_TIERS[site] ?? 2;
 
     /**
      * Results grouped into one row per site.
@@ -80,7 +86,7 @@
      * the badge, and made a site that returned nothing indistinguishable from
      * one that was never searched. Row order follows the best result each site
      * produced, so the strongest source is still at the top -- except that a
-     * priority site's row always comes first, whatever its relevance.
+     * lower-tier site's row always comes first, whatever its relevance.
      */
     const rows = $derived.by(() => {
         const grouped = new Map<string, { name: string; items: DirectResult[] }>();
@@ -92,8 +98,8 @@
         return [...grouped.entries()]
             .map(([site, row]) => ({ site, ...row }))
             .sort((a, b) => {
-                const priorityDiff = Number(PRIORITY_SITES.has(b.site)) - Number(PRIORITY_SITES.has(a.site));
-                if (priorityDiff) return priorityDiff;
+                const tierDiff = siteTier(a.site) - siteTier(b.site);
+                if (tierDiff) return tierDiff;
                 return (b.items[0]?.relevance ?? 0) - (a.items[0]?.relevance ?? 0);
             });
     });
@@ -126,7 +132,7 @@
 
     function toggle(next: boolean) {
         open = next;
-        // Search on first open rather than on mount: five live site requests
+        // Search on first open rather than on mount: eight live site requests
         // is not something to spend on every page view.
         if (next && !searched && !loading) search();
     }
@@ -183,7 +189,7 @@
                     <div
                         class="border-muted-foreground/30 border-t-primary size-4 animate-spin rounded-full border-2">
                     </div>
-                    Searching five sites for &ldquo;{title}&rdquo;&hellip;
+                    Searching eight sites for &ldquo;{title}&rdquo;&hellip;
                 </div>
             {:else if failure}
                 <div class="flex flex-col items-start gap-2 py-4">
