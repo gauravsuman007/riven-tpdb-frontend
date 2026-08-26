@@ -15,6 +15,7 @@
     import LoaderIcon from "@lucide/svelte/icons/loader-circle";
     import CheckIcon from "@lucide/svelte/icons/check";
     import SaveIcon from "@lucide/svelte/icons/save";
+    import VpnControl from "$lib/components/settings/vpn-control.svelte";
 
     setShadcnContext();
 
@@ -149,7 +150,12 @@
         { id: "scraping", label: "Scraping", sections: ["scraping", "ranking"] },
         { id: "downloaders", label: "Downloaders", sections: ["downloaders"] },
         { id: "library", label: "Library", sections: ["filesystem", "stream", "updaters"] },
-        { id: "post", label: "Post-processing", sections: ["post_processing"] }
+        { id: "post", label: "Post-processing", sections: ["post_processing"] },
+        // Its own tab rather than falling through to "Other". The schema
+        // fields below are only half of it -- logging in and picking an exit
+        // node are live actions against the daemon, so this tab also carries
+        // the control panel above the form.
+        { id: "vpn", label: "VPN", sections: ["vpn"] }
     ] as const;
 
     /**
@@ -229,6 +235,15 @@
                             knowing Prowlarr's ids. The picker sits alongside
                             it and writes the same setting.
                         -->
+                        <!--
+                            Logging in and choosing an exit node are actions
+                            against a running daemon, not values to save, so
+                            the generated form cannot express them.
+                        -->
+                        {#if tab.id === "vpn"}
+                            <VpnControl />
+                        {/if}
+
                         {#if tab.id === "scraping"}
                             <div
                                 class="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
