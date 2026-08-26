@@ -175,51 +175,70 @@
 
     {#if status && !status.connected}
         <!--
-            Two ways in, because they suit different situations. A reusable
-            auth key survives restarts unattended; interactive login needs no
-            key management but has to be re-approved when it expires.
+            Two clearly separate actions, not one button whose meaning changes
+            with what happens to be typed. That ambiguity was the actual bug
+            report: a login-URL button that only reveals itself after being
+            triggered, sitting next to a key field, reads as "no button" the
+            moment anything makes the key path the one that fires instead.
         -->
-        <div class="flex flex-col gap-3 border-t border-white/10 pt-3">
-            {#if status.auth_url}
+        <div class="flex flex-col gap-4 border-t border-white/10 pt-3">
+            <div class="flex flex-col gap-2">
+                <span class="text-xs font-medium">Log in through your browser</span>
                 <div class="flex flex-wrap items-center gap-2">
                     <Button
-                        href={status.auth_url}
-                        target="_blank"
-                        rel="noreferrer noopener"
+                        type="button"
                         variant="secondary"
-                        size="sm">
-                        <ExternalLinkIcon class="mr-2 size-4" aria-hidden="true" />
-                        Approve this machine
+                        size="sm"
+                        disabled={busy}
+                        onclick={() => call("connect", { auth_key: null })}>
+                        Generate login link
                     </Button>
-                    <span class="text-muted-foreground text-xs">
-                        Waiting for approval… this updates itself.
-                    </span>
+                    {#if status.auth_url}
+                        <Button
+                            href={status.auth_url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            variant="outline"
+                            size="sm">
+                            <ExternalLinkIcon class="mr-2 size-4" aria-hidden="true" />
+                            Approve this machine
+                        </Button>
+                        <span class="text-muted-foreground text-xs">
+                            Waiting for approval… this updates itself.
+                        </span>
+                    {/if}
                 </div>
-            {/if}
+                <p class="text-muted-foreground text-xs">
+                    No key to manage, but has to be re-approved if Tailscale expires the login.
+                    Disabling key expiry for this device in the Tailscale admin console makes it
+                    permanent.
+                </p>
+            </div>
 
-            <div class="flex flex-wrap items-end gap-2">
-                <label class="flex min-w-0 flex-1 flex-col gap-1">
-                    <span class="text-xs font-medium">Auth key (optional)</span>
+            <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
+                <span class="text-xs font-medium">Or connect with a reusable auth key</span>
+                <div class="flex flex-wrap items-end gap-2">
                     <input
                         type="password"
                         bind:value={authKey}
                         placeholder="tskey-auth-…"
                         autocomplete="off"
-                        class="border-border/60 bg-background focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none" />
-                </label>
-                <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy}
-                    onclick={() => call("connect", { auth_key: authKey || null })}>
-                    {authKey ? "Connect with key" : "Log in"}
-                </Button>
+                        aria-label="Tailscale auth key"
+                        class="border-border/60 bg-background focus:border-primary/50 min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none" />
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy || !authKey.trim()}
+                        onclick={() => call("connect", { auth_key: authKey })}>
+                        Connect with key
+                    </Button>
+                </div>
+                <p class="text-muted-foreground text-xs">
+                    Saved once used, so the tunnel reconnects on its own after a restart with no
+                    browser step. This is the only place the key is asked for or stored.
+                </p>
             </div>
-            <p class="text-muted-foreground text-xs">
-                Leave the key empty to log in through your browser instead. A key you enter here is
-                saved so the tunnel comes back on its own after a restart.
-            </p>
         </div>
     {/if}
 
