@@ -43,7 +43,7 @@ export interface StudioRow {
     titles: StudioTitle[];
 }
 
-export interface StudioDetail extends Studio {
+export interface StudioRows {
     rows: StudioRow[];
 }
 
@@ -91,12 +91,32 @@ export async function listStudios(
     return (await get<Studio[]>(`/studios${suffix}`, options)) ?? [];
 }
 
+/** One studio. A database read on the backend, so this is fast. */
 export async function getStudio(
+    studioId: number,
+    options: FetchOptions
+): Promise<Studio | null> {
+    return get<Studio>(`/studios/${studioId}`, options);
+}
+
+/**
+ * A studio's ranked rows. Slow -- two live storefront reads behind a
+ * one-request-a-second delay, so several seconds, and nothing can make it
+ * faster without lying about how current the ranking is.
+ *
+ * Kept separate from `getStudio` so the page can paint the studio while this
+ * is still in flight rather than showing nothing for the whole wait.
+ */
+export async function getStudioRows(
     studioId: number,
     options: FetchOptions,
     perRow = 12
-): Promise<StudioDetail | null> {
-    return get<StudioDetail>(`/studios/${studioId}?per_row=${perRow}`, options);
+): Promise<StudioRow[]> {
+    const payload = await get<StudioRows>(
+        `/studios/${studioId}/rows?per_row=${perRow}`,
+        options
+    );
+    return payload?.rows ?? [];
 }
 
 export async function setStudioSaved(

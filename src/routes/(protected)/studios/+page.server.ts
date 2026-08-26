@@ -7,18 +7,22 @@ export const load: PageServerLoad = async (event) => {
         return redirect(302, "/auth/login");
     }
 
-    const search = event.url.searchParams.get("q") ?? "";
-
+    /*
+        The whole directory in one request, filtered in the browser as the
+        user types. Round-tripping each keystroke would put a live request
+        (and a spinner) behind every character; the payload is ~1,200 small
+        rows, which is cheaper to send once than to search repeatedly.
+    */
     const studios = await listStudios(
         {
             baseUrl: event.locals.backendUrl,
             apiKey: event.locals.apiKey,
             fetch: event.fetch
         },
-        { search: search || undefined }
+        { limit: 2000 }
     );
 
-    return { studios, search };
+    return { studios };
 };
 
 export const actions: Actions = {

@@ -60,6 +60,14 @@
     let open = $state(false);
     let loading = $state(false);
     let searched = $state(false);
+    /*
+        A search term the user typed, used instead of the title (or the item's
+        cast and studio) when set. The sites carry the same scene under wildly
+        inconsistent names, so when the automatic search finds nothing the
+        difference between watching a title and not is usually one hand-typed
+        phrase.
+    */
+    let customQuery = $state("");
     let results = $state<DirectResult[]>([]);
     let siteErrors = $state<Record<string, string>>({});
     let failure = $state<string | null>(null);
@@ -108,12 +116,20 @@
         loading = true;
         failure = null;
 
+        /*
+            A typed term wins over item_id. Passing both would let the backend
+            keep matching on the item's cast and studio, which is exactly the
+            matching the user is overriding by typing something else.
+        */
+        const typed = customQuery.trim();
+        const query = typed
+            ? `query=${encodeURIComponent(typed)}`
+            : itemId
+              ? `item_id=${itemId}`
+              : `query=${encodeURIComponent(title)}`;
+
         try {
-            const response = await fetch(
-                itemId
-                    ? `/api/v1/direct/search?item_id=${itemId}&limit=3`
-                    : `/api/v1/direct/search?query=${encodeURIComponent(title)}&limit=3`
-            );
+            const response = await fetch(`/api/v1/direct/search?${query}&limit=3`);
             if (!response.ok) throw new Error(`Search returned ${response.status}`);
 
             const payload = await response.json();
@@ -128,6 +144,19 @@
         } finally {
             loading = false;
         }
+    }
+
+    /*
+        Always re-runs, unlike opening the panel. The user typed a new term and
+        is asking for it to be tried; reusing the previous results because a
+        search had already happened would look like the button did nothing.
+    */
+    /** What the last/next search actually looks for -- the typed term wins. */
+    const searchedFor = $derived(customQuery.trim() || title);
+
+    function runCustomSearch() {
+        open = true;
+        if (!loading) search();
     }
 
     function toggle(next: boolean) {
@@ -159,8 +188,9 @@
 </script>
 
 <Collapsible.Root {open} onOpenChange={toggle} class="mt-2">
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
     <Collapsible.Trigger
-        class="border-primary/30 bg-primary/10 hover:bg-primary/20 focus-visible:ring-ring flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+        class="border-primary/30 bg-primary/10 hover:bg-primary/20 focus-visible:ring-ring flex w-full flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
         <GlobeIcon class="text-primary size-4 shrink-0" />
         <span class="min-w-0 flex-1">
             <span class="text-primary block text-sm font-semibold">Watch from a site</span>
@@ -182,6 +212,32 @@
             )} />
     </Collapsible.Trigger>
 
+    <!--
+        Sits beside the trigger rather than inside the panel: when the
+        automatic search misses, the user needs to retype without first
+        opening a panel full of the wrong results.
+    -->
+    <div class="flex items-center gap-1.5">
+        <input
+            type="search"
+            bind:value={customQuery}
+            onkeydown={(e) => e.key === "Enter" && runCustomSearch()}
+            placeholder="Custom search term"
+            aria-label="Custom search term for streaming sites"
+            class="border-border/60 bg-background focus:border-primary/50 h-full min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none sm:w-48 sm:flex-none" />
+        <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="h-full shrink-0"
+            disabled={loading || !customQuery.trim()}
+            onclick={runCustomSearch}>
+            <SearchIcon class="size-4" aria-hidden="true" />
+            <span class="sr-only">Search sites for this term</span>
+        </Button>
+    </div>
+  </div>
+
     <Collapsible.Content>
         <div class="pt-2">
             {#if loading}
@@ -189,7 +245,7 @@
                     <div
                         class="border-muted-foreground/30 border-t-primary size-4 animate-spin rounded-full border-2">
                     </div>
-                    Searching eight sites for &ldquo;{title}&rdquo;&hellip;
+                    Searching eight sites for &ldquo;{searchedFor}&rdquo;&hellip;
                 </div>
             {:else if failure}
                 <div class="flex flex-col items-start gap-2 py-4">
@@ -202,7 +258,7 @@
             {:else if searched && !results.length}
                 <div class="flex flex-col items-start gap-2 py-4">
                     <p class="text-muted-foreground text-sm">
-                        No site had anything for &ldquo;{title}&rdquo;.
+                        No site had anything for &ldquo;{searchedFor}&rdquo;.
                     </p>
                     <Button variant="outline" size="sm" onclick={search}>
                         <SearchIcon class="mr-2 size-4" />

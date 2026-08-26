@@ -1,29 +1,36 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail, redirect } from "@sveltejs/kit";
-import { getStudio, promoteTitle, setStudioSaved } from "$lib/studios";
+import { getStudio, getStudioRows, promoteTitle, setStudioSaved } from "$lib/studios";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
         return redirect(302, "/auth/login");
     }
 
-    /*
-        Slow on purpose, and there is no way around it. Both rows are read live
-        from the storefront, one request each, serialised behind its
-        one-request-a-second courtesy delay. Caching them would mean showing a
-        ranking from last week under a heading that says "trending".
-    */
-    const studio = await getStudio(Number(event.params.id), {
+    const options = {
         baseUrl: event.locals.backendUrl,
         apiKey: event.locals.apiKey,
         fetch: event.fetch
-    });
+    };
+
+    const studio = await getStudio(Number(event.params.id), options);
 
     if (!studio) {
         error(404, "No such studio");
     }
 
-    return { studio };
+    /*
+        Streamed, deliberately NOT awaited. The rows are two live storefront
+        reads serialised behind a one-request-a-second courtesy delay, so they
+        take several seconds and no amount of caching can fix that without
+        showing last week's ranking under a heading that says "trending".
+
+        Awaiting here meant the page showed nothing at all for the whole wait,
+        including the studio name and logo that were ready immediately.
+        Returning the promise lets SvelteKit paint the page now and fill the
+        rows in when they land.
+    */
+    return { studio, rows: getStudioRows(Number(event.params.id), options) };
 };
 
 export const actions: Actions = {

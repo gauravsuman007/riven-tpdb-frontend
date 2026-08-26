@@ -22,7 +22,27 @@
 
     let { data, form }: PageProps = $props();
 
+    let search = $state("");
+
     const savedCount = $derived(data.studios.filter((studio) => studio.saved).length);
+
+    /*
+        Filtered here rather than on the server. The whole directory arrives
+        with the page, so typing narrows it instantly instead of putting a
+        request and a spinner behind every keystroke.
+
+        Matching ignores case and punctuation, because the directory writes
+        studios every possible way -- "Devil's Film", "Devils Film" -- and a
+        literal substring test makes half of them unfindable by the spelling
+        a user would actually type.
+    */
+    const collapse = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+    const visible = $derived.by(() => {
+        const needle = collapse(search);
+        if (!needle) return data.studios;
+        return data.studios.filter((studio) => collapse(studio.name).includes(needle));
+    });
 </script>
 
 <svelte:head>
@@ -48,31 +68,35 @@
             </div>
         </header>
 
-        <form method="GET" class="flex max-w-md items-center gap-2">
+        <div class="flex max-w-md items-center gap-2">
             <div class="relative flex-1">
                 <SearchIcon
                     class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-500"
                     aria-hidden="true" />
                 <input
                     type="search"
-                    name="q"
-                    value={data.search}
+                    bind:value={search}
                     placeholder="Search studios"
+                    aria-label="Search studios"
                     class="w-full rounded-lg border border-white/15 bg-zinc-900/80 py-2 pr-3 pl-9 text-sm text-white placeholder:text-zinc-500 focus:border-white/40 focus:outline-none" />
             </div>
-            <Button type="submit" variant="secondary" size="sm">Search</Button>
-        </form>
+            {#if search}
+                <span class="shrink-0 font-mono text-xs text-zinc-400">
+                    {visible.length}
+                </span>
+            {/if}
+        </div>
 
         {#if form?.message}
             <p class="font-mono text-xs text-zinc-400">{form.message}</p>
         {/if}
 
-        {#if !data.studios.length}
+        {#if !visible.length}
             <div class="flex flex-col items-center gap-3 py-24 text-center">
                 <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
                 <p class="max-w-lg text-zinc-300">
-                    {#if data.search}
-                        No studio matches “{data.search}”.
+                    {#if search}
+                        No studio matches “{search}”.
                     {:else}
                         The studio directory has not been synced yet. It refreshes weekly overnight,
                         and reads one page per studio, so the first run takes a few minutes.
@@ -81,7 +105,7 @@
             </div>
         {:else}
             <ul class="grid grid-cols-2 gap-4 pb-20 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {#each data.studios as studio (studio.id)}
+                {#each visible as studio (studio.id)}
                     <li
                         class="flex flex-col gap-3 rounded-xl border border-white/15 bg-zinc-900/60 p-4 transition-colors hover:border-white/30">
                         <a

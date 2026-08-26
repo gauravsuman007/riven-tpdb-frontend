@@ -22,8 +22,6 @@
     import PlusIcon from "@lucide/svelte/icons/plus";
 
     let { data, form }: PageProps = $props();
-
-    const hasTitles = $derived(data.studio.rows.some((row) => row.titles.length));
 </script>
 
 <svelte:head>
@@ -95,18 +93,50 @@
             <p class="font-mono text-xs text-zinc-400">{form.message}</p>
         {/if}
 
-        {#if !hasTitles}
-            <div class="flex flex-col items-center gap-3 py-24 text-center">
-                <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
-                <p class="max-w-lg text-zinc-300">
-                    Adult Empire returned nothing for this studio just now. These rows are read
-                    live, so this is usually the storefront being briefly unavailable rather than
-                    an empty catalogue — reloading generally fixes it.
-                </p>
-            </div>
-        {:else}
+        <!--
+            Awaited rather than loaded with the page: the rows are read live
+            from the storefront and take a few seconds, and the studio above
+            is ready immediately. The skeleton keeps the layout stable so
+            nothing jumps when they arrive.
+        -->
+        {#await data.rows}
             <div class="flex flex-col gap-12 pb-20">
-                {#each data.studio.rows as row (row.key)}
+                {#each ["Top Sellers", "Trending Now"] as placeholder (placeholder)}
+                    <section class="flex flex-col gap-4">
+                        <div class="space-y-1">
+                            <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                                {placeholder}
+                            </h2>
+                            <p class="font-mono text-xs text-zinc-500">
+                                Reading Adult Empire&hellip;
+                            </p>
+                        </div>
+                        <ul class="flex gap-4 overflow-hidden pb-4">
+                            {#each [0, 1, 2, 3, 4, 5] as i (i)}
+                                <li class="w-[150px] shrink-0 md:w-[180px]">
+                                    <div
+                                        class="aspect-[3/4] animate-pulse rounded-xl border border-white/10 bg-zinc-900/60">
+                                    </div>
+                                </li>
+                            {/each}
+                        </ul>
+                    </section>
+                {/each}
+            </div>
+        {:then rows}
+            {@const hasTitles = rows.some((row) => row.titles.length)}
+            {#if !hasTitles}
+                <div class="flex flex-col items-center gap-3 py-24 text-center">
+                    <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
+                    <p class="max-w-lg text-zinc-300">
+                        Adult Empire returned nothing for this studio just now. These rows are read
+                        live, so this is usually the storefront being briefly unavailable rather
+                        than an empty catalogue — reloading generally fixes it.
+                    </p>
+                </div>
+            {:else}
+            <div class="flex flex-col gap-12 pb-20">
+                {#each rows as row (row.key)}
                     {#if row.titles.length}
                         <section class="flex flex-col gap-4">
                             <div class="space-y-1">
@@ -169,6 +199,14 @@
                     {/if}
                 {/each}
             </div>
-        {/if}
+            {/if}
+        {:catch}
+            <div class="flex flex-col items-center gap-3 py-24 text-center">
+                <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
+                <p class="max-w-lg text-zinc-300">
+                    Could not reach Adult Empire for this studio's rankings.
+                </p>
+            </div>
+        {/await}
     </div>
 </PageShell>
