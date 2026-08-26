@@ -23,6 +23,9 @@
     import PlayIcon from "@lucide/svelte/icons/play";
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import SearchIcon from "@lucide/svelte/icons/search";
+    import VpnRouteBanner from "$lib/components/media/riven/vpn-route-banner.svelte";
+    import { getVpnStatus, routeState, type VpnStatus } from "$lib/vpn";
+    import { onMount } from "svelte";
 
     interface DirectResult {
         site: string;
@@ -71,6 +74,23 @@
     let results = $state<DirectResult[]>([]);
     let siteErrors = $state<Record<string, string>>({});
     let failure = $state<string | null>(null);
+
+    /*
+        Fetched on mount rather than only when the panel opens: whether search
+        is blocked has to be known before the trigger and the custom-search
+        row render, since those are visible (and have to be disabled) even
+        while the panel itself is collapsed.
+    */
+    let vpnStatus = $state<VpnStatus | null>(null);
+
+    async function refreshVpnStatus() {
+        vpnStatus = await getVpnStatus();
+    }
+
+    onMount(refreshVpnStatus);
+
+    const scrapeRoute = $derived(routeState(vpnStatus, "scraping"));
+    const streamRoute = $derived(routeState(vpnStatus, "streaming"));
 
     /**
      * Tiers a site's row sorts by ahead of relevance -- has to match the
@@ -155,11 +175,17 @@
     const searchedFor = $derived(customQuery.trim() || title);
 
     function runCustomSearch() {
+        if (scrapeRoute.blocked) return;
         open = true;
         if (!loading) search();
     }
 
     function toggle(next: boolean) {
+        // Belt and braces alongside the trigger's own `disabled`: a stale
+        // click event queued just as the tunnel drops must not still open the
+        // panel and fire a search that is about to be refused server-side too.
+        if (next && scrapeRoute.blocked) return;
+
         open = next;
         // Search on first open rather than on mount: eight live site requests
         // is not something to spend on every page view.
@@ -167,6 +193,11 @@
     }
 
     function play(result: DirectResult) {
+        // Belt and braces alongside the button's own `disabled` and
+        // `pointer-events-none`: nothing here should ever reach the player
+        // while streaming is routed through a tunnel that is not up.
+        if (streamRoute.blocked) return;
+
         const src =
             `/api/direct/stream?site=${encodeURIComponent(result.site)}` +
             `&video_id=${encodeURIComponent(result.video_id)}`;
@@ -187,10 +218,14 @@
     }
 </script>
 
-<Collapsible.Root {open} onOpenChange={toggle} class="mt-2">
+<Collapsible.Root {open} onOpenChange={toggle} disabled={scrapeRoute.blocked} class="mt-2">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
     <Collapsible.Trigger
-        class="border-primary/30 bg-primary/10 hover:bg-primary/20 focus-visible:ring-ring flex w-full flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+        disabled={scrapeRoute.blocked}
+        class={cn(
+            "border-primary/30 bg-primary/10 hover:bg-primary/20 focus-visible:ring-ring flex w-full flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+            scrapeRoute.blocked && "cursor-not-allowed opacity-50 hover:bg-primary/10"
+        )}>
         <GlobeIcon class="text-primary size-4 shrink-0" />
         <span class="min-w-0 flex-1">
             <span class="text-primary block text-sm font-semibold">Watch from a site</span>
@@ -221,16 +256,17 @@
         <input
             type="search"
             bind:value={customQuery}
-            onkeydown={(e) => e.key === "Enter" && runCustomSearch()}
+            onkeydown={(e) => e.key === "Enter" && !scrapeRoute.blocked && runCustomSearch()}
             placeholder="Custom search term"
             aria-label="Custom search term for streaming sites"
-            class="border-border/60 bg-background focus:border-primary/50 h-full min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none sm:w-48 sm:flex-none" />
+            disabled={scrapeRoute.blocked}
+            class="border-border/60 bg-background focus:border-primary/50 h-full min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:w-48 sm:flex-none" />
         <Button
             type="button"
             variant="secondary"
             size="sm"
             class="h-full shrink-0"
-            disabled={loading || !customQuery.trim()}
+            disabled={loading || !customQuery.trim() || scrapeRoute.blocked}
             onclick={runCustomSearch}>
             <SearchIcon class="size-4" aria-hidden="true" />
             <span class="sr-only">Search sites for this term</span>
@@ -238,8 +274,37 @@
     </div>
   </div>
 
+  <!-- One line at the bottom of the row, saying how the search is routed. -->
+  <div class="mt-1.5">
+    <VpnRouteBanner
+        purpose="scraping"
+        route={scrapeRoute}
+        gerund="Searching"
+        base="Search"
+        size="sm"
+        onDisabled={refreshVpnStatus} />
+  </div>
+
     <Collapsible.Content>
         <div class="pt-2">
+            <!--
+                Bigger and at the top: this is the moment that decides whether
+                clicking a result below will actually play anything, so it has
+                to be seen before the results, not discovered by clicking a
+                faded-out thumbnail.
+            -->
+            {#if searched && !loading}
+                <div class="mb-4">
+                    <VpnRouteBanner
+                        purpose="streaming"
+                        route={streamRoute}
+                        gerund="Streaming"
+                        base="Stream"
+                        size="lg"
+                        onDisabled={refreshVpnStatus} />
+                </div>
+            {/if}
+
             {#if loading}
                 <div class="text-muted-foreground flex items-center gap-2 py-6 text-sm">
                     <div
@@ -280,8 +345,12 @@
                                 {#each row.items as result, index (`${result.site}:${result.video_id}`)}
                                     <button
                                         type="button"
-                                        onclick={() => play(result)}
-                                        class="group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none">
+                                        disabled={streamRoute.blocked}
+                                        onclick={() => !streamRoute.blocked && play(result)}
+                                        class={cn(
+                                            "group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                                            streamRoute.blocked && "pointer-events-none cursor-not-allowed opacity-40 hover:border-border/60"
+                                        )}>
                                         <div
                                             class="bg-muted relative aspect-video w-full overflow-hidden">
                                             {#if result.thumbnail}
