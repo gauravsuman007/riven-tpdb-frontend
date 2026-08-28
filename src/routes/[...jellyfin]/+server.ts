@@ -617,9 +617,20 @@ async function dispatch(event: Ctx): Promise<Response> {
         const match = pathname.match(candidate.pattern);
         if (!match) continue;
 
-        return candidate.handler(event, match);
+        // Temporary diagnostic: confirming whether the official Android app
+        // ever calls this surface at all before chasing further theories.
+        // Remove once the native-playback bug is root-caused.
+        try {
+            const response = await candidate.handler(event, match);
+            console.log(`[jellyfin] ${event.request.method} ${pathname} -> ${response.status}`);
+            return response;
+        } catch (e) {
+            console.log(`[jellyfin] ${event.request.method} ${pathname} -> threw`, e);
+            throw e;
+        }
     }
 
+    console.log(`[jellyfin] ${event.request.method} ${pathname} -> no route matched (404)`);
     return notFound();
 }
 
