@@ -39,25 +39,45 @@ history if it's ever relevant again.
   HTML page must reference it, which is what `injectJellyfinBundle` in
   `hooks.server.ts` does via `transformPageChunk`.
 - **The native player reads its token from OUR OWN localStorage**:
-  `jellyfin_credentials` → `Servers[0].{UserId,AccessToken}`. **Suspected
-  wrong assumption, not yet confirmed on-device**: the original design
-  assumed the human logs into a real page in this WebView and the bundle
-  script exchanges that better-auth session cookie for the token via
-  `GET /web/session-token`. But the official Android app's login (server
-  add → native username/password screen → `AuthenticateByName`) almost
-  certainly happens *natively*, outside any WebView page load — in real
-  Jellyfin the native client is the one that SEEDS `jellyfin_credentials`
-  into the WebView's localStorage before loading the main page, for
-  jellyfin-web (which has no native login of its own) to read. If that's
-  what's happening here too, our session-cookie fallback fires because
-  `creds()` finds nothing, and it also finds nothing (no session cookie
-  exists in that WebView), so `ensureCredentials` silently fails and
-  `NativePlayer.loadPlayer()` is never called — matching the observed
-  symptom of the native player screen opening but never receiving media.
-  `bundle.ts` now logs every step of this path via `console.log("[riven-native]", ...)`
-  instead of swallowing failures — check `chrome://inspect` (WebView remote
-  debugging over USB) against a real device before changing this further;
-  don't guess again without that evidence.
+  `jellyfin_credentials` → `Servers[0].{UserId,AccessToken}` — but it does
+  NOT read it proactively. Confirmed by reading
+  `JellyfinWebViewClient.shouldInterceptRequest()`: it imports the token
+  into the app's native session (`mainViewModel.setupUser(...)`) only at the
+  moment it intercepts a request whose path ends in
+  `sessions/capabilities/full`, which is real jellyfin-web's own post-login
+  startup call. Our page has no other reason to make that request, and
+  without it every native API call goes out with the pre-login
+  `MediaBrowser Client="...", Version="..."` header and NO `Token=` — a
+  silent 401 storm with no visible error. `bundle.ts` therefore POSTs to
+  that path itself once credentials exist. Do not remove that call.
+- **TRAP, cost the longest debugging cycle in this feature's history**:
+  `toGuid()` silently mis-encodes a STRING id. The backend serialises
+  `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
+  takes no radix argument and *ignores* one, so `("862").toString(16)`
+  returns `"862"` rather than `"35e"`. The decimal id then zero-pads into a
+  perfectly valid-looking GUID that decodes as a completely different item
+  (862 -> `...000862` -> 2146), and every request for it 404s with nothing
+  in the error hinting at an encoding problem — it looks exactly like a
+  stale client cache, which is what it was misdiagnosed as, twice.
+  `toGuid` now coerces with `Number()` and throws on anything unusable;
+  keep it that way, because TypeScript cannot enforce the declared `number`
+  type across an HTTP boundary.
+- **The OpenAPI spec is NOT the authority on required fields.** Its
+  `required` arrays are almost entirely empty, so it will call a response
+  valid that a real client rejects outright. jellyfin-android deserializes
+  via jellyfin-sdk-kotlin, where a field is required iff its generated data
+  class declares it *without a default*; a missing key throws
+  `MissingFieldException` and aborts playback with no useful client-side
+  error (the server sees a clean 200). `scripts/jellyfin-required-fields.py`
+  reads those generated models and diffs them against live responses —
+  run it after changing any DTO shape instead of discovering fields one at
+  a time from device logcat, which is how `MediaSourceInfo`,
+  `UserConfiguration` and `UserPolicy` were each found the hard way.
+- **Debugging the native client: `adb logcat` is the only real signal.**
+  The failures above are invisible server-side (200s all round) and
+  invisible in `chrome://inspect` (that shows only the WebView's JS
+  console, not native Kotlin). Filter on
+  `MediaSourceResolver|PlayerViewModel|ExoPlayer|riven-native`.
 - **`window.NativePlayer.loadPlayer()` takes item IDs, not URLs.** ExoPlayer
   resolves the stream itself via `/Items/{id}/PlaybackInfo` and
   `/Videos/{id}/stream`. `video-player.svelte` checks
