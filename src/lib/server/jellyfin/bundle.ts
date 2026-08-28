@@ -11,8 +11,18 @@
  *    So this script is served AS that bundle: one request both trips the
  *    flag and delivers the code, inside the client's 10s connection timeout.
  *    RENAMING THIS PATH BREAKS BOTH CLIENTS SILENTLY.
- * 2. The native layer reads its own API token out of OUR localStorage:
- *    `jellyfin_credentials` -> `Servers[0].{UserId,AccessToken}`.
+ * 2. The native layer does NOT read `jellyfin_credentials` on its own on
+ *    every page load. Per `JellyfinWebViewClient.shouldInterceptRequest()`,
+ *    it only imports the token into the app's native session (`mainViewModel
+ *    .setupUser(...)`) at the moment it intercepts a request whose path ends
+ *    in `sessions/capabilities/full` -- the real jellyfin-web client's own
+ *    post-login startup call, which evaluates
+ *    `JSON.parse(localStorage.getItem('jellyfin_credentials'))` in the
+ *    WebView right then. Skip that request (our page has no other reason to
+ *    make it) and the native side calls every API -- PlaybackInfo, stream,
+ *    Users/Me -- with the pre-login `MediaBrowser Client="...", Version="..."`
+ *    header and NO `Token=`, which is a silent 401 with no visible error.
+ *    So this script must fire that request itself once credentials exist.
  * 3. `window.NativePlayer.loadPlayer()` takes ITEM IDS, not URLs; ExoPlayer
  *    then resolves the stream itself via `/Items/{id}/PlaybackInfo` and
  *    `/Videos/{id}/stream`.
@@ -53,8 +63,35 @@ export const BUNDLE_JS = `
     catch (e) {}
   }
 
+  // Tells jellyfin-android to intercept this exact request and import
+  // whatever is in localStorage's jellyfin_credentials into its native
+  // session (mainViewModel.setupUser). Path match is case-insensitive and
+  // suffix-based on the client's side; the response body is irrelevant --
+  // our own router already answers this path with 204.
+  var CAPABILITIES_PATH = "/sessions/capabilities/full";
+  var nativeSessionImported = false;
+
+  function importIntoNativeSession(done) {
+    if (nativeSessionImported) { done(true); return; }
+
+    fetch(CAPABILITIES_PATH, { method: "POST", credentials: "same-origin" })
+      .then(function () {
+        // The WebView's interception is fire-and-forget on its side (it
+        // evaluates JS asynchronously and lets this request proceed
+        // regardless), so there is no signal for when setupUser() actually
+        // finishes. A short wait here is cheaper than a real race with the
+        // very next NativePlayer call.
+        setTimeout(function () {
+          nativeSessionImported = true;
+          log("posted sessions/capabilities/full to trigger native credential import");
+          done(true);
+        }, 250);
+      })
+      .catch(function (e) { log("sessions/capabilities/full failed", e); done(false); });
+  }
+
   function ensureCredentials(done) {
-    if (creds()) { log("using existing jellyfin_credentials"); done(true); return; }
+    if (creds()) { log("using existing jellyfin_credentials"); importIntoNativeSession(done); return; }
     if (!nativeAvailable()) { log("NativePlayer not available, cannot ensure credentials"); done(false); return; }
 
     // The native client authenticates itself natively (AuthenticateByName is
@@ -76,7 +113,7 @@ export const BUNDLE_JS = `
           Servers: [{ Id: d.ServerId, UserId: d.UserId, AccessToken: d.AccessToken }]
         }));
         log("credentials obtained via session-token exchange");
-        done(true);
+        importIntoNativeSession(done);
       })
       .catch(function (e) { log("session-token fetch failed", e); done(false); });
   }
