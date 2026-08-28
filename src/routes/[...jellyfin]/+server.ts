@@ -124,11 +124,24 @@ function userDto(): Json {
         HasConfiguredPassword: true,
         HasConfiguredEasyPassword: false,
         EnableAutoLogin: false,
+        // The Kotlin SDK's UserConfiguration serializer has no defaults for
+        // any of these -- a missing key throws MissingFieldException
+        // client-side (confirmed via device logcat) even though HTTP-wise
+        // this response looks fine.
         Configuration: {
             PlayDefaultAudioTrack: true,
             DisplayMissingEpisodes: false,
             SubtitleMode: "Default",
-            EnableNextEpisodeAutoPlay: false
+            EnableNextEpisodeAutoPlay: false,
+            GroupedFolders: [],
+            DisplayCollectionsView: false,
+            EnableLocalPassword: false,
+            OrderedViews: [],
+            LatestItemsExcludes: [],
+            MyMediaExcludes: [],
+            HidePlayedInLatest: true,
+            RememberAudioSelections: true,
+            RememberSubtitleSelections: true
         },
         Policy: {
             IsAdministrator: true,
@@ -479,6 +492,11 @@ const ROUTES: Route[] = [
             RememberSorting: false,
             PrimaryImageHeight: 250,
             PrimaryImageWidth: 250,
+            // The Kotlin SDK's DisplayPreferencesDto serializer requires
+            // these with no defaults (confirmed via device logcat).
+            ScrollDirection: "Horizontal",
+            ShowBackdrop: true,
+            ShowSidebar: false,
             CustomPrefs: {}
         });
     }),

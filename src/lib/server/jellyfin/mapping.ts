@@ -182,6 +182,15 @@ export function mediaSourceDto(
         RequiresOpening: false,
         RequiresClosing: false,
         SupportsProbing: false,
+        // The Kotlin SDK's MediaSourceInfo serializer has no defaults for
+        // these -- a genuinely absent key throws MissingFieldException
+        // client-side and silently aborts playback after PlaybackInfo
+        // otherwise looks like it succeeded. Found via real device logcat,
+        // not guessed.
+        IsInfiniteStream: false,
+        RequiresLooping: false,
+        TranscodingSubProtocol: null,
+        HasSegments: false,
         MediaStreams: [],
         MediaAttachments: [],
         Formats: []
