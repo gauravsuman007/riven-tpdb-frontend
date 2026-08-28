@@ -36,11 +36,19 @@
 
 import { error, type RequestHandler } from "@sveltejs/kit";
 import { auth } from "$lib/server/auth";
+import { db } from "$lib/server/db";
+import { user } from "$lib/server/schema";
 import { BUNDLE_JS, BUNDLE_PATH } from "$lib/server/jellyfin/bundle";
 import { jellyfinEnabled, jellyfinServerName, jellyfinUsername } from "$lib/server/jellyfin/config";
 import * as identity from "$lib/server/jellyfin/auth";
 import { LIBRARY_ID, SERVER_ID, USER_ID, fromGuid, toGuid } from "$lib/utils/jellyfin-ids";
 import { baseItem, mediaSourceDto } from "$lib/server/jellyfin/mapping";
+import {
+    getProgress,
+    getProgressMany,
+    setPlayed,
+    setProgress
+} from "$lib/server/playback-progress";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = Record<string, any>;
@@ -87,6 +95,34 @@ async function backendFetch(event: Ctx, path: string, init?: RequestInit): Promi
 // --------------------------------------------------------------------------
 // System / identity
 // --------------------------------------------------------------------------
+
+/**
+ * Whose progress a Jellyfin request is reading or writing.
+ *
+ * The Jellyfin surface authenticates with the backend API key, not a
+ * better-auth session, so there is exactly one identity behind it -- the same
+ * account `local_access` grants. Resume therefore follows the person, not the
+ * app: a scene started in the browser resumes in the TV client because both
+ * resolve to this id.
+ */
+function progressUserId(): string | null {
+    const account = db.select().from(user).orderBy(user.createdAt).get();
+    return account?.id ?? null;
+}
+
+/** Attach stored positions to a page of items in one query. */
+async function withProgress(items: Json[]): Promise<Json[]> {
+    const userId = progressUserId();
+    const positions = userId
+        ? getProgressMany(
+              userId,
+              items.map((item) => Number(item.id))
+          )
+        : new Map();
+
+    return Promise.all(items.map((item) => baseItem(item, null, positions.get(Number(item.id)))));
+}
+
 
 function publicInfo(event: Ctx): Json {
     return {
@@ -443,7 +479,7 @@ const ROUTES: Route[] = [
         const limit = Math.min(Number(event.url.searchParams.get("limit") ?? 20), 100);
         const { items } = await fetchItems(event, { limit, sortBy: "DateCreated", sortOrder: "Descending" });
 
-        return json(await Promise.all(items.map((item) => baseItem(item))));
+        return json(await withProgress(items));
     }),
     route("GET", "/Items", async (event) => {
         requireAuth(event, event.locals.apiKey);
@@ -509,17 +545,39 @@ const ROUTES: Route[] = [
         requireAuth(event, event.locals.apiKey);
         return noContent();
     }),
+    // The three playback-reporting calls every Jellyfin client makes on its
+    // own, with no cooperation needed from the page. Implementing them is
+    // what makes resume work identically on Android, webOS and anything else
+    // speaking this protocol -- they were previously accepted and discarded,
+    // which is why nothing ever resumed outside the browser.
     route("POST", "/Sessions/Playing", (event) => {
         requireEnabled();
-        return noContent();
+        return recordProgress(event);
     }),
     route("POST", "/Sessions/Playing/Progress", (event) => {
         requireEnabled();
-        return noContent();
+        return recordProgress(event);
     }),
     route("POST", "/Sessions/Playing/Stopped", (event) => {
         requireEnabled();
-        return noContent();
+        return recordProgress(event);
+    }),
+    // Explicit "mark watched / unwatched" from a client's context menu.
+    route("POST", "/Users/{userId}/PlayedItems/{itemId}", (event, match) => {
+        requireAuth(event, event.locals.apiKey);
+        return markPlayed(match[2], true);
+    }),
+    route("DELETE", "/Users/{userId}/PlayedItems/{itemId}", (event, match) => {
+        requireAuth(event, event.locals.apiKey);
+        return markPlayed(match[2], false);
+    }),
+    route("POST", "/UserPlayedItems/{itemId}", (event, match) => {
+        requireAuth(event, event.locals.apiKey);
+        return markPlayed(match[1], true);
+    }),
+    route("DELETE", "/UserPlayedItems/{itemId}", (event, match) => {
+        requireAuth(event, event.locals.apiKey);
+        return markPlayed(match[1], false);
     }),
     route("POST", "/Sessions/Capabilities", (event) => {
         requireEnabled();
@@ -590,11 +648,57 @@ async function itemsListResponse(event: Ctx): Promise<Response> {
     });
 
     return json({
-        Items: await Promise.all(items.map((item) => baseItem(item))),
+        Items: await withProgress(items),
         TotalRecordCount: wanted ? items.length : total,
         StartIndex: startIndex
     });
 }
+
+/**
+ * Persist a position reported by a Jellyfin client.
+ *
+ * Never fails the request: these are fire-and-forget telemetry calls made
+ * during playback, and a client that gets an error back from one may stop
+ * reporting for the rest of the session. A dropped position is a much smaller
+ * problem than playback reacting to a database hiccup, so anything unexpected
+ * is swallowed after being logged.
+ */
+async function recordProgress(event: Ctx): Promise<Response> {
+    try {
+        const body = (await event.request.json().catch(() => null)) as Json | null;
+
+        if (!body) return noContent();
+
+        const rivenId = fromGuid(String(body.ItemId ?? body.itemId ?? ""));
+        const userId = progressUserId();
+
+        if (rivenId === null || !userId) return noContent();
+
+        setProgress(
+            userId,
+            rivenId,
+            Number(body.PositionTicks ?? body.positionTicks ?? 0),
+            // Clients omit runtime on most reports; the stored value is kept
+            // when they do, so "finished" stays decidable.
+            Number(body.RunTimeTicks ?? body.runTimeTicks ?? 0) || null
+        );
+    } catch (err) {
+        console.error("[jellyfin] could not record playback progress:", err);
+    }
+
+    return noContent();
+}
+
+function markPlayed(guid: string, played: boolean): Response {
+    const rivenId = fromGuid(guid);
+    const userId = progressUserId();
+
+    if (rivenId === null || !userId) return notFound();
+
+    setPlayed(userId, rivenId, played);
+    return noContent();
+}
+
 
 async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
     const rivenId = fromGuid(guid);
@@ -604,11 +708,13 @@ async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
     if (!item) return notFound();
 
     const playback = await fetchPlaybackInfo(event, rivenId);
+    const userId = progressUserId();
 
     return json(
         await baseItem(
             item,
-            playback ? { container: playback.container, durationSeconds: playback.durationSeconds } : null
+            playback ? { container: playback.container, durationSeconds: playback.durationSeconds } : null,
+            userId ? getProgress(userId, rivenId) : null
         )
     );
 }

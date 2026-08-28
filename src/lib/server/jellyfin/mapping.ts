@@ -85,7 +85,8 @@ async function imageTag(item: Json): Promise<string> {
  */
 export async function baseItem(
     item: Json,
-    mediaSource?: { container: string | null; durationSeconds: number | null } | null
+    mediaSource?: { container: string | null; durationSeconds: number | null } | null,
+    progress?: { positionTicks: number; played: boolean } | null
 ): Promise<Json> {
     const studios = studioNames(item);
 
@@ -129,10 +130,14 @@ export async function baseItem(
         // image (the poster path itself).
         ImageTags: item.poster_path ? { Primary: await imageTag(item) } : {},
         BackdropImageTags: [],
+        // What makes a client offer "Resume" instead of starting over, and
+        // what draws the progress bar under the poster. Clients read this and
+        // nothing else for that decision, so an item with a stored position
+        // that reports zero here silently loses its resume point.
         UserData: {
-            PlaybackPositionTicks: 0,
-            PlayCount: 0,
-            Played: false,
+            PlaybackPositionTicks: progress?.positionTicks ?? 0,
+            PlayCount: progress?.played ? 1 : 0,
+            Played: progress?.played ?? false,
             IsFavorite: false,
             Key: String(item.id)
         }

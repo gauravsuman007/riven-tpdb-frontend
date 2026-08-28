@@ -15,6 +15,7 @@
      *   transcode -- re-encode via HLS (last resort, expensive)
      */
     import { onMount, onDestroy } from "svelte";
+    import { resumeTarget } from "$lib/utils/playback";
     import Hls from "hls.js";
     import { toGuid } from "$lib/utils/jellyfin-ids";
 
@@ -200,6 +201,73 @@
         return type.includes("mpegurl") || type.includes("x-mpegURL");
     }
 
+    /**
+     * Resume tracking, shared with every Jellyfin client.
+     *
+     * Both write to the same store (`/api/playback/progress` here,
+     * `/Sessions/Playing/*` there), so where you got to follows you between
+     * the browser and the TV rather than being per-app.
+     *
+     * Reported on an interval rather than on `timeupdate`, which fires 4-66
+     * times a second and would be a request storm. Also reported once on
+     * teardown, so closing the player is recorded even if it happens between
+     * ticks -- that is the common case, and the one that matters most.
+     */
+    const PROGRESS_INTERVAL_MS = 10_000;
+
+    let progressTimer: ReturnType<typeof setInterval> | undefined;
+    let resumeApplied = false;
+
+    function reportProgress(): void {
+        if (itemId === undefined || !videoElement) return;
+
+        const positionSeconds = videoElement.currentTime;
+
+        if (!Number.isFinite(positionSeconds)) return;
+
+        const durationSeconds = Number.isFinite(videoElement.duration)
+            ? videoElement.duration
+            : duration;
+
+        // keepalive: this runs during teardown, where a normal fetch is
+        // cancelled with the page/component and the last position is lost.
+        void fetch("/api/playback/progress", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ itemId, positionSeconds, durationSeconds }),
+            keepalive: true
+        }).catch(() => {});
+    }
+
+    /** Seek to the stored position, once, on the first loadedmetadata. */
+    async function applyResume(): Promise<void> {
+        if (resumeApplied || itemId === undefined || !videoElement) return;
+
+        resumeApplied = true;
+
+        try {
+            const response = await fetch(`/api/playback/progress?itemId=${itemId}`);
+
+            if (!response.ok) return;
+
+            const { positionSeconds } = await response.json();
+
+            const target = resumeTarget(
+                positionSeconds,
+                Number.isFinite(videoElement.duration) ? videoElement.duration : duration
+            );
+
+            if (target !== null) videoElement.currentTime = target;
+        } catch {
+            // A missing resume point is not worth interrupting playback for.
+        }
+    }
+
+    function startProgressReporting(): void {
+        clearInterval(progressTimer);
+        progressTimer = setInterval(reportProgress, PROGRESS_INTERVAL_MS);
+    }
+
     onMount(async () => {
         // Running inside the Jellyfin WebView shell (official Android app,
         // LG webOS) with its native player available: hand off to ExoPlayer
@@ -259,6 +327,11 @@
     });
 
     onDestroy(() => {
+        // Before tearing anything down: this is the position that actually
+        // matters, and the element is about to stop reporting one.
+        reportProgress();
+        clearInterval(progressTimer);
+
         hls?.destroy();
 
         // Free the ffmpeg session rather than waiting for it to idle out.
@@ -313,6 +386,9 @@
         <video
             bind:this={videoElement}
             onerror={onVideoError}
+            onloadedmetadata={applyResume}
+            onplay={startProgressReporting}
+            onpause={reportProgress}
             {controls}
             {poster}
             autoplay
