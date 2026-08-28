@@ -88,7 +88,9 @@ function transformItems(items: RivenLibraryItem[]) {
                 indexer,
                 tpdb_uuid: tpdbId,
                 type: getItemType(item.type),
-                riven_id: item.id,
+                // Number(): the backend serialises this as a string, and consumers
+                // (notably toGuid for the native player) need a real number.
+                riven_id: Number(item.id),
                 state: item.state ?? null,
                 // The card renders whatever `badge` it is handed; deriving it
                 // here keeps the state vocabulary in one place.

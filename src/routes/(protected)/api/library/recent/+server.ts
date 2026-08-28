@@ -106,7 +106,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
                         item.year ||
                         (item.aired_at ? new Date(item.aired_at).getFullYear() : "N/A"),
                     tpdb_uuid: tpdbId,
-                    riven_id: item.id, // Keep internal ID if needed
+                    // Number(): serialised as a string by the backend; see toGuid.
+                    riven_id: Number(item.id),
                     // Carried so the card can show status and offer playback, the
                     // same as the library grid does.
                     state: item.state ?? null,

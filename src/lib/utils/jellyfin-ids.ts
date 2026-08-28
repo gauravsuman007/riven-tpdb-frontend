@@ -25,9 +25,27 @@ export const LIBRARY_ID = "72697665-6e74-7064-6200-000000000003";
 // browsable entities but are not stored as rows anywhere.
 const SYNTHETIC_PREFIX = "ffffffff";
 
-/** Widen a MediaItem id into the 32-hex shape clients expect. */
-export function toGuid(itemId: number): string {
-    return itemId.toString(16).padStart(32, "0");
+/**
+ * Widen a MediaItem id into the 32-hex shape clients expect.
+ *
+ * TRAP, cost a long debugging cycle: the backend serialises `MediaItem.id`
+ * as a STRING ("862"), and several call sites pass it straight through as
+ * `riven_id`. `String.prototype.toString()` takes no radix argument and
+ * silently ignores one, so `("862").toString(16)` returns "862" unchanged --
+ * the decimal id gets zero-padded into a valid-looking GUID that decodes as
+ * a completely different number (862 -> ...000862 -> 2146), and every
+ * request for it 404s with nothing to suggest an encoding bug. Coercing
+ * here rather than trusting the declared `number` type is what makes this
+ * safe, because TypeScript cannot enforce it across an HTTP boundary.
+ */
+export function toGuid(itemId: number | string): string {
+    const value = Number(itemId);
+
+    if (!Number.isInteger(value) || value <= 0) {
+        throw new Error(`toGuid: not a usable MediaItem id: ${JSON.stringify(itemId)}`);
+    }
+
+    return value.toString(16).padStart(32, "0");
 }
 
 /**
