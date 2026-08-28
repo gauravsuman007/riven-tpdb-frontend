@@ -48,20 +48,37 @@ export const BUNDLE_JS = `
   // Exchanges the browser's own session cookie (the human already signed in
   // through the real login page) for the native player's token, so there is
   // no separate credential prompt inside the WebView.
-  function ensureCredentials(done) {
-    if (creds()) { done(true); return; }
-    if (!nativeAvailable()) { done(false); return; }
+  function log() {
+    try { console.log.apply(console, ["[riven-native]"].concat([].slice.call(arguments))); }
+    catch (e) {}
+  }
 
+  function ensureCredentials(done) {
+    if (creds()) { log("using existing jellyfin_credentials"); done(true); return; }
+    if (!nativeAvailable()) { log("NativePlayer not available, cannot ensure credentials"); done(false); return; }
+
+    // The native client authenticates itself natively (AuthenticateByName is
+    // never called from inside this WebView) and, per real Jellyfin, is
+    // expected to seed jellyfin_credentials into this WebView's localStorage
+    // before it ever loads a page. If that did not happen -- e.g. this
+    // client wires its bridge differently -- fall back to exchanging our own
+    // better-auth session cookie, which only exists if the human happened to
+    // load a real login page in this same WebView.
+    log("no jellyfin_credentials found, falling back to /web/session-token");
     fetch("/web/session-token", { credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        if (!r.ok) log("/web/session-token returned", r.status);
+        return r.ok ? r.json() : null;
+      })
       .then(function (d) {
         if (!d) { done(false); return; }
         window.localStorage.setItem(CRED_KEY, JSON.stringify({
           Servers: [{ Id: d.ServerId, UserId: d.UserId, AccessToken: d.AccessToken }]
         }));
+        log("credentials obtained via session-token exchange");
         done(true);
       })
-      .catch(function () { done(false); });
+      .catch(function (e) { log("session-token fetch failed", e); done(false); });
   }
 
   // What the player component calls. \`itemId\` is the Jellyfin item id (32
@@ -69,10 +86,11 @@ export const BUNDLE_JS = `
   window.RivenNative = {
     available: nativeAvailable,
     play: function (itemId, startPositionTicks) {
-      if (!nativeAvailable()) return false;
+      if (!nativeAvailable()) { log("play() called but NativePlayer unavailable"); return false; }
 
       ensureCredentials(function (ok) {
-        if (!ok) return;
+        if (!ok) { log("play() aborted: no credentials available for native player"); return; }
+        log("calling NativePlayer.loadPlayer for", itemId);
         window.NativePlayer.loadPlayer(JSON.stringify({
           ids: [itemId],
           startIndex: 0,

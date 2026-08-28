@@ -39,18 +39,42 @@ history if it's ever relevant again.
   HTML page must reference it, which is what `injectJellyfinBundle` in
   `hooks.server.ts` does via `transformPageChunk`.
 - **The native player reads its token from OUR OWN localStorage**:
-  `jellyfin_credentials` → `Servers[0].{UserId,AccessToken}`. Because the
-  Jellyfin protocol and the real UI now share an origin, the bundle script
-  exchanges the human's own better-auth session cookie for that token via
-  `GET /web/session-token` — no separate API-key prompt inside the WebView,
-  unlike the old proxied version of this bridge.
+  `jellyfin_credentials` → `Servers[0].{UserId,AccessToken}`. **Suspected
+  wrong assumption, not yet confirmed on-device**: the original design
+  assumed the human logs into a real page in this WebView and the bundle
+  script exchanges that better-auth session cookie for the token via
+  `GET /web/session-token`. But the official Android app's login (server
+  add → native username/password screen → `AuthenticateByName`) almost
+  certainly happens *natively*, outside any WebView page load — in real
+  Jellyfin the native client is the one that SEEDS `jellyfin_credentials`
+  into the WebView's localStorage before loading the main page, for
+  jellyfin-web (which has no native login of its own) to read. If that's
+  what's happening here too, our session-cookie fallback fires because
+  `creds()` finds nothing, and it also finds nothing (no session cookie
+  exists in that WebView), so `ensureCredentials` silently fails and
+  `NativePlayer.loadPlayer()` is never called — matching the observed
+  symptom of the native player screen opening but never receiving media.
+  `bundle.ts` now logs every step of this path via `console.log("[riven-native]", ...)`
+  instead of swallowing failures — check `chrome://inspect` (WebView remote
+  debugging over USB) against a real device before changing this further;
+  don't guess again without that evidence.
 - **`window.NativePlayer.loadPlayer()` takes item IDs, not URLs.** ExoPlayer
   resolves the stream itself via `/Items/{id}/PlaybackInfo` and
   `/Videos/{id}/stream`. `video-player.svelte` checks
   `window.RivenNative?.available()` at the top of its `onMount` and, when
   true, hands off to the native player instead of setting up the in-page
   `<video>` element at all — ExoPlayer takes over as a native overlay outside
-  this component's DOM.
+  this component's DOM. **The overlay must never open in the first place**:
+  `player.svelte.ts`'s `open()`/`openDirect()` now check
+  `window.RivenNative?.available()` themselves and hand off directly,
+  without ever setting `player.current` — the popup used to still mount
+  with an empty `<video>` (no src, showing a bare play button) underneath
+  the native player, and its `touch-action:none` seek/zoom stage ate the OS
+  edge-swipe-back gesture for a player the user couldn't see. A direct-site
+  video (no library item, so no ids to hand to `NativePlayer`) instead plays
+  through a bare native `<video>` + `webkitEnterFullscreen()`/
+  `requestFullscreen()` in that same code path, bypassing the custom overlay
+  entirely so the OS back gesture still works.
 - **Video delivery is a thin proxy, not a reimplementation.** `/Videos/{id}/stream`,
   `/Videos/{id}/main.m3u8`, and the HLS segment routes call the backend's
   existing `/api/v1/stream/file|playback_info|hls/...` endpoints directly —
