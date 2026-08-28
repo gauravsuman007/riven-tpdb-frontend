@@ -32,8 +32,13 @@ declare global {
     // else -- a normal browser never has this.
     interface Window {
         RivenNative?: {
+            /** False when the human chose the "webui" player: use our own. */
             available: () => boolean;
             play: (itemId: string, startPositionTicks?: number) => boolean;
+            /** Whether this shell can open its own native settings screen. */
+            settingsAvailable: () => boolean;
+            /** Opens them -- where the player type (web/integrated/external) lives. */
+            openSettings: () => boolean;
         };
     }
 }

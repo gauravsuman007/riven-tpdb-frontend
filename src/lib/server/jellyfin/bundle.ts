@@ -50,14 +50,29 @@ export const BUNDLE_JS = `
     return null;
   }
 
-  function nativeAvailable() {
+  // The app offers three player types in its OWN native settings
+  // (VideoPlayerType: "webui" | "exoplayer" | "external"), and exposes each
+  // as a separate JS bridge whose isEnabled() reflects that choice. Exactly
+  // one is ever enabled, so asking both is how we learn what the human
+  // picked -- there is no API to query the setting directly.
+  function exoAvailable() {
     try { return !!(window.NativePlayer && window.NativePlayer.isEnabled()); }
     catch (e) { return false; }
   }
 
-  // Exchanges the browser's own session cookie (the human already signed in
-  // through the real login page) for the native player's token, so there is
-  // no separate credential prompt inside the WebView.
+  function externalAvailable() {
+    try { return !!(window.ExternalPlayer && window.ExternalPlayer.isEnabled()); }
+    catch (e) { return false; }
+  }
+
+  // "Should we hand off at all?" -- false means the human chose "webui", so
+  // our own in-page player should handle it exactly as it does in a browser.
+  function nativeAvailable() {
+    return exoAvailable() || externalAvailable();
+  }
+
+  // Failures only: this bridge is invisible from the server side, so a
+  // silent abort here is very expensive to diagnose (see AGENTS.md).
   function log() {
     try { console.log.apply(console, ["[riven-native]"].concat([].slice.call(arguments))); }
     catch (e) {}
@@ -83,15 +98,17 @@ export const BUNDLE_JS = `
         // very next NativePlayer call.
         setTimeout(function () {
           nativeSessionImported = true;
-          log("posted sessions/capabilities/full to trigger native credential import");
           done(true);
         }, 250);
       })
       .catch(function (e) { log("sessions/capabilities/full failed", e); done(false); });
   }
 
+  // Exchanges the browser's own session cookie (the human already signed in
+  // through the real login page) for the native player's token, so there is
+  // no separate credential prompt inside the WebView.
   function ensureCredentials(done) {
-    if (creds()) { log("using existing jellyfin_credentials"); importIntoNativeSession(done); return; }
+    if (creds()) { importIntoNativeSession(done); return; }
     if (!nativeAvailable()) { log("NativePlayer not available, cannot ensure credentials"); done(false); return; }
 
     // The native client authenticates itself natively (AuthenticateByName is
@@ -101,7 +118,6 @@ export const BUNDLE_JS = `
     // client wires its bridge differently -- fall back to exchanging our own
     // better-auth session cookie, which only exists if the human happened to
     // load a real login page in this same WebView.
-    log("no jellyfin_credentials found, falling back to /web/session-token");
     fetch("/web/session-token", { credentials: "same-origin" })
       .then(function (r) {
         if (!r.ok) log("/web/session-token returned", r.status);
@@ -112,7 +128,6 @@ export const BUNDLE_JS = `
         window.localStorage.setItem(CRED_KEY, JSON.stringify({
           Servers: [{ Id: d.ServerId, UserId: d.UserId, AccessToken: d.AccessToken }]
         }));
-        log("credentials obtained via session-token exchange");
         importIntoNativeSession(done);
       })
       .catch(function (e) { log("session-token fetch failed", e); done(false); });
@@ -127,15 +142,35 @@ export const BUNDLE_JS = `
 
       ensureCredentials(function (ok) {
         if (!ok) { log("play() aborted: no credentials available for native player"); return; }
-        log("calling NativePlayer.loadPlayer for", itemId);
-        window.NativePlayer.loadPlayer(JSON.stringify({
+
+        // Both bridges take the same PlayOptions JSON (ids, not URLs); the
+        // external one resolves a stream URL and fires an Intent instead of
+        // playing in-app.
+        var options = JSON.stringify({
           ids: [itemId],
           startIndex: 0,
           startPositionTicks: startPositionTicks || 0
-        }));
+        });
+
+        if (externalAvailable()) window.ExternalPlayer.initPlayer(options);
+        else window.NativePlayer.loadPlayer(options);
       });
 
       return true;
+    },
+
+    // Opens the app's own settings screen, where the player type above is
+    // chosen. This is the only way to reach those preferences: they are
+    // native, per-device, and have no server-side representation, so a
+    // server cannot set them on the client's behalf.
+    settingsAvailable: function () {
+      try { return !!(window.NativeShell && window.NativeShell.openClientSettings); }
+      catch (e) { return false; }
+    },
+
+    openSettings: function () {
+      try { window.NativeShell.openClientSettings(); return true; }
+      catch (e) { log("openClientSettings failed", e); return false; }
     }
   };
 
