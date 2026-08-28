@@ -14,8 +14,92 @@
     import { describeState } from "$lib/utils/item-state";
     import * as dateUtils from "$lib/utils/date";
     import { cubicOut } from "svelte/easing";
+    import { page } from "$app/state";
+    import { goto, invalidateAll } from "$app/navigation";
+    import { tick } from "svelte";
+    import { toast } from "svelte-sonner";
+    import { Button } from "$lib/components/ui/button/index.js";
+    import * as Select from "$lib/components/ui/select/index.js";
+    import * as Pagination from "$lib/components/ui/pagination/index.js";
+    import { Input } from "$lib/components/ui/input/index.js";
+    import { ItemStore } from "$lib/stores/library-items.svelte";
+    import { stateOptions, sortOptions } from "$lib/schemas/items";
+    import Pause from "@lucide/svelte/icons/pause";
+    import Play from "@lucide/svelte/icons/play";
+    import Trash from "@lucide/svelte/icons/trash";
+    import X from "@lucide/svelte/icons/x";
+    import Loading2Circle from "@lucide/svelte/icons/loader-2";
+    import Search from "@lucide/svelte/icons/search";
+    import {
+        pause_downloads,
+        unpause_downloads,
+        cancel_downloads,
+        pause_all_downloads,
+        resume_all_downloads,
+        cancel_all_downloads
+    } from "./dashboard.remote";
 
     let { data }: { data: PageData } = $props();
+
+    const downloadsStore = new ItemStore();
+    let actionInProgress = $state(false);
+    let queueActionInProgress = $state(false);
+    let dlSearch = $state(page.url.searchParams.get("dl_search") ?? "");
+    let dlStates = $state(page.url.searchParams.getAll("dl_state"));
+    let dlSort = $state(page.url.searchParams.getAll("dl_sort"));
+    let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+    function applyDownloadsQuery(resetPage: boolean) {
+        const url = new URL(page.url);
+
+        url.searchParams.delete("dl_state");
+        dlStates.forEach((s) => url.searchParams.append("dl_state", s));
+
+        url.searchParams.delete("dl_sort");
+        dlSort.forEach((s) => url.searchParams.append("dl_sort", s));
+
+        if (dlSearch) {
+            url.searchParams.set("dl_search", dlSearch);
+        } else {
+            url.searchParams.delete("dl_search");
+        }
+
+        if (resetPage) url.searchParams.set("dl_page", "1");
+
+        goto(url.toString(), { keepFocus: true, noScroll: true, invalidateAll: true });
+    }
+
+    function handleDlSearchInput() {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => applyDownloadsQuery(true), 300);
+    }
+
+    async function runDownloadAction(action: () => Promise<unknown>, successMsg: string) {
+        actionInProgress = true;
+        try {
+            await action();
+            toast.success(successMsg);
+            downloadsStore.clear();
+            await invalidateAll();
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "An unknown error occurred");
+        } finally {
+            actionInProgress = false;
+        }
+    }
+
+    async function runQueueAction(action: () => Promise<unknown>, successMsg: string) {
+        queueActionInProgress = true;
+        try {
+            await action();
+            toast.success(successMsg);
+            await invalidateAll();
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "An unknown error occurred");
+        } finally {
+            queueActionInProgress = false;
+        }
+    }
 
     function transformStatesToArray(states: Record<string, number> | undefined) {
         if (!states) return [];
@@ -333,11 +417,102 @@
     <section class="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card.Root class="flex h-full flex-col">
             <Card.Header class="pb-2">
-                <div class="flex items-center justify-between">
-                    <Card.Title class="text-sm font-medium text-neutral-300">
-                        In Progress
-                    </Card.Title>
-                    <Badge variant="secondary" class="rounded-xl">{activeDownloads.length}</Badge>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <Card.Title class="text-sm font-medium text-neutral-300">
+                            In Progress
+                        </Card.Title>
+                        <Badge variant="secondary" class="rounded-xl"
+                            >{data.downloads?.total_active ?? activeDownloads.length}</Badge>
+                    </div>
+
+                    <div class="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={queueActionInProgress || activeDownloads.length === 0}
+                            class="h-8 gap-1.5 rounded-lg px-2 text-xs hover:bg-white/10"
+                            onclick={() =>
+                                runQueueAction(
+                                    () => pause_all_downloads(),
+                                    "Paused all in-flight downloads"
+                                )}>
+                            <Pause class="h-3 w-3" /> Pause all
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={queueActionInProgress}
+                            class="h-8 gap-1.5 rounded-lg px-2 text-xs hover:bg-white/10"
+                            onclick={() =>
+                                runQueueAction(
+                                    () => resume_all_downloads(),
+                                    "Resumed all paused downloads"
+                                )}>
+                            <Play class="h-3 w-3" /> Resume all
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={queueActionInProgress || activeDownloads.length === 0}
+                            class="h-8 gap-1.5 rounded-lg px-2 text-xs hover:bg-red-500/20 hover:text-red-400"
+                            onclick={() =>
+                                runQueueAction(
+                                    () => cancel_all_downloads(),
+                                    "Cancelled all in-flight downloads"
+                                )}>
+                            <Trash class="h-3 w-3" /> Cancel all
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- Filters: state, sort, search, page size -->
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <div class="group relative">
+                        <Search
+                            class="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                        <Input
+                            bind:value={dlSearch}
+                            oninput={handleDlSearchInput}
+                            placeholder="Search title..."
+                            class="h-8 w-40 rounded-lg border-transparent bg-white/5 pl-7 text-xs" />
+                    </div>
+
+                    <Select.Root
+                        type="multiple"
+                        bind:value={dlStates}
+                        onValueChange={async () => {
+                            await tick();
+                            applyDownloadsQuery(true);
+                        }}>
+                        <Select.Trigger
+                            class="h-8 w-28 rounded-lg border-0 bg-white/5 text-xs text-zinc-400">
+                            {dlStates.length ? dlStates.join(", ") : "State"}
+                        </Select.Trigger>
+                        <Select.Content class="border-zinc-800 bg-zinc-900">
+                            {#each Object.keys(stateOptions) as option}
+                                <Select.Item value={option} label={option} />
+                            {/each}
+                        </Select.Content>
+                    </Select.Root>
+
+                    <Select.Root
+                        type="multiple"
+                        bind:value={dlSort}
+                        onValueChange={async () => {
+                            await tick();
+                            applyDownloadsQuery(false);
+                        }}>
+                        <Select.Trigger
+                            class="h-8 w-28 rounded-lg border-0 bg-white/5 text-xs text-zinc-400">
+                            {dlSort.length ? dlSort.join(", ") : "Sort"}
+                        </Select.Trigger>
+                        <Select.Content class="border-zinc-800 bg-zinc-900">
+                            {#each Object.keys(sortOptions) as option}
+                                <Select.Item value={option} label={option} />
+                            {/each}
+                        </Select.Content>
+                    </Select.Root>
                 </div>
             </Card.Header>
             <Card.Content class="flex-1">
@@ -351,46 +526,154 @@
                             {@const status = describeState(entry.state)}
                             {@const href = detailsHref(entry)}
                             <li class="flex items-center justify-between gap-3 py-2.5">
-                                <div class="min-w-0">
-                                    {#if href}
-                                        <a
-                                            {href}
-                                            class="truncate text-sm font-medium text-neutral-100 hover:underline">
-                                            {entry.title}
-                                        </a>
-                                    {:else}
-                                        <p class="truncate text-sm font-medium text-neutral-100">
-                                            {entry.title}
+                                <div class="flex min-w-0 items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={downloadsStore.has(entry.riven_id)}
+                                        onchange={() => downloadsStore.toggle(entry.riven_id)}
+                                        class="h-3.5 w-3.5 shrink-0 rounded border-zinc-700 bg-transparent" />
+                                    <div class="min-w-0">
+                                        {#if href}
+                                            <a
+                                                {href}
+                                                class="truncate text-sm font-medium text-neutral-100 hover:underline">
+                                                {entry.title}
+                                            </a>
+                                        {:else}
+                                            <p class="truncate text-sm font-medium text-neutral-100">
+                                                {entry.title}
+                                            </p>
+                                        {/if}
+                                        <p class="text-muted-foreground mt-0.5 text-xs">
+                                            {#if entry.requested_at}
+                                                requested {since(entry.requested_at)}
+                                            {/if}
+                                            {#if entry.stream_count}
+                                                · {entry.stream_count} release{entry.stream_count ===
+                                                1
+                                                    ? ""
+                                                    : "s"} found
+                                            {/if}
+                                            {#if entry.scraped_times > 1}
+                                                · {entry.scraped_times} scrape passes
+                                            {/if}
+                                            {#if entry.blacklisted_count}
+                                                · {entry.blacklisted_count} rejected
+                                            {/if}
                                         </p>
-                                    {/if}
-                                    <p class="text-muted-foreground mt-0.5 text-xs">
-                                        {#if entry.requested_at}
-                                            requested {since(entry.requested_at)}
-                                        {/if}
-                                        {#if entry.stream_count}
-                                            · {entry.stream_count} release{entry.stream_count === 1
-                                                ? ""
-                                                : "s"} found
-                                        {/if}
-                                        {#if entry.scraped_times > 1}
-                                            · {entry.scraped_times} scrape passes
-                                        {/if}
-                                        {#if entry.blacklisted_count}
-                                            · {entry.blacklisted_count} rejected
-                                        {/if}
-                                    </p>
+                                    </div>
                                 </div>
-                                <Badge
-                                    variant="secondary"
-                                    class={cn(
-                                        "shrink-0 rounded-xl",
-                                        status.variant === "error" && "bg-red-600/25 text-red-300",
-                                        status.variant === "success" &&
-                                            "bg-green-600/25 text-green-300"
-                                    )}>{status.label}</Badge>
+                                <div class="flex shrink-0 items-center gap-1.5">
+                                    <Badge
+                                        variant="secondary"
+                                        class={cn(
+                                            "rounded-xl",
+                                            status.variant === "error" &&
+                                                "bg-red-600/25 text-red-300",
+                                            status.variant === "success" &&
+                                                "bg-green-600/25 text-green-300"
+                                        )}>{status.label}</Badge>
+                                    {#if entry.state === "Paused"}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={actionInProgress}
+                                            class="h-7 w-7 rounded-lg hover:bg-white/10"
+                                            title="Resume"
+                                            onclick={() =>
+                                                runDownloadAction(
+                                                    () =>
+                                                        unpause_downloads({
+                                                            ids: [String(entry.riven_id)]
+                                                        }),
+                                                    `Resumed ${entry.title}`
+                                                )}>
+                                            <Play class="h-3.5 w-3.5" />
+                                        </Button>
+                                    {:else}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={actionInProgress}
+                                            class="h-7 w-7 rounded-lg hover:bg-white/10"
+                                            title="Pause"
+                                            onclick={() =>
+                                                runDownloadAction(
+                                                    () =>
+                                                        pause_downloads({
+                                                            ids: [String(entry.riven_id)]
+                                                        }),
+                                                    `Paused ${entry.title}`
+                                                )}>
+                                            <Pause class="h-3.5 w-3.5" />
+                                        </Button>
+                                    {/if}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        disabled={actionInProgress}
+                                        class="h-7 w-7 rounded-lg hover:bg-red-500/20 hover:text-red-400"
+                                        title="Cancel"
+                                        onclick={() =>
+                                            runDownloadAction(
+                                                () =>
+                                                    cancel_downloads({
+                                                        ids: [String(entry.riven_id)]
+                                                    }),
+                                                `Cancelled ${entry.title}`
+                                            )}>
+                                        <Trash class="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
                             </li>
                         {/each}
                     </ul>
+
+                    {#if (data.downloads?.total_pages ?? 1) > 1}
+                        <div class="flex justify-center pt-4">
+                            <Pagination.Root
+                                count={data.downloads?.total_active ?? 0}
+                                perPage={data.downloads?.limit ?? 15}
+                                page={data.downloads?.page ?? 1}
+                                onPageChange={(p) => {
+                                    const url = new URL(page.url);
+                                    url.searchParams.set("dl_page", String(p));
+                                    goto(url.toString(), {
+                                        keepFocus: true,
+                                        noScroll: true,
+                                        invalidateAll: true
+                                    });
+                                }}>
+                                {#snippet children({ pages, currentPage })}
+                                    <Pagination.Content>
+                                        <Pagination.Item>
+                                            <Pagination.PrevButton
+                                                class="border-white/10 hover:bg-white/10" />
+                                        </Pagination.Item>
+                                        {#each pages as p (p.key)}
+                                            {#if p.type === "ellipsis"}
+                                                <Pagination.Item
+                                                    ><Pagination.Ellipsis /></Pagination.Item>
+                                            {:else}
+                                                <Pagination.Item>
+                                                    <Pagination.Link
+                                                        page={p}
+                                                        isActive={currentPage === p.value}
+                                                        class="data-[selected]:bg-primary data-[selected]:text-primary-foreground border-transparent hover:bg-white/10">
+                                                        {p.value}
+                                                    </Pagination.Link>
+                                                </Pagination.Item>
+                                            {/if}
+                                        {/each}
+                                        <Pagination.Item>
+                                            <Pagination.NextButton
+                                                class="border-white/10 hover:bg-white/10" />
+                                        </Pagination.Item>
+                                    </Pagination.Content>
+                                {/snippet}
+                            </Pagination.Root>
+                        </div>
+                    {/if}
                 {/if}
             </Card.Content>
         </Card.Root>
@@ -531,4 +814,108 @@
             </Card.Root>
         {/each}
     </section>
+
+    <!-- Floating Selection Bar: bulk actions for selected in-progress downloads -->
+    {#if downloadsStore.count > 0}
+        <div
+            transition:fly={{ y: 100, duration: 400, easing: cubicOut }}
+            class="fixed bottom-8 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-3xl border border-white/10 bg-zinc-900/80 p-2 pl-4 shadow-2xl backdrop-blur-xl">
+            <div class="mr-4 flex items-center gap-3">
+                <div
+                    class="bg-primary/20 text-primary flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold">
+                    {downloadsStore.count}
+                </div>
+                <span class="text-sm font-medium text-zinc-300">Selected</span>
+            </div>
+
+            <div class="mx-1 h-8 w-px bg-white/10"></div>
+
+            <div class="flex items-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={actionInProgress}
+                    class="h-9 gap-2 rounded-xl px-3 hover:bg-white/10"
+                    onclick={() =>
+                        runDownloadAction(
+                            () =>
+                                pause_downloads({
+                                    ids: downloadsStore.items.map((id) => id.toString())
+                                }),
+                            `Paused ${downloadsStore.count} items`
+                        )}>
+                    {#if actionInProgress}
+                        <Loading2Circle class="h-3.5 w-3.5 animate-spin" />
+                    {:else}
+                        <Pause class="h-3.5 w-3.5" />
+                    {/if}
+                    Pause
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={actionInProgress}
+                    class="h-9 gap-2 rounded-xl px-3 hover:bg-white/10"
+                    onclick={() =>
+                        runDownloadAction(
+                            () =>
+                                unpause_downloads({
+                                    ids: downloadsStore.items.map((id) => id.toString())
+                                }),
+                            `Resumed ${downloadsStore.count} items`
+                        )}>
+                    {#if actionInProgress}
+                        <Loading2Circle class="h-3.5 w-3.5 animate-spin" />
+                    {:else}
+                        <Play class="h-3.5 w-3.5" />
+                    {/if}
+                    Resume
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={actionInProgress}
+                    class="h-9 gap-2 rounded-xl px-3 hover:bg-red-500/20 hover:text-red-400"
+                    onclick={() =>
+                        runDownloadAction(
+                            () =>
+                                cancel_downloads({
+                                    ids: downloadsStore.items.map((id) => id.toString())
+                                }),
+                            `Cancelled ${downloadsStore.count} items`
+                        )}>
+                    {#if actionInProgress}
+                        <Loading2Circle class="h-3.5 w-3.5 animate-spin" />
+                    {:else}
+                        <Trash class="h-3.5 w-3.5" />
+                    {/if}
+                    Cancel
+                </Button>
+
+                <div class="mx-1 h-8 w-px bg-white/10"></div>
+
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-9 gap-2 rounded-xl px-3 hover:bg-white/10"
+                    onclick={() =>
+                        activeDownloads.forEach((entry) => {
+                            if (!downloadsStore.has(entry.riven_id))
+                                downloadsStore.toggle(entry.riven_id);
+                        })}>
+                    Select all on page
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-9 w-9 rounded-xl hover:bg-white/10"
+                    onclick={() => downloadsStore.clear()}>
+                    <X class="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    {/if}
 </PageShell>

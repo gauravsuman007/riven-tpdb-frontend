@@ -5,7 +5,14 @@ import { createScopedLogger } from "$lib/logger";
 
 const logger = createScopedLogger("dashboard");
 
-export const load = (async ({ fetch, locals }) => {
+const DOWNLOADS_PAGE_SIZE = 15;
+
+export const load = (async ({ fetch, locals, url }) => {
+    const page = Math.max(1, Number(url.searchParams.get("dl_page")) || 1);
+    const states = url.searchParams.getAll("dl_state");
+    const sort = url.searchParams.getAll("dl_sort");
+    const search = url.searchParams.get("dl_search") || undefined;
+
     const [statistics, svc, downloaderInfo, downloads] = await Promise.all([
         providers.riven.GET("/api/v1/stats", {
             baseUrl: locals.backendUrl,
@@ -34,7 +41,17 @@ export const load = (async ({ fetch, locals }) => {
             headers: {
                 "x-api-key": locals.apiKey
             },
-            params: { query: { limit: 15 } },
+            params: {
+                query: {
+                    limit: DOWNLOADS_PAGE_SIZE,
+                    page,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    states: states.length ? (states as any) : undefined,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    sort: sort.length ? (sort as any) : undefined,
+                    search
+                }
+            },
             fetch: fetch
         })
     ]);
@@ -64,6 +81,13 @@ export const load = (async ({ fetch, locals }) => {
         statistics: statistics.data,
         services: svc.data || {},
         downloaderInfo: downloaderInfo.data,
-        downloads: downloads.data ?? { active: [], recent: [] }
+        downloads: downloads.data ?? {
+            active: [],
+            recent: [],
+            page,
+            limit: DOWNLOADS_PAGE_SIZE,
+            total_active: 0,
+            total_pages: 1
+        }
     };
 }) satisfies PageServerLoad;

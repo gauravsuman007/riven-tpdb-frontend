@@ -21,6 +21,555 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collections
+         * @description Every collection, newest year first, with counts but without entries.
+         */
+        get: operations["list_collections"];
+        put?: never;
+        /**
+         * Create Collection
+         * @description Create an empty user collection.
+         */
+        post: operations["create_collection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Collection
+         * @description One collection with its entries.
+         *
+         *     Winners sort first, then by category, so the page reads as a ballot rather
+         *     than an arbitrary list.
+         */
+        get: operations["get_collection"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Collection
+         * @description Delete a user collection and its entries.
+         *
+         *     Entries are catalogue rows, so nothing leaves the library: a title that was
+         *     requested from this collection stays exactly where it is.
+         */
+        delete: operations["delete_collection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/entries/{entry_id}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Entry
+         * @description Promote one entry into the library.
+         *
+         *     Only a resolved entry can be requested -- without a TPDB id there is nothing
+         *     for the indexer to look up.
+         */
+        post: operations["request_collection_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/brochure/shelves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Brochure
+         * @description Every shelf with its top entries, in one request.
+         *
+         *     The brochure is a browsing surface, so it is served whole rather than a
+         *     request per row: four shelves would otherwise be four round trips before
+         *     the page paints. Entries come back in rank order and are capped per shelf,
+         *     since a shelf shows a row, not a catalogue.
+         */
+        get: operations["get_brochure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entry
+         * @description One entry, for a brochure detail page.
+         */
+        get: operations["get_collection_entry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{key}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Categories
+         * @description Entry counts per award category, for filtering a large collection.
+         */
+        get: operations["list_collection_categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/avn/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Avn Overview
+         * @description Every AVN ceremony year, newest first, with a row of winners each.
+         *
+         *     Years are enumerated from the settings rather than from the database, so a
+         *     year that has not been fetched yet still gets a row. Without that the page
+         *     would grow downwards as the sync progressed, which reads as breakage rather
+         *     than as progress.
+         */
+        get: operations["get_avn_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/avn/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable Avn
+         * @description Turn the AVN corpus job on (or off).
+         */
+        post: operations["enable_avn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/avn/cancel-downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Avn Downloads
+         * @description Stop AVN award downloads that have not finished.
+         *
+         *     Turning auto-requests off in Settings already does this, but only for the
+         *     flip itself. This is the way to clear a backlog that was queued before --
+         *     a corpus sync can leave thousands of titles in the pipeline, and they keep
+         *     landing in the library for hours otherwise.
+         *
+         *     Titles already downloaded are kept: those are media the user now owns, and
+         *     removing them is a library decision, not a scheduling one.
+         */
+        post: operations["cancel_avn_downloads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/brochure/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Brochure Status
+         * @description Whether the brochure is on, and how much it has mirrored.
+         */
+        get: operations["get_brochure_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/brochure/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable Brochure
+         * @description Turn the Adult Empire brochure on (or off).
+         *
+         *     Unlike AVN this needs no TPDB token: Adult Empire supplies studio, year and
+         *     cast, which is everything the scrapers match on. TPDB enrichment is a
+         *     separate, optional pass over titles that are already downloadable.
+         */
+        post: operations["enable_brochure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{key}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add To Collection
+         * @description Add one title to a user collection.
+         *
+         *     Adding does **not** request the title. A collection is a list of titles you
+         *     are interested in; the library is what you own. If the title happens to be
+         *     in the library already the entry adopts it, but nothing is ever queued for
+         *     download from here.
+         */
+        post: operations["add_to_collection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{key}/items/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove From Collection
+         * @description Remove one title from a user collection.
+         *
+         *     Local only. TPDB's collection route has no DELETE, so a title mirrored
+         *     there stays there and has to be removed on the TPDB website.
+         */
+        delete: operations["remove_from_collection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Studios
+         * @description The studio directory.
+         *
+         *     ``saved=true`` is what the brochure's studios section asks for; the
+         *     unfiltered list is the picker used to add to it.
+         */
+        get: operations["get_studios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios/{studio_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Studio
+         * @description Add a studio to the brochure's studios section.
+         */
+        post: operations["save_studio"];
+        /**
+         * Unsave Studio
+         * @description Remove a studio from the brochure's studios section.
+         */
+        delete: operations["unsave_studio"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios/{studio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Studio Detail
+         * @description One studio. A database read, so it answers immediately.
+         *
+         *     Deliberately does not include the ranked rows -- see :class:`StudioRows`.
+         */
+        get: operations["get_studio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios/{studio_id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Studio Rows
+         * @description A studio's ranked rows.
+         *
+         *     Saved studios get their rows from the weekly cache (see
+         *     ``StudioService.sync_rows``) -- instant, capped at
+         *     ``studio_rows_top_n``. A studio that is not saved, or was saved too
+         *     recently for the cache to have run yet, falls back to a live read (same
+         *     as before this cache existed) so the page is never blank.
+         *
+         *     A row that fails comes back empty rather than failing the request: these
+         *     are two independent page reads of someone else's shop, and one being
+         *     unavailable should not blank the studio.
+         */
+        get: operations["get_studio_rows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios/titles/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Title
+         * @description Turn a studio listing row into a brochure entry and return its id.
+         *
+         *     The frontend navigates to the ordinary brochure detail page with this id,
+         *     so a studio title and a bestseller title are the same page and the same
+         *     code from here on.
+         *
+         *     Idempotent, and it looks across every Adult Empire collection before
+         *     creating anything: a title on a studio page is frequently also on a
+         *     brochure shelf, and two entries for one storefront id would mean two
+         *     detail pages that disagree about whether it had been requested.
+         */
+        post: operations["promote_studio_title"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studios/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Studios
+         * @description Refresh the directory now, rather than waiting for the weekly run.
+         */
+        post: operations["sync_studios"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vpn/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vpn Status
+         * @description Current tunnel state, including which exit nodes are on offer.
+         */
+        get: operations["vpn_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vpn/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vpn Connect
+         * @description Bring the tunnel up, by auth key or interactive login.
+         *
+         *     The two paths in the VPN tab are separate buttons precisely so this can
+         *     stay deterministic: whichever one was clicked is exactly what runs here.
+         *     A stored key is never substituted for an omitted one -- that used to be
+         *     the behaviour, and it meant "Generate login link" would silently attempt
+         *     key auth instead of an interactive login the moment any key had ever been
+         *     saved, with the login-URL button then having nothing to show for it. If
+         *     stored-key auto-reconnect on restart is ever wanted, it belongs in the
+         *     service's own startup path, not folded into what this explicit action
+         *     means.
+         *
+         *     A key supplied here is saved, so it survives a restart without asking
+         *     again -- but only for the "Connect with key" path, which is the one this
+         *     request actually is.
+         */
+        post: operations["vpn_connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vpn/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vpn Disconnect
+         * @description Stop routing. Deliberately not a logout -- the machine stays authorised.
+         */
+        post: operations["vpn_disconnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vpn/exit-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vpn Set Exit Node
+         * @description Choose which node routed traffic leaves from.
+         */
+        post: operations["vpn_set_exit_node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/database/backup": {
         parameters: {
             query?: never;
@@ -367,6 +916,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/direct/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Direct Search */
+        get: operations["direct_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct Sources
+         * @description List the renditions a video has, without handing out the URLs.
+         */
+        get: operations["direct_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct Stream
+         * @description Resolve and proxy one rendition, passing Range through both ways.
+         */
+        get: operations["direct_stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct Plugins
+         * @description Every known scraper -- built-in and plugin, enabled or not.
+         *
+         *     Re-scans the plugin folder on every call. These are a handful of files
+         *     parsed from local disk, not a network request, so there is nothing to
+         *     cache and no reason to make "did my new file show up" depend on a
+         *     separate refresh action.
+         */
+        get: operations["direct_plugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/plugins/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Direct Plugins Rescan
+         * @description Drop the cached scraper registry and rebuild it.
+         *
+         *     `/plugins` above already re-scans the folder for its own listing, so this
+         *     exists for the other half: making a file drop or an edit to an existing
+         *     plugin take effect in the scrapers actually used by /direct/search,
+         *     without waiting for some other settings change to invalidate them first.
+         */
+        post: operations["direct_plugins_rescan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/plugins/{key}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Direct Plugin Set Enabled
+         * @description Switch one scraper on or off, built-in or plugin alike.
+         *
+         *     Written to `direct_scraping.disabled` directly rather than through the
+         *     generic settings form -- that field is hidden from the schema for the
+         *     same reason `tailscale.auth_key` is (see `settings/visibility.py`): a
+         *     second write path to the same value with no way to tell which one is
+         *     current is exactly the "two auth key fields" bug repeating itself.
+         */
+        post: operations["direct_plugin_set_enabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/states": {
         parameters: {
             query?: never;
@@ -453,8 +1135,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Library State by TPDB ID
-         * @description Look up which of the given TPDB uuids already exist in the library
+         * Library State by TPDB or Adult Empire ID
+         * @description Look up which of the given adult ids already exist in the library
          */
         get: operations["get_library_states"];
         put?: never;
@@ -705,6 +1387,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/downloads/pause_all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause All In-Flight Downloads
+         * @description Pause every item currently in the downloads dashboard's active set
+         */
+        post: operations["pause_all_downloads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/downloads/resume_all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume All Paused Downloads
+         * @description Resume every item currently paused
+         */
+        post: operations["resume_all_downloads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/downloads/cancel_all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel All In-Flight Downloads
+         * @description Remove every item currently in the downloads dashboard's active set
+         */
+        delete: operations["cancel_all_downloads"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/reindex": {
         parameters: {
             query?: never;
@@ -780,6 +1522,38 @@ export interface paths {
         get: operations["scrape_item"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scrape/queue_release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a specific release, cached or not
+         * @description Pin one release to a title and let the normal pipeline download it.
+         *
+         *     This is the path for a release the debrid service does not already hold.
+         *     ``start_session`` cannot be used for those: it exists to let the user pick
+         *     files *out of* a torrent, and an uncached torrent has no file list yet --
+         *     the provider has not fetched its metadata. It therefore refused the pick
+         *     outright, which for adult content is the common case rather than the edge
+         *     one, since these releases are rarely in anyone's cache.
+         *
+         *     Rather than reimplementing downloading, this reuses the mechanism the
+         *     "switch to this release" button already uses: pin ``preferred_stream_hash``
+         *     and hand the item to the pipeline, which knows how to wait for a provider
+         *     to finish caching.
+         */
+        post: operations["queue_release"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1252,7 +2026,7 @@ export interface paths {
         };
         /**
          * Search
-         * @description Full-text search across one TPDB collection.
+         * @description Full-text search across one TPDB collection, best title match first.
          */
         get: operations["tpdb_search"];
         put?: never;
@@ -1603,6 +2377,27 @@ export interface components {
              */
             media_type: "movie" | "tv";
         };
+        /**
+         * AddToCollectionRequest
+         * @description What to add. Exactly one of these identifies a title.
+         *
+         *     Three routes in because three surfaces need it: a TPDB detail page knows a
+         *     uuid, a library page knows a Riven id, and a brochure or award page knows a
+         *     catalogue entry id.
+         */
+        AddToCollectionRequest: {
+            /** Tpdb Id */
+            tpdb_id?: string | null;
+            /**
+             * Tpdb Kind
+             * @default movie
+             */
+            tpdb_kind: string;
+            /** Media Item Id */
+            media_item_id?: number | null;
+            /** Entry Id */
+            entry_id?: number | null;
+        };
         /** AllDebridModel */
         AllDebridModel: {
             /**
@@ -1664,6 +2459,12 @@ export interface components {
             tracemalloc: boolean;
             /** @description Passwordless access for trusted local networks */
             local_access?: components["schemas"]["LocalAccessModel"];
+            /** @description Route scraper and streaming traffic through a VPN */
+            vpn?: components["schemas"]["VpnModel"];
+            /** @description Direct streaming-site scrapers, built-in and plugin */
+            direct_scraping?: components["schemas"]["DirectScrapingModel"];
+            /** @description Serve the library to Jellyfin clients (TV playback) */
+            jellyfin_server?: components["schemas"]["JellyfinServerModel"];
             /** @description Filesystem configuration */
             filesystem?: components["schemas"]["FilesystemModel"];
             /** @description Library updaters configuration */
@@ -1740,7 +2541,6 @@ export interface components {
             imdb_id?: string | null;
             /** Tpdb Id */
             tpdb_id?: string | null;
-            adultempire_id?: string | null;
             /** Ranking Overrides */
             ranking_overrides?: {
                 [key: string]: string[];
@@ -1751,6 +2551,99 @@ export interface components {
             min_filesize_override?: number | null;
             /** Max Filesize Override */
             max_filesize_override?: number | null;
+        };
+        /** AvnOverview */
+        AvnOverview: {
+            /** Enabled */
+            enabled: boolean;
+            /** Years */
+            years: components["schemas"]["AvnYear"][];
+            /** Progress */
+            progress: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * AvnYear
+         * @description One ceremony year as a row on the AVN page.
+         *
+         *     ``key`` is null for a year whose collection has not been built yet. That is
+         *     the normal state right after enabling: the corpus sync writes years one at
+         *     a time, so the page shows every expected year immediately and fills them in
+         *     as they arrive, rather than appearing empty and then jumping.
+         */
+        AvnYear: {
+            /** Year */
+            year: number;
+            /** Key */
+            key: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "fetching";
+            /** Total */
+            total: number;
+            /** Matched */
+            matched: number;
+            /** Requested */
+            requested: number;
+            /** Entries */
+            entries: components["schemas"]["CollectionEntryResponse"][];
+        };
+        /**
+         * AwardsModel
+         * @description AVN award collections built from Wikipedia's per-ceremony articles.
+         *
+         *     Observable, not Updatable: ``update_interval`` is only read by the
+         *     scheduler's content-service loop, and these jobs are registered directly.
+         *     Inheriting it would put a field in the settings UI that does nothing.
+         */
+        AwardsModel: {
+            /**
+             * Enabled
+             * @description Build AVN award collections in the library
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Include Nominees
+             * @description Store losing nominees alongside winners. Off by default: winners alone are ~2,800 entries against ~11,700 with nominees, and resolving nominees against TPDB is most of the work. Turning this off removes nominees already stored on the next sync.
+             * @default false
+             */
+            include_nominees: boolean;
+            /**
+             * Auto Request Winners
+             * @description Request award winners automatically once they resolve to a TPDB title. Nominees, if stored, are never auto-requested. Off by default: a full corpus is thousands of winners, so turning this on downloads a library's worth of titles rather than letting you browse the ceremonies and pick. Turning it back off cancels award downloads that have not finished; anything already downloaded is kept.
+             * @default false
+             */
+            auto_request_winners: boolean;
+            /**
+             * First Year
+             * @description Earliest ceremony year to build a collection for
+             * @default 1987
+             */
+            first_year: number;
+            /**
+             * Resolve Batch Size
+             * @description Entries to resolve against TPDB per run. TPDB allows 2 requests a second, so a large batch makes one run long rather than fast.
+             * @default 40
+             */
+            resolve_batch_size: number;
+            /**
+             * Refresh Interval
+             * @description How often to re-fetch the award corpus, in seconds
+             * @default 604800
+             */
+            refresh_interval: number;
+            /**
+             * Resolve Interval
+             * @description How often to resolve another batch of pending entries
+             * @default 300
+             */
+            resolve_interval: number;
         };
         /** BackupResponse */
         BackupResponse: {
@@ -1774,6 +2667,119 @@ export interface components {
              */
             file?: string | null;
         };
+        /**
+         * BrochureModel
+         * @description Adult Empire's ranked listings, browsed as a brochure.
+         *
+         *     Observable rather than Updatable for the same reason as AwardsModel: its
+         *     jobs are registered directly, so an inherited ``update_interval`` would be
+         *     a settings field that does nothing.
+         */
+        BrochureModel: {
+            /**
+             * Enabled
+             * @description Mirror Adult Empire's ranked listings
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Pages Per Listing
+             * @description Pages to read per shelf, 48 titles each. Three is enough to fill a browsing row without a long sync.
+             * @default 3
+             */
+            pages_per_listing: number;
+            /**
+             * Enrich Batch Size
+             * @description Titles to fetch full details for per run. Ratings, studio and cast only exist on the detail page, which is one request each.
+             * @default 25
+             */
+            enrich_batch_size: number;
+            /**
+             * Refresh Interval
+             * @description How often to re-read the ranked listings, in seconds
+             * @default 43200
+             */
+            refresh_interval: number;
+            /**
+             * Enrich Interval
+             * @description How often to enrich another batch of titles
+             * @default 600
+             */
+            enrich_interval: number;
+            /**
+             * Enrich From Tpdb
+             * @description After a brochure title is in the library, try to attach a TPDB record for artwork and tags. Purely additive -- the title is already downloadable without it.
+             * @default true
+             */
+            enrich_from_tpdb: boolean;
+            /**
+             * Resolve Batch Size
+             * @description Catalogue entries to resolve against TPDB per run. Each costs a search plus up to three detail requests, and TPDB allows two a second, so this stays small.
+             * @default 10
+             */
+            resolve_batch_size: number;
+            /**
+             * Resolve Interval
+             * @description How often to resolve another batch of entries against TPDB
+             * @default 300
+             */
+            resolve_interval: number;
+            /**
+             * Studios Enabled
+             * @description Mirror Adult Empire's studio directory so studios can be saved and browsed. A saved studio's rows are cached (see studio_rows_top_n); everything else is read live and never stored.
+             * @default true
+             */
+            studios_enabled: boolean;
+            /**
+             * Studio Rows Top N
+             * @description Titles to cache per row, for saved studios only. Refreshed on the same weekly schedule as the studio directory sync (studio_sync_day/studio_sync_hour) -- bounded to saved studios and this count so caching rows never becomes the 'twenty thousand rows a week' cost the live-read design exists to avoid.
+             * @default 25
+             */
+            studio_rows_top_n: number;
+            /**
+             * Studio Sync Day
+             * @description Weekday to refresh the studio directory on: mon, tue, wed, thu, fri, sat or sun. The directory changes about never, so weekly is generous.
+             * @default sun
+             */
+            studio_sync_day: string;
+            /**
+             * Studio Sync Hour
+             * @description Hour of the day to refresh the studio directory, local time. The sync is one storefront request per studio at a one-second delay, so it runs overnight.
+             * @default 3
+             */
+            studio_sync_hour: number;
+            /**
+             * Studio Enrich Batch Size
+             * @description Studios to look up on TPDB per run, for logos and descriptions. Adult Empire's studio pages carry neither.
+             * @default 20
+             */
+            studio_enrich_batch_size: number;
+        };
+        /**
+         * BrochureShelf
+         * @description One row of the brochure: a listing plus the titles to show in it.
+         */
+        BrochureShelf: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Total */
+            total: number;
+            /** Entries */
+            entries: components["schemas"]["CollectionEntryResponse"][];
+        };
+        /** BrochureStatus */
+        BrochureStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Total */
+            total: number;
+        };
         /** CalendarResponse */
         CalendarResponse: {
             /**
@@ -1786,6 +2792,13 @@ export interface components {
                 };
             };
         };
+        /** CancelResponse */
+        CancelResponse: {
+            /** Cancelled */
+            cancelled: number;
+            /** Message */
+            message: string;
+        };
         /** CleanSnapshotsResponse */
         CleanSnapshotsResponse: {
             /** Success */
@@ -1794,6 +2807,78 @@ export interface components {
             message: string;
             /** Deleted Files */
             deleted_files: string[];
+        };
+        /** CollectionDetail */
+        CollectionDetail: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Source */
+            source: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Year */
+            year: number | null;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Total */
+            total: number;
+            /** Winners */
+            winners: number;
+            /** Matched */
+            matched: number;
+            /** Requested */
+            requested: number;
+            /** Entries */
+            entries: components["schemas"]["CollectionEntryResponse"][];
+        };
+        /** CollectionEntryResponse */
+        CollectionEntryResponse: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Studio */
+            studio: string | null;
+            /** Performers */
+            performers: string[] | null;
+            /** Category */
+            category: string | null;
+            /** Year */
+            year: number | null;
+            /** Winner */
+            winner: boolean;
+            /** Tpdb Id */
+            tpdb_id: string | null;
+            /** Tpdb Kind */
+            tpdb_kind: string | null;
+            /** External Source */
+            external_source: string | null;
+            /** External Id */
+            external_id: string | null;
+            /** Rank */
+            rank: number | null;
+            /** Rating */
+            rating: number | null;
+            /** Duration Minutes */
+            duration_minutes: number | null;
+            /** Match State */
+            match_state: string;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Requested */
+            requested: boolean;
+            /** Actionable */
+            actionable: boolean;
+            /** Media Item Id */
+            media_item_id: number | null;
+            /** State */
+            state: string | null;
         };
         /** CollectionResponse */
         CollectionResponse: {
@@ -1808,6 +2893,52 @@ export interface components {
             numeric_id: number;
             /** Collected */
             collected: boolean;
+        };
+        /**
+         * CollectionSummary
+         * @description A collection without its entries, for the shelf view.
+         *
+         *     The counts are what make a collection legible at a glance, and they are
+         *     computed in SQL rather than by loading entries -- a year can hold several
+         *     hundred.
+         */
+        CollectionSummary: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Source */
+            source: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Year */
+            year: number | null;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Total */
+            total: number;
+            /** Winners */
+            winners: number;
+            /** Matched */
+            matched: number;
+            /** Requested */
+            requested: number;
+        };
+        /**
+         * CollectionsModel
+         * @description User-created collections: named lists curated by hand.
+         */
+        CollectionsModel: {
+            /**
+             * Sync To Tpdb
+             * @description Also mark titles in your ThePornDB account's collection when you add them here -- this is the only 'add to collection' action; there is no separate button for it. TPDB has one flat collection per account with no named lists, so only membership is mirrored -- not which collection a title is in. It is also one-way: TPDB's API has no delete, so removing a title here cannot un-collect it there.
+             * @default true
+             */
+            sync_to_tpdb: boolean;
         };
         /** CometConfig */
         CometConfig: {
@@ -1842,6 +2973,11 @@ export interface components {
              */
             ratelimit: boolean;
         };
+        /** ConnectBody */
+        ConnectBody: {
+            /** Auth Key */
+            auth_key?: string | null;
+        };
         /**
          * Container
          * @description Root model for container mapping file IDs to file information.
@@ -1863,6 +2999,12 @@ export interface components {
         };
         /** ContentModel */
         ContentModel: {
+            /** @description User collections */
+            collections?: components["schemas"]["CollectionsModel"];
+            /** @description Adult Empire brochure */
+            brochure?: components["schemas"]["BrochureModel"];
+            /** @description AVN award collections */
+            awards?: components["schemas"]["AwardsModel"];
             /** @description TPDB adult content subscriptions */
             tpdb?: components["schemas"]["TpdbContentModel"];
             /** @description Overseerr configuration */
@@ -1875,6 +3017,13 @@ export interface components {
             listrr?: components["schemas"]["ListrrModel"];
             /** @description Trakt configuration */
             trakt?: components["schemas"]["TraktModel"];
+        };
+        /** CreateCollectionRequest */
+        CreateCollectionRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
         };
         /**
          * CustomRank
@@ -1982,6 +3131,91 @@ export interface components {
             errors: string[];
         };
         /**
+         * DirectScrapingModel
+         * @description Which direct-site scrapers run, built-in and user-supplied alike.
+         *
+         *     A scraper is just a Python file defining a `DirectScraper` subclass --
+         *     see the Plugins tab and README for the interface. The built-in sites ship
+         *     with the image; anything dropped into `plugin_dir` is discovered the same
+         *     way and toggled the same way, so there is one mechanism, not two.
+         */
+        DirectScrapingModel: {
+            /**
+             * Plugin Dir
+             * @description Where to look for user-supplied scraper plugins, mapped from a host folder in docker-compose.yml. Changing this without changing the compose mount points at a path nothing is shared into.
+             * @default /riven/plugins
+             */
+            plugin_dir: string;
+            /**
+             * Disabled
+             * @description Scraper keys switched off, whether built-in or from a plugin file. Written by the Plugins tab's toggle, not meant to be edited here directly.
+             */
+            disabled?: string[];
+        };
+        /** DirectSearchResponse */
+        DirectSearchResponse: {
+            /** Query */
+            query: string;
+            /** Results */
+            results: components["schemas"]["DirectVideoModel"][];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /** DirectSourceModel */
+        DirectSourceModel: {
+            /** Label */
+            label: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Resolution */
+            resolution?: string | null;
+            /** Size */
+            size?: number | null;
+            /** Index */
+            index: number;
+        };
+        /** DirectSourcesResponse */
+        DirectSourcesResponse: {
+            /** Site */
+            site: string;
+            /** Video Id */
+            video_id: string;
+            /** Sources */
+            sources: components["schemas"]["DirectSourceModel"][];
+        };
+        /** DirectVideoModel */
+        DirectVideoModel: {
+            /** Site */
+            site: string;
+            /** Site Name */
+            site_name: string;
+            /** Video Id */
+            video_id: string;
+            /** Title */
+            title: string;
+            /** Page Url */
+            page_url: string;
+            /** Thumbnail */
+            thumbnail?: string | null;
+            /** Duration */
+            duration?: number | null;
+            /** Resolution */
+            resolution?: string | null;
+            /** Size */
+            size?: number | null;
+            /** Views */
+            views?: number | null;
+            /**
+             * Hd
+             * @default false
+             */
+            hd: boolean;
+            /** Relevance */
+            relevance?: number | null;
+        };
+        /**
          * DownloadActivityEntry
          * @description One row of the downloads view.
          */
@@ -2064,6 +3298,26 @@ export interface components {
              * @description Most recently completed items, newest first
              */
             recent: components["schemas"]["DownloadActivityEntry"][];
+            /**
+             * Page
+             * @description Current page number, applies to `active`
+             */
+            page: number;
+            /**
+             * Limit
+             * @description Rows per page, applies to `active`
+             */
+            limit: number;
+            /**
+             * Total Active
+             * @description Total in-flight rows matching the filter, across all pages
+             */
+            total_active: number;
+            /**
+             * Total Pages
+             * @description Total pages of `active` rows
+             */
+            total_pages: number;
         };
         /**
          * DownloaderUserInfo
@@ -2201,6 +3455,30 @@ export interface components {
         EventTypesResponse: {
             /** Event Types */
             event_types: string[];
+        };
+        /** ExitNodeBody */
+        ExitNodeBody: {
+            /** Node Id */
+            node_id?: string | null;
+        };
+        /** ExitNodeModel */
+        ExitNodeModel: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country?: string | null;
+            /**
+             * Online
+             * @default true
+             */
+            online: boolean;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
         };
         /**
          * ExtrasRankModel
@@ -2445,6 +3723,58 @@ export interface components {
              * @default http://localhost:8096
              */
             url: string;
+        };
+        /**
+         * JellyfinServerModel
+         * @description Serve the library to Jellyfin clients, so it plays on a television.
+         *
+         *     This is the opposite direction from `updaters.jellyfin`, which tells a real
+         *     Jellyfin server to rescan. Here Riven IS the server: clients authenticate
+         *     against it, browse the library out of Postgres, and stream through the
+         *     existing playback path. Nothing scans the VFS mount -- see AGENTS.md for
+         *     why letting a real media server near it is a trap.
+         *
+         *     There is no password field on purpose. The password is the Riven API key,
+         *     so this exposes no second credential and cannot grant access the existing
+         *     API would refuse.
+         */
+        JellyfinServerModel: {
+            /**
+             * Enabled
+             * @description Answer the Jellyfin client protocol. Log in from a Jellyfin app with the username below and your Riven API key as the password.
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Server Name
+             * @description Name clients show for this server in their server list
+             * @default Riven
+             */
+            server_name: string;
+            /**
+             * Username
+             * @description Username Jellyfin clients log in with. The password is always the Riven API key.
+             * @default riven
+             */
+            username: string;
+            /**
+             * Discovery
+             * @description Answer the UDP broadcast on port 7359 that lets Jellyfin apps find this server without typing its address.
+             * @default true
+             */
+            discovery: boolean;
+            /**
+             * Library Name
+             * @description Name of the single library clients see
+             * @default Library
+             */
+            library_name: string;
+            /**
+             * Advertised Url
+             * @description Address discovery hands to clients, e.g. http://192.168.1.10:8080. Leave blank to work it out from the network interface the client reached us on, which is right unless Riven sits behind a reverse proxy or a non-default port.
+             * @default
+             */
+            advertised_url: string;
         };
         /**
          * LanguagesConfig
@@ -2713,6 +4043,16 @@ export interface components {
              * @description Whether this release was rejected and will be skipped
              */
             is_blacklisted: boolean;
+            /**
+             * Is Downloaded
+             * @description Whether this release has a downloaded file, active or kept as an alternate
+             */
+            is_downloaded: boolean;
+            /**
+             * Is Downloading
+             * @description Whether this release is being fetched in the background
+             */
+            is_downloading: boolean;
         };
         /** ListrrModel */
         ListrrModel: {
@@ -3339,6 +4679,13 @@ export interface components {
              */
             rss?: string[];
         };
+        /** PluginsResponse */
+        PluginsResponse: {
+            /** Plugin Dir */
+            plugin_dir: string;
+            /** Scrapers */
+            scrapers: components["schemas"]["ScraperInfoModel"][];
+        };
         /**
          * PopularTagsResponse
          * @description Tag frequency across a sample of the newest scenes.
@@ -3357,6 +4704,13 @@ export interface components {
         PostProcessing: {
             /** @description Subtitle post-processing configuration */
             subtitle?: components["schemas"]["SubtitleConfig"];
+        };
+        /** PromoteResponse */
+        PromoteResponse: {
+            /** Entry Id */
+            entry_id: number;
+            /** Message */
+            message: string;
         };
         /** ProwlarrConfig */
         ProwlarrConfig: {
@@ -3471,6 +4825,17 @@ export interface components {
             webdl?: components["schemas"]["CustomRank"];
             webmux?: components["schemas"]["CustomRank"];
             xvid?: components["schemas"]["CustomRank"];
+        };
+        /** QueueReleaseResponse */
+        QueueReleaseResponse: {
+            /** Message */
+            message: string;
+            /** Item Id */
+            item_id: number;
+            /** Infohash */
+            infohash: string;
+            /** Cached */
+            cached: boolean;
         };
         /**
          * RTNSettingsModel
@@ -3636,6 +5001,15 @@ export interface components {
              */
             ids: number[];
         };
+        /** RequestResponse */
+        RequestResponse: {
+            /** Message */
+            message: string;
+            /** Entry Id */
+            entry_id: number;
+            /** Media Item Id */
+            media_item_id: number | null;
+        };
         /** ResetResponse */
         ResetResponse: {
             /** Message */
@@ -3720,6 +5094,23 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** ScraperInfoModel */
+        ScraperInfoModel: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Base Url */
+            base_url: string;
+            /** Kind */
+            kind: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Source File */
+            source_file?: string | null;
+            /** Error */
+            error?: string | null;
+        };
         /** ScraperModel */
         ScraperModel: {
             /**
@@ -3782,6 +5173,11 @@ export interface components {
             rarbg?: components["schemas"]["RarbgConfig"];
             /** @description AIOStreams configuration */
             aiostreams?: components["schemas"]["AIOStreamsConfig"];
+        };
+        /** ScraperToggleBody */
+        ScraperToggleBody: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** SelectFilesResponse */
         SelectFilesResponse: {
@@ -3965,6 +5361,70 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** StudioResponse */
+        StudioResponse: {
+            /** Id */
+            id: number;
+            /** Ae Id */
+            ae_id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string | null;
+            /** Title Count */
+            title_count: number | null;
+            /** Description */
+            description: string | null;
+            /** Logo Path */
+            logo_path: string | null;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Tpdb Site Id */
+            tpdb_site_id: string | null;
+            /** Saved */
+            saved: boolean;
+        };
+        /** StudioRow */
+        StudioRow: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Titles */
+            titles: components["schemas"]["StudioTitle"][];
+        };
+        /**
+         * StudioRows
+         * @description A studio's ranked rows, on their own.
+         *
+         *     Split from the studio itself because the two have wildly different costs.
+         *     The studio is a database read; the rows are two live page reads of
+         *     someone else's shop, serialised behind a one-request-a-second courtesy
+         *     delay, so they take several seconds and nothing can make them faster.
+         *     Serving them together meant the page could not paint until the storefront
+         *     answered -- a blank screen for the whole wait, to show a name and a logo
+         *     that were ready immediately.
+         */
+        StudioRows: {
+            /** Rows */
+            rows: components["schemas"]["StudioRow"][];
+        };
+        /**
+         * StudioTitle
+         * @description One row of a studio's ranked listing, before it has an entry.
+         */
+        StudioTitle: {
+            /** Rank */
+            rank: number;
+            /** Product Id */
+            product_id: string;
+            /** Title */
+            title: string;
+            /** Poster */
+            poster: string | null;
+        };
         /** SubtitleConfig */
         SubtitleConfig: {
             /**
@@ -4011,6 +5471,42 @@ export interface components {
             name: string;
             /** Count */
             count: number;
+        };
+        /**
+         * TailscaleModel
+         * @description Tailscale-specific wiring. Everything here is about reaching the sidecar.
+         *
+         *     The daemon runs as a separate container in userspace networking mode. That
+         *     is not a packaging preference -- kernel mode captures the whole container's
+         *     routing table, and there would be no way to send only the scrapers through
+         *     it while TPDB, the debrid provider and the library scan went out normally.
+         */
+        TailscaleModel: {
+            /**
+             * Auth Key
+             * @description A reusable Tailscale auth key. Leave empty to log in interactively from the VPN tab instead.
+             * @default
+             */
+            auth_key: string;
+            /**
+             * Socket Path
+             * @description Path to the sidecar's control socket, shared in by the compose file. This is how exit nodes and login are driven.
+             * @default /var/run/tailscale/tailscaled.sock
+             */
+            socket_path: string;
+            /**
+             * Proxy Url
+             * @description The sidecar's SOCKS5 address. socks5h rather than socks5 so DNS is resolved at the exit node -- resolving locally would leak every scraped hostname to the host's own resolver.
+             * @default socks5h://tailscale:1055
+             */
+            proxy_url: string;
+        };
+        /** ToggleResponse */
+        ToggleResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Message */
+            message: string;
         };
         /** TorBoxModel */
         TorBoxModel: {
@@ -4338,6 +5834,8 @@ export interface components {
             logo?: string | null;
             /** Favicon */
             favicon?: string | null;
+            /** Description */
+            description?: string | null;
             /** Parent Id */
             parent_id?: number | null;
             /** Network Id */
@@ -4576,6 +6074,83 @@ export interface components {
             /** Hdr Type */
             hdr_type?: string | null;
         };
+        /**
+         * VpnModel
+         * @description Route selected traffic through a VPN.
+         *
+         *     Deliberately selective. The two switches exist because searching a few
+         *     sites and streaming gigabytes through an exit node are different
+         *     propositions, and wanting one routed but not the other is a reasonable
+         *     position rather than an edge case.
+         *
+         *     Nothing else in the application is affected: TPDB, the debrid providers,
+         *     the indexers and the library scan always go out directly.
+         */
+        VpnModel: {
+            /**
+             * Enabled
+             * @description Route traffic through a VPN
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Provider
+             * @description Which VPN provider to use
+             * @default tailscale
+             * @constant
+             */
+            provider: "tailscale";
+            /**
+             * Route Scraping
+             * @description Send streaming-site searches through the VPN. If the tunnel is down, searches fail rather than falling back to a direct connection.
+             * @default false
+             */
+            route_scraping: boolean;
+            /**
+             * Route Streaming
+             * @description Send video playback from streaming sites through the VPN. This is the bandwidth-heavy one. If the tunnel is down, playback fails rather than falling back to a direct connection.
+             * @default false
+             */
+            route_streaming: boolean;
+            /** @description Tailscale settings */
+            tailscale?: components["schemas"]["TailscaleModel"];
+        };
+        /** VpnStatusResponse */
+        VpnStatusResponse: {
+            /** Provider */
+            provider: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Connected */
+            connected: boolean;
+            /** State */
+            state: string;
+            /** Detail */
+            detail?: string | null;
+            /** Auth Url */
+            auth_url?: string | null;
+            /** Hostname */
+            hostname?: string | null;
+            /** Exit Node */
+            exit_node?: string | null;
+            /** Exit Node Name */
+            exit_node_name?: string | null;
+            /**
+             * Exit Nodes
+             * @default []
+             */
+            exit_nodes: components["schemas"]["ExitNodeModel"][];
+            /**
+             * Route Scraping
+             * @default false
+             */
+            route_scraping: boolean;
+            /**
+             * Route Streaming
+             * @default false
+             */
+            route_streaming: boolean;
+        };
         /** ZileanConfig */
         ZileanConfig: {
             /**
@@ -4634,6 +6209,873 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RootResponse"];
+                };
+            };
+        };
+    };
+    list_collections: {
+        parameters: {
+            query?: {
+                /** @description Filter by source, e.g. 'avn' */
+                source?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_collection: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection: {
+        parameters: {
+            query?: {
+                winners_only?: boolean;
+                matched_only?: boolean;
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Collection key, e.g. 'avn-2026' */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_collection: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_collection_entry: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description CollectionEntry id */
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_brochure: {
+        parameters: {
+            query?: {
+                per_shelf?: number;
+                source?: string;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrochureShelf"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_entry: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionEntryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_collection_categories: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_avn_overview: {
+        parameters: {
+            query?: {
+                per_year?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvnOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_avn: {
+        parameters: {
+            query?: {
+                enabled?: boolean;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToggleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_avn_downloads: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_brochure_status: {
+        parameters: {
+            query?: {
+                source?: string;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrochureStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_brochure: {
+        parameters: {
+            query?: {
+                enabled?: boolean;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToggleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_to_collection: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Collection key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddToCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionEntryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_from_collection: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_studios: {
+        parameters: {
+            query?: {
+                saved?: boolean | null;
+                search?: string | null;
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_studio: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                studio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsave_studio: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                studio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_studio: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                studio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_studio_rows: {
+        parameters: {
+            query?: {
+                per_row?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                studio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioRows"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_studio_title: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_studios: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vpn_status: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VpnStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vpn_connect: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConnectBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VpnStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vpn_disconnect: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VpnStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vpn_set_exit_node: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExitNodeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VpnStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5291,6 +7733,253 @@ export interface operations {
             };
         };
     };
+    direct_search: {
+        parameters: {
+            query?: {
+                /** @description Free-text search */
+                query?: string | null;
+                /** @description Use this library item's title as the query */
+                item_id?: number | null;
+                /** @description Maximum results kept per site, after ranking */
+                limit?: number;
+                /** @description Comma-separated site keys */
+                sites?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectSearchResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_sources: {
+        parameters: {
+            query: {
+                site: string;
+                video_id: string;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectSourcesResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_stream: {
+        parameters: {
+            query: {
+                site: string;
+                video_id: string;
+                index?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_plugins: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginsResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_plugins_rescan: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginsResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_plugin_set_enabled: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScraperToggleBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginsResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_states: {
         parameters: {
             query?: {
@@ -5428,6 +8117,14 @@ export interface operations {
             query?: {
                 /** @description Maximum rows per section */
                 limit?: number;
+                /** @description Page number, applies to `active` only */
+                page?: number;
+                /** @description Restrict `active` to these states. Default is the usual in-flight set (Requested/Indexed/Scraped/Downloaded/Symlinked). */
+                states?: (components["schemas"]["States"] | components["schemas"]["StatesFilter"])[] | null;
+                /** @description Filter `active` by title, case-insensitive */
+                search?: string | null;
+                /** @description Sort order(s) for `active`. Multiple sorts allowed but only one per type (title or date). Defaults to oldest request first. */
+                sort?: components["schemas"]["SortOrderEnum"][] | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -5465,9 +8162,10 @@ export interface operations {
     };
     get_library_states: {
         parameters: {
-            query: {
+            query?: {
                 /** @description TPDB uuids to look up. Ids not in the library are omitted. */
                 tpdb_ids?: string[] | null;
+                /** @description Adult Empire product ids to look up. Brochure titles carry no TPDB id, so this is how they are addressed. */
                 adultempire_ids?: string[] | null;
                 /** @description Include per-file details and candidate releases. A detail page wants these; a poster grid does not. */
                 detailed?: boolean;
@@ -6015,6 +8713,120 @@ export interface operations {
             };
         };
     };
+    pause_all_downloads: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_all_downloads: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_all_downloads: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     composite_reindexer: {
         parameters: {
             query?: {
@@ -6152,6 +8964,7 @@ export interface operations {
                 imdb_id?: string | null;
                 /** @description The TPDB UUID of the media item */
                 tpdb_id?: string | null;
+                /** @description The Adult Empire product id of the media item */
                 adultempire_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;
@@ -6195,6 +9008,46 @@ export interface operations {
             };
         };
     };
+    queue_release: {
+        parameters: {
+            query: {
+                /** @description Infohash of the chosen release */
+                infohash: string;
+                item_id?: number | null;
+                tmdb_id?: string | null;
+                tvdb_id?: string | null;
+                imdb_id?: string | null;
+                tpdb_id?: string | null;
+                adultempire_id?: string | null;
+                media_type?: ("movie" | "tv") | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueReleaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_manual_session: {
         parameters: {
             query: {
@@ -6213,6 +9066,7 @@ export interface operations {
                 imdb_id?: string | null;
                 /** @description The TPDB UUID of the media item */
                 tpdb_id?: string | null;
+                /** @description The Adult Empire product id of the media item */
                 adultempire_id?: string | null;
                 /** @description The media type */
                 media_type?: ("movie" | "tv") | null;

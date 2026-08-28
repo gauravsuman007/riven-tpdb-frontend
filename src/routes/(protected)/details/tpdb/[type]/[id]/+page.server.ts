@@ -151,30 +151,11 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 };
 
 export const actions: Actions = {
-    /**
-     * Add to the TPDB collection. TPDB exposes no DELETE on this resource, so
-     * this is one-way -- the UI must not present it as a toggle.
-     */
-    collect: async ({ request, fetch, locals }) => {
-        const form = await request.formData();
-        const numericId = Number(form.get("numericId"));
-
-        if (!numericId) return fail(400, { message: "Missing TPDB id" });
-
-        const { error: err } = await providers.riven.POST("/api/v1/tpdb/collection/{numeric_id}", {
-            baseUrl: locals.backendUrl,
-            headers: { "x-api-key": locals.apiKey },
-            fetch,
-            params: { path: { numeric_id: numericId } }
-        });
-
-        if (err) {
-            logger.error("TPDB collection add failed", err);
-            return fail(502, { message: "Could not add to TPDB collection" });
-        }
-
-        return { collected: true };
-    },
+    // No standalone "add to TPDB collection" action anymore -- there is only
+    // one "Add to collection" button now (AddToCollection.svelte), and its
+    // backend endpoint syncs to TPDB itself (content.collections.sync_to_tpdb,
+    // on by default). `collected`, loaded above, is read-only status feedback
+    // for that automatic sync, not a separate action to trigger it.
 
     /**
      * Download a specific release instead of the one Riven picked.

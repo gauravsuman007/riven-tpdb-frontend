@@ -72,6 +72,7 @@
     // A card can offer playback only once the file exists and Riven knows
     // the item -- the stream endpoints are keyed on the Riven id, not TPDB's.
     let canPlay = $derived(!!data.riven_id && describeState(data.state).available);
+    let stateColor = $derived(data.state ? describeState(data.state).barColor : null);
 
     // Default container classes (w-full allows grid to control width)
     // Merged with passed className
@@ -91,7 +92,8 @@
         {isSelectable}
         isSelected={isSelectable && !!data.riven_id && selectStore?.has(data.riven_id!)}
         onSelectToggle={() => data.riven_id && selectStore?.toggle(data.riven_id!)}
-        onPlay={canPlay ? () => openPlayer(data.riven_id, data.title) : undefined}>
+        onPlay={canPlay ? () => openPlayer(data.riven_id, data.title) : undefined}
+        {stateColor}>
         {#snippet topRight()}
             {#if data.badge}
                 <Badge

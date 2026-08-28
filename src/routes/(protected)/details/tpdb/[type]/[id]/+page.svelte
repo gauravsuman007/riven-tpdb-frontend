@@ -193,22 +193,22 @@
                         size="default" />
 
                     <!--
-                        Local collections, which are a different thing from the
-                        TPDB collection below: these are named lists in Riven,
-                        while TPDB has exactly one flat collection per account.
+                        One button. Local collections are named lists in
+                        Riven; TPDB has exactly one flat, unnamed collection
+                        per account -- so adding here also marks the title
+                        collected on TPDB automatically (sync_to_tpdb, on by
+                        default), rather than needing a second explicit
+                        button for the same "I'm interested in this" action.
                     -->
                     <AddToCollection
                         tpdbId={data.tpdbUuid}
                         tpdbKind={data.type === "tv" ? "scene" : "movie"} />
 
-                    {#if data.numericId}
-                        <form method="POST" action="?/collect" use:enhance>
-                            <input type="hidden" name="numericId" value={data.numericId} />
-                            <Button type="submit" variant="outline" disabled={collected}>
-                                <BookmarkIcon class="mr-2 size-4" />
-                                {collected ? "In TPDB collection" : "Add to TPDB collection"}
-                            </Button>
-                        </form>
+                    {#if collected}
+                        <span
+                            class="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                            <BookmarkIcon class="size-3.5" /> Synced to TPDB
+                        </span>
                     {/if}
                 </div>
 
@@ -334,7 +334,20 @@
                                                             Downloaded
                                                         </Badge>
                                                     {/if}
-                                                    {#if release.is_preferred && !release.is_active}
+                                                    {#if release.is_downloaded && !release.is_active}
+                                                        <Badge
+                                                            variant="outline"
+                                                            class="border-emerald-500/50 text-[10px] text-emerald-500">
+                                                            Available alternate
+                                                        </Badge>
+                                                    {/if}
+                                                    {#if release.is_downloading}
+                                                        <Badge
+                                                            class="border-0 bg-amber-600/90 text-[10px] text-white">
+                                                            Downloading in background
+                                                        </Badge>
+                                                    {/if}
+                                                    {#if release.is_preferred && !release.is_active && !release.is_downloading}
                                                         <!--
                                                     "Selected", not
                                                     "downloading": picking a

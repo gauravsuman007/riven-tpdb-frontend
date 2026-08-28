@@ -18,6 +18,13 @@
         showContent?: boolean;
         /** When set, a play affordance is drawn over the poster. */
         onPlay?: () => void;
+        /**
+         * Tailwind background class for the state bar along the bottom edge,
+         * e.g. `describeState(item.state).barColor`. Omitted entirely when
+         * there is no state to show, rather than falling back to a color --
+         * a bar that is always present would stop meaning anything.
+         */
+        stateColor?: string | null;
     }
 
     let {
@@ -31,7 +38,8 @@
         class: className,
         topRight,
         showContent = true,
-        onPlay
+        onPlay,
+        stateColor = null
     }: Props = $props();
 </script>
 
@@ -114,6 +122,13 @@
             class="absolute top-3 right-3 z-20 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1">
             {@render topRight()}
         </div>
+    {/if}
+
+    <!-- State bar: a thin colored line at the poster's bottom edge, the same
+         "state at a glance" idea a Whisparr-style poster strip uses. Above the
+         content block in z-order so it stays visible under the text gradient. -->
+    {#if stateColor}
+        <div class={cn("absolute inset-x-0 bottom-0 z-20 h-1", stateColor)}></div>
     {/if}
 
     <!-- Content -->

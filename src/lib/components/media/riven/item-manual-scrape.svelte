@@ -249,6 +249,10 @@
         totalServices: 0,
         message: null
     });
+    // Per-scraper failures (network error, bad config, timeout), distinct
+    // from a scraper that ran fine and found nothing. Cleared at the start of
+    // each new scrape.
+    let scraperErrors = $state<{ service: string; message: string }[]>([]);
     let eventSourceRef = $state<EventSource | null>(null);
 
     const categoryIcons: Record<string, typeof Monitor> = {
@@ -882,6 +886,7 @@
             // Immediately move to step 2 to show streaming results
             step = 2;
             streams = [];
+            scraperErrors = [];
             streamingProgress = {
                 isStreaming: true,
                 currentService: null,
@@ -953,6 +958,20 @@
                         eventSourceRef = null;
                         loading = false;
                         toast.success(`Found ${data.total_streams} streams`);
+                    } else if (data.event === "service_error") {
+                        // Scoped to one scraper -- the others' results still
+                        // arrive normally, so this must not look like the
+                        // whole scrape failed.
+                        logger.error(`Scraper ${data.service} failed:`, data.message);
+                        scraperErrors = [
+                            ...scraperErrors,
+                            { service: data.service, message: data.message }
+                        ];
+                        streamingProgress = {
+                            ...streamingProgress,
+                            servicesCompleted: data.services_completed,
+                            totalServices: data.total_services
+                        };
                     } else if (data.event === "error") {
                         logger.error("Streaming scrape error:", data.message);
                         // Don't stop streaming, just log the error - partial results may still be useful
@@ -1691,6 +1710,16 @@
                                     </Badge>
                                 </div>
                             </div>
+                        </div>
+                    {/if}
+
+                    {#if scraperErrors.length}
+                        <div class="space-y-1 rounded-lg border border-red-900/40 bg-red-950/20 p-3">
+                            {#each scraperErrors as { service, message } (service)}
+                                <p class="text-xs text-red-300">
+                                    <span class="font-medium">{service}</span> failed: {message}
+                                </p>
+                            {/each}
                         </div>
                     {/if}
 

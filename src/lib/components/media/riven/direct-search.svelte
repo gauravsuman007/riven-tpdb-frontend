@@ -423,9 +423,13 @@
             {/if}
 
             {#if Object.keys(siteErrors).length}
-                <p class="text-muted-foreground mt-4 text-xs">
-                    Could not reach: {Object.keys(siteErrors).join(", ")}
-                </p>
+                <div class="mt-4 space-y-1 text-xs">
+                    {#each Object.entries(siteErrors) as [site, message] (site)}
+                        <p class="text-muted-foreground">
+                            <span class="text-destructive font-medium">{site}</span>: {message}
+                        </p>
+                    {/each}
+                </div>
             {/if}
         </div>
     </Collapsible.Content>
