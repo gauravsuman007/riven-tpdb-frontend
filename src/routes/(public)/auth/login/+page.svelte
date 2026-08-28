@@ -31,6 +31,8 @@
             registerForm: SuperValidated<Infer<typeof registerSchema>> | null;
             authProviders: Record<string, AuthProvider>;
             isFirstUser: boolean;
+            /** This client is on a network configured for passwordless login. */
+            localAccess: boolean;
         };
     } = $props();
 
@@ -196,6 +198,11 @@
                                             {/snippet}
                                         </Form.Control>
                                         <Form.FieldErrors />
+                                        {#if data.localAccess}
+                                            <Form.Description>
+                                                On this network you can leave the password empty.
+                                            </Form.Description>
+                                        {/if}
                                     </Form.Field>
                                     <Form.Button class="mt-4 w-full">Submit</Form.Button>
                                 </form>

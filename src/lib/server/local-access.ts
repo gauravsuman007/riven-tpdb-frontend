@@ -24,6 +24,19 @@ export type { LocalAccessConfig } from "$lib/utils/cidr";
 
 const logger = createScopedLogger("local-access");
 
+/**
+ * Which account a trusted-network client asked to be signed in as.
+ *
+ * Set by the login form when someone on a trusted network submits a username
+ * with an empty password. It is only ever a *selector*, never a credential:
+ * every request still re-checks that the connection comes from a trusted
+ * address before this is looked at, so the cookie grants nothing on its own
+ * and is worthless if it leaves the network. That is what makes it safe to
+ * store a plain username rather than something signed -- there is no
+ * authority in it to forge.
+ */
+export const LOCAL_ACCOUNT_COOKIE = "riven_local_account";
+
 const DISABLED: LocalAccessConfig = { enabled: false, networks: [], username: "" };
 
 // The backend is the source of truth, but asking it on every single request

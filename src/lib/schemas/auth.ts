@@ -5,7 +5,12 @@ export const loginSchema = z.object({
         .string()
         .min(3, "Username must be at least 3 characters long")
         .max(15, "Username must be at most 15 characters long"),
-    password: z.string().min(4, "Password must be at least 4 characters long")
+    // No minimum: an EMPTY password is meaningful on the login form -- it
+    // asks for the trusted-network sign-in, which the server grants only for
+    // an existing account on a configured local network (see
+    // `local-access.ts`). A short-but-not-empty password still fails, just at
+    // the server as bad credentials rather than here.
+    password: z.string()
 });
 export type LoginSchema = z.infer<typeof loginSchema>;
 

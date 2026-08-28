@@ -17,6 +17,24 @@ import { getGenericOAuthProviders } from "./oauth-utils";
 import { plexOAuth } from "./plex-oauth";
 import { generateSecret } from "$lib/helpers";
 
+/**
+ * Plex sign-in is OFF unless explicitly switched on.
+ *
+ * Upstream riven-frontend ships it enabled and opt-OUT (`DISABLE_PLEX`). This
+ * fork has no use for it -- there is no Plex in the pipeline at all -- so the
+ * polarity is inverted here rather than the integration being deleted. Keeping
+ * upstream's code paths intact and flipping one predicate is what lets Plex
+ * changes from upstream keep merging cleanly (see MAINTAINING.md); deleting
+ * plex-oauth.ts and its routes would turn every future upstream touch of them
+ * into a conflict, for no gain over never enabling them.
+ *
+ * `DISABLE_PLEX` is still honoured, so an upstream-shaped deployment that sets
+ * it does not suddenly get Plex back.
+ */
+function plexEnabled(e: Record<string, string | undefined>): boolean {
+    return e.ENABLE_PLEX === "true" && e.DISABLE_PLEX !== "true";
+}
+
 export const auth = betterAuth({
     secret: env.AUTH_SECRET || generateSecret(),
     baseURL: env.ORIGIN,
@@ -36,7 +54,7 @@ export const auth = betterAuth({
             enabled: true,
             allowDifferentEmails: true,
             trustedProviders: [
-                ...(env.DISABLE_PLEX !== "true" ? ["plex"] : []),
+                ...(plexEnabled(env) ? ["plex"] : []),
                 ...getGenericOAuthProviders(env).map((p) => p.providerId)
             ]
         },
@@ -74,7 +92,7 @@ export const auth = betterAuth({
         }),
         genericOAuth({
             config: [
-                ...(env.DISABLE_PLEX !== "true"
+                ...(plexEnabled(env)
                     ? [
                           plexOAuth({
                               clientId: env.PLEX_CLIENT_ID || "riven",
@@ -118,7 +136,7 @@ export function getAuthProviders() {
         };
     }
 
-    if (env.DISABLE_PLEX !== "true") {
+    if (plexEnabled(env)) {
         providers.plex = {
             enabled: true,
             disableSignup: env.ENABLE_PLEX_SIGNUP !== "true",

@@ -12,7 +12,11 @@ import { user } from "$lib/server/schema";
 import { eq, or } from "drizzle-orm";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
-import { isTrustedAddress, loadLocalAccessConfig } from "$lib/server/local-access";
+import {
+    LOCAL_ACCOUNT_COOKIE,
+    isTrustedAddress,
+    loadLocalAccessConfig
+} from "$lib/server/local-access";
 import { BUNDLE_PATH } from "$lib/server/jellyfin/bundle";
 import { jellyfinEnabled } from "$lib/server/jellyfin/config";
 
@@ -63,26 +67,36 @@ const localAccessSession = async (event: Parameters<Handle>[0]["event"]) => {
     // Read the account straight from the auth database. The admin API's user
     // listing needs an admin session to call, and by definition there is no
     // session here yet.
-    const account = config.username
-        ? db
-              .select()
-              .from(user)
-              .where(
-                  or(
-                      eq(user.username, config.username),
-                      eq(user.name, config.username),
-                      eq(user.email, config.username)
-                  )
-              )
-              .get()
-        : // No name configured: the oldest admin, so which account gets picked
-          // does not change as users are added.
-          db.select().from(user).where(eq(user.role, "admin")).orderBy(user.createdAt).get();
+    const byName = (name: string) =>
+        db
+            .select()
+            .from(user)
+            .where(or(eq(user.username, name), eq(user.name, name), eq(user.email, name)))
+            .get();
+
+    // A device that signed in through the login form with an empty password
+    // picked its own account; honour that over the configured default. The
+    // cookie is only a selector -- we are already past the trusted-address
+    // check above, and it is re-run on every request, so this cannot be used
+    // to reach anything from off the network.
+    const requested = event.cookies.get(LOCAL_ACCOUNT_COOKIE);
+
+    const account = requested
+        ? byName(requested)
+        : config.username
+          ? byName(config.username)
+          : // No name configured: the oldest admin, so which account gets
+            // picked does not change as users are added.
+            db.select().from(user).where(eq(user.role, "admin")).orderBy(user.createdAt).get();
 
     if (!account) {
         logger.error(
             `Local access is enabled for ${address} but no account matches ` +
-                (config.username ? `"${config.username}"` : "the admin role") +
+                (requested
+                    ? `the requested "${requested}"`
+                    : config.username
+                      ? `"${config.username}"`
+                      : "the admin role") +
                 "; falling back to the login screen"
         );
         return null;
