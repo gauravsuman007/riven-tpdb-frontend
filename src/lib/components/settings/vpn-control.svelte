@@ -173,7 +173,32 @@
         <p class="text-destructive text-xs">{failure}</p>
     {/if}
 
-    {#if status && !status.connected}
+    <!--
+        Gluetun has no login of its own: the provider credentials come from
+        the container's environment at startup, so the only action here is
+        starting the tunnel. Showing Tailscale's login-link and auth-key
+        controls for it would offer two things that cannot work.
+    -->
+    {#if status && !status.connected && status.provider === "gluetun"}
+        <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
+            <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                class="w-fit"
+                disabled={busy}
+                onclick={() => call("connect", { auth_key: null })}>
+                Start the tunnel
+            </Button>
+            <p class="text-muted-foreground text-xs">
+                Gluetun signs in with the credentials in its own container
+                environment. If this will not start, check the gluetun
+                container's logs — the failure is there, not here.
+            </p>
+        </div>
+    {/if}
+
+    {#if status && !status.connected && status.provider === "tailscale"}
         <!--
             Two clearly separate actions, not one button whose meaning changes
             with what happens to be typed. That ambiguity was the actual bug
@@ -242,7 +267,22 @@
         </div>
     {/if}
 
-    {#if status?.connected}
+    {#if status?.connected && status.provider === "gluetun"}
+        <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
+            <span class="text-xs font-medium">Where traffic leaves</span>
+            <p class="flex items-center gap-1.5 text-xs text-emerald-500">
+                <CheckIcon class="size-3" aria-hidden="true" />
+                {status.exit_node ?? status.hostname ?? "Connected"}
+            </p>
+            <p class="text-muted-foreground text-xs">
+                Gluetun picks its server from the container's own environment
+                (VPN_SERVER_COUNTRIES and similar) when it starts, so this is
+                changed in docker-compose.yml rather than here.
+            </p>
+        </div>
+    {/if}
+
+    {#if status?.connected && status.provider === "tailscale"}
         <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
             <span class="text-xs font-medium">Exit node</span>
             {#if status.exit_nodes.length}
