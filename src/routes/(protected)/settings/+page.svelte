@@ -1,6 +1,13 @@
 <script lang="ts">
     import type { ActionData, PageData } from "./$types";
-    import { Form, Field, HiddenIdPrefixInput, setFormContext, setValue } from "@sjsf/form";
+    import {
+        Form,
+        Field,
+        HiddenIdPrefixInput,
+        setFormContext,
+        setValue,
+        getValueSnapshot
+    } from "@sjsf/form";
     import { page } from "$app/state";
     import { createMeta, setupSvelteKitForm } from "@sjsf/sveltekit/client";
     import * as defaults from "$lib/components/settings/form-defaults";
@@ -11,12 +18,12 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import { cn } from "$lib/utils";
     import { buildSecretUiSchema } from "$lib/components/settings/secret-ui-schema";
-    import { Button } from "$lib/components/ui/button/index.js";
     import LoaderIcon from "@lucide/svelte/icons/loader-circle";
     import CheckIcon from "@lucide/svelte/icons/check";
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
     import PluginControl from "$lib/components/settings/plugin-control.svelte";
+    import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
 
     setShadcnContext();
 
@@ -76,7 +83,10 @@
                 if (stored) setValue(form, structuredClone(stored));
 
                 settle(true);
-                toast.success("Settings saved");
+                // Re-baseline against what the backend actually stored, so
+                // the watcher below does not immediately see the server's own
+                // normalisation as a fresh edit and save in a loop.
+                baseline = snapshot();
             } else {
                 settle(false);
                 // Name the fields that blocked the save. A rejected save
@@ -114,6 +124,71 @@
     const saveState = $derived(request.isProcessed ? "saving" : justSaved ? "saved" : "idle");
 
     setFormContext(form);
+
+    /**
+     * Autosave.
+     *
+     * There is no Save button: every field commits on its own, a short pause
+     * after the last edit. Three things make that safe rather than a save
+     * loop:
+     *
+     *  - the baseline is taken from the form's OWN first snapshot, not from
+     *    `initialValue`. The schema applies defaults on mount, so those two
+     *    differ, and baselining on `initialValue` would post the defaults
+     *    over your stored settings the moment the page loaded.
+     *  - after each save the baseline is retaken from the stored value, so
+     *    the backend normalising what it received (coercing a number, adding
+     *    a default) does not read back as a new edit.
+     *  - saves never overlap: while one is in flight the watcher waits, and
+     *    the debounce restarts, so a burst of typing is one request.
+     *
+     * The submit path itself is unchanged -- this calls `requestSubmit()` on
+     * the real <form>, so the integration's own enhanced handler still runs.
+     * Calling anything else would drop the form to a native POST, which the
+     * server parses down a different branch (see the comment on `<Form>`).
+     */
+    const AUTOSAVE_DEBOUNCE_MS = 900;
+
+    let formHost = $state<HTMLElement | undefined>();
+    let baseline: string | undefined;
+    let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function snapshot(): string | undefined {
+        try {
+            return JSON.stringify(getValueSnapshot(form));
+        } catch {
+            // A snapshot that cannot be serialised is not a reason to break
+            // the page; it only means this edit is not autosaved.
+            return undefined;
+        }
+    }
+
+    $effect(() => {
+        const current = snapshot();
+
+        if (current === undefined) return;
+
+        // First run: adopt whatever the form settled on as "already saved".
+        if (baseline === undefined) {
+            baseline = current;
+            return;
+        }
+
+        if (current === baseline) return;
+
+        // Let the in-flight save finish and re-baseline; this effect re-runs
+        // when it does.
+        if (request.isProcessed) return;
+
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(() => {
+            const form_ = formHost?.querySelector("form");
+
+            if (form_) form_.requestSubmit();
+        }, AUTOSAVE_DEBOUNCE_MS);
+
+        return () => clearTimeout(autosaveTimer);
+    });
 
     /**
      * Tabs are a presentation layer over one form: the schema still comes from
@@ -221,7 +296,7 @@
             {/each}
         </div>
 
-        <div class="settings-form">
+        <div class="settings-form" bind:this={formHost}>
             <!--
                 Nothing but `method` goes in `attributes`. These are spread
                 onto the <form> element and would override the integration's
@@ -261,6 +336,11 @@
                             <PluginControl />
                         {/if}
 
+                        <!-- Renders only inside the Jellyfin WebView shell. -->
+                        {#if tab.id === "general"}
+                            <NativeClientControl />
+                        {/if}
+
                         {#if tab.id === "scraping"}
                             <div
                                 class="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
@@ -284,23 +364,25 @@
                     </div>
                 {/each}
 
+                <!--
+                    Status, not a control: there is nothing to press. It stays
+                    sticky because "did that save?" is the question this bar
+                    exists to answer, and an indicator you have to scroll to
+                    find does not answer it.
+                -->
                 <div
-                    class="border-border/60 bg-background/80 sticky bottom-0 mt-8 flex items-center gap-3 border-t py-4 backdrop-blur-md">
-                    <Button type="submit" disabled={saveState === "saving"} class="min-w-32">
-                        {#if saveState === "saving"}
-                            <LoaderIcon class="mr-2 size-4 animate-spin" />
-                            Saving
-                        {:else if saveState === "saved"}
-                            <CheckIcon class="mr-2 size-4" />
-                            Saved
-                        {:else}
-                            <SaveIcon class="mr-2 size-4" />
-                            Save
-                        {/if}
-                    </Button>
-                    <p class="text-muted-foreground text-xs">
-                        Saves every tab, not just the one on screen.
-                    </p>
+                    class="border-border/60 bg-background/80 text-muted-foreground sticky bottom-0 mt-8 flex items-center gap-2 border-t py-4 text-xs backdrop-blur-md"
+                    aria-live="polite">
+                    {#if saveState === "saving"}
+                        <LoaderIcon class="size-3.5 animate-spin" />
+                        Saving changes
+                    {:else if saveState === "saved"}
+                        <CheckIcon class="size-3.5 text-emerald-500" />
+                        All changes saved
+                    {:else}
+                        <SaveIcon class="size-3.5" />
+                        Changes save automatically, across every tab
+                    {/if}
                 </div>
             </Form>
         </div>
