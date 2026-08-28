@@ -92,6 +92,10 @@
     let muted = $state(false);
     let currentTime = $state(0);
     let duration = $state(0);
+    // The file's real duration from ffprobe, bound from VideoPlayer. Preferred
+    // over `video.duration` whenever set -- see the prop's doc comment for why
+    // the element's own value can be badly wrong for a non-faststart file.
+    let probedDuration = $state<number | undefined>(undefined);
     let buffered = $state(0);
     let scrubbing = $state(false);
 
@@ -412,7 +416,8 @@
 
         paused = video.paused;
         muted = video.muted;
-        duration = Number.isFinite(video.duration) ? video.duration : 0;
+        duration =
+            probedDuration ?? (Number.isFinite(video.duration) ? video.duration : 0);
 
         // While scrubbing, the readout follows the finger, not the element --
         // otherwise it snaps back on every timeupdate mid-drag.
@@ -593,6 +598,7 @@
             reset();
             videoWidth = 0;
             videoHeight = 0;
+            probedDuration = undefined;
             showControls();
         }
     });
@@ -764,6 +770,7 @@
                         <VideoPlayer
                             itemId={target.itemId}
                             bind:element={video}
+                            bind:duration={probedDuration}
                             class="h-full w-full" />
                     {:else}
                         <VideoPlayer

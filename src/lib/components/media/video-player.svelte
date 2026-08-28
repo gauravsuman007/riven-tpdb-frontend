@@ -49,6 +49,20 @@
          * the only reliable way to keep fullscreen on the overlay's terms.
          */
         controls?: boolean;
+        /**
+         * The file's real duration, from ffprobe -- undefined until
+         * playback_info answers, or if it never got a usable probe.
+         *
+         * `video.duration` is not trustworthy on its own: for a file whose
+         * moov atom sits at the end (common for anything not remuxed with
+         * `+faststart`, which includes plain Bluray remuxes), the browser
+         * cannot see the real duration until that atom has downloaded --
+         * until then it estimates from whatever bytes have buffered, and
+         * that estimate can be wildly short or long, and can also keep
+         * changing as more buffers in. Callers should prefer this value over
+         * the element's own `duration` whenever it is set.
+         */
+        duration?: number;
     }
 
     interface PlaybackInfo {
@@ -70,7 +84,8 @@
         poster,
         class: className = "",
         element = $bindable(),
-        controls = false
+        controls = false,
+        duration = $bindable()
     }: VideoPlayerProps = $props();
 
     let videoElement: HTMLVideoElement | undefined = $state();
@@ -186,6 +201,9 @@
 
     onMount(async () => {
         if (src) {
+            // No library item behind this, so no probe to trust either --
+            // fall back to whatever the element itself reports.
+            duration = undefined;
             startExternal(src);
             loading = false;
             return;
@@ -198,6 +216,10 @@
 
             const info: PlaybackInfo = await response.json();
             console.log(`Playback mode: ${info.mode} -- ${info.reason}`);
+
+            // A duration of 0 means the probe failed rather than that the
+            // file is instant; only trust a positive value.
+            duration = info.probe.duration > 0 ? info.probe.duration : undefined;
 
             // The backend recommends; the browser decides, because only it
             // knows what it can actually decode.
@@ -216,6 +238,7 @@
             // Probing is an optimisation, not a requirement. If it fails, try
             // the cheap path and let the media element report a real error.
             console.error("Could not determine playback mode:", e);
+            duration = undefined;
             startDirect();
         } finally {
             loading = false;
