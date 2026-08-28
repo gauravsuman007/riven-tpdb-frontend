@@ -143,6 +143,8 @@ function userDto(): Json {
             RememberAudioSelections: true,
             RememberSubtitleSelections: true
         },
+        // Same story as Configuration above: the Kotlin SDK's UserPolicy
+        // serializer requires every one of these with no default.
         Policy: {
             IsAdministrator: true,
             IsHidden: false,
@@ -157,7 +159,25 @@ function userDto(): Json {
             EnableAllFolders: true,
             EnabledFolders: [],
             BlockedTags: [],
-            AccessSchedules: []
+            AccessSchedules: [],
+            EnableUserPreferenceAccess: true,
+            EnableRemoteControlOfOtherUsers: false,
+            EnableSharedDeviceControl: false,
+            EnableLiveTvManagement: false,
+            EnableLiveTvAccess: false,
+            ForceRemoteSourceTranscoding: false,
+            EnableSyncTranscoding: true,
+            EnableMediaConversion: false,
+            EnableAllDevices: true,
+            EnableAllChannels: true,
+            InvalidLoginAttemptCount: 0,
+            LoginAttemptsBeforeLockout: -1,
+            MaxActiveSessions: 0,
+            EnablePublicSharing: false,
+            RemoteClientBitrateLimit: 0,
+            AuthenticationProviderId: "org.jellyfin.sdk.model.api.AuthenticationProvider",
+            PasswordResetProviderId: "org.jellyfin.sdk.model.api.PasswordResetProvider",
+            SyncPlayAccess: "None"
         }
     };
 }
@@ -636,7 +656,12 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
         source.TranscodingContainer = "ts";
     }
 
-    return json({ MediaSources: [source], PlaySessionId: String(rivenId) });
+    // A bare decimal string here (the old behavior) is shaped exactly like
+    // the tail of one of our GUIDs once zero-padded, and real Jellyfin's own
+    // PlaySessionId is an opaque, unrelated random token -- never derived
+    // from the item id. Generating a real random id here removes any chance
+    // of it later being reinterpreted as one.
+    return json({ MediaSources: [source], PlaySessionId: crypto.randomUUID().replace(/-/g, "") });
 }
 
 async function dispatch(event: Ctx): Promise<Response> {
