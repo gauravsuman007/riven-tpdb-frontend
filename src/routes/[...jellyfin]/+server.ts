@@ -71,6 +71,21 @@ function requireAuth(event: Ctx, apiKey: string): identity.ClientIdentity {
     const id = identity.identify(event.request.headers, event.url.searchParams);
 
     if (!identity.isValidToken(id.token, apiKey)) {
+        // Temporary diagnostic: comparing lengths/prefixes only, never the
+        // full secret, to see whether the client is sending no token at all,
+        // a token of the wrong shape, or a token that merely doesn't match --
+        // three very different bugs.
+        console.log(
+            "[jellyfin] auth failed:",
+            "authorization=" + JSON.stringify(event.request.headers.get("authorization")),
+            "x-emby-authorization=" + JSON.stringify(event.request.headers.get("x-emby-authorization")),
+            "x-emby-token=" + JSON.stringify(event.request.headers.get("x-emby-token")),
+            "x-mediabrowser-token=" + JSON.stringify(event.request.headers.get("x-mediabrowser-token")),
+            "query-ApiKey=" + JSON.stringify(event.url.searchParams.get("ApiKey")),
+            "query-api_key=" + JSON.stringify(event.url.searchParams.get("api_key")),
+            "parsed-token-len=" + (id.token ? id.token.length : null),
+            "apiKey-len=" + apiKey.length
+        );
         error(401, "Invalid token");
     }
 
