@@ -26,6 +26,16 @@ declare global {
     interface Navigator {
         readonly userAgentData?: NavigatorUAData;
     }
+
+    // Bridge injected by lib/server/jellyfin/bundle.ts into the Jellyfin
+    // WebView shells (official Android app, LG webOS). Undefined everywhere
+    // else -- a normal browser never has this.
+    interface Window {
+        RivenNative?: {
+            available: () => boolean;
+            play: (itemId: string, startPositionTicks?: number) => boolean;
+        };
+    }
 }
 
 export {};

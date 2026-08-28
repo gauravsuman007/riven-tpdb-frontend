@@ -13,6 +13,8 @@ import { eq, or } from "drizzle-orm";
 import { createCustomFetch } from "$lib/custom-fetch";
 import { createScopedLogger } from "$lib/logger";
 import { isTrustedAddress, loadLocalAccessConfig } from "$lib/server/local-access";
+import { BUNDLE_PATH } from "$lib/server/jellyfin/bundle";
+import { jellyfinEnabled } from "$lib/server/jellyfin/config";
 
 const logger = createScopedLogger("hooks");
 
@@ -137,6 +139,28 @@ const configureLocals: Handle = async ({ event, resolve }) => {
     return resolve(event);
 };
 
+/**
+ * Give the Jellyfin WebView shells (official Android app, LG webOS) something
+ * to "connect" to. `JellyfinWebViewClient.shouldInterceptRequest()` marks the
+ * client connected the instant it sees a REQUEST PATH matching
+ * "main.<anything>.bundle.js" -- it never reads the response -- so every
+ * HTML page needs to reference that path or the shell sits on a spinner for
+ * 10s and reports the server unreachable. See `lib/server/jellyfin/bundle.ts`.
+ *
+ * Harmless for a normal browser: the script is inert unless
+ * `window.NativePlayer` exists.
+ */
+const injectJellyfinBundle: Handle = async ({ event, resolve }) => {
+    if (!jellyfinEnabled()) return resolve(event);
+
+    return resolve(event, {
+        transformPageChunk: ({ html }) =>
+            html.includes(BUNDLE_PATH)
+                ? html
+                : html.replace("</head>", `<script src="${BUNDLE_PATH}" defer></script></head>`)
+    });
+};
+
 const handleTVDBCookie: Handle = async ({ event, resolve }) => {
     const tvdbCookie = event.cookies.get("tvdb_cookie");
 
@@ -166,4 +190,9 @@ const handleTVDBCookie: Handle = async ({ event, resolve }) => {
     return resolve(event);
 };
 
-export const handle: Handle = sequence(configureLocals, betterAuthHandler, handleTVDBCookie);
+export const handle: Handle = sequence(
+    configureLocals,
+    betterAuthHandler,
+    handleTVDBCookie,
+    injectJellyfinBundle
+);

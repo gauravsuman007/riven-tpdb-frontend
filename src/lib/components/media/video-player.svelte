@@ -16,6 +16,7 @@
      */
     import { onMount, onDestroy } from "svelte";
     import Hls from "hls.js";
+    import { toGuid } from "$lib/utils/jellyfin-ids";
 
     interface VideoPlayerProps {
         /**
@@ -200,6 +201,18 @@
     }
 
     onMount(async () => {
+        // Running inside the Jellyfin WebView shell (official Android app,
+        // LG webOS) with its native player available: hand off to ExoPlayer
+        // instead of setting up this in-page <video> element. It takes over
+        // as a native overlay outside this component's DOM, resolving
+        // playback itself via /Items/{id}/PlaybackInfo + /Videos/{id}/stream
+        // -- see lib/server/jellyfin/bundle.ts for the bridge.
+        if (itemId && window.RivenNative?.available()) {
+            loading = false;
+            window.RivenNative.play(toGuid(itemId));
+            return;
+        }
+
         if (src) {
             // No library item behind this, so no probe to trust either --
             // fall back to whatever the element itself reports.
