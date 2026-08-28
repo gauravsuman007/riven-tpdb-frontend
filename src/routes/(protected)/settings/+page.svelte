@@ -150,7 +150,15 @@
         { id: "content", label: "Content", sections: ["content"] },
         { id: "scraping", label: "Scraping", sections: ["scraping", "ranking"] },
         { id: "downloaders", label: "Downloaders", sections: ["downloaders"] },
-        { id: "library", label: "Library", sections: ["filesystem", "stream", "updaters"] },
+        // `jellyfin_server` sits beside `updaters` deliberately: they are the
+        // two directions of the same integration. `updaters` tells a real
+        // media server to rescan; `jellyfin_server` makes Riven be the
+        // server instead, which is the one that works on a debrid library.
+        {
+            id: "library",
+            label: "Library",
+            sections: ["filesystem", "stream", "updaters", "jellyfin_server"]
+        },
         { id: "post", label: "Post-processing", sections: ["post_processing"] },
         // Its own tab rather than falling through to "Other". The schema
         // fields below are only half of it -- logging in and picking an exit
