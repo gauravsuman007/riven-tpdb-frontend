@@ -189,7 +189,12 @@ export function mediaSourceDto(
         // not guessed.
         IsInfiniteStream: false,
         RequiresLooping: false,
-        TranscodingSubProtocol: null,
+        // Non-nullable enum ("http" | "hls", lowercase) in the client's
+        // model -- null here throws JsonDecodingException even though the
+        // field has a default, because the SDK does not enable
+        // coerceInputValues. "http" is the direct-stream default; the
+        // transcoding branch overrides it with "hls".
+        TranscodingSubProtocol: "http",
         HasSegments: false,
         MediaStreams: [],
         MediaAttachments: [],

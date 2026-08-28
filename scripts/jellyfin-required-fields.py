@@ -51,11 +51,21 @@ def fetch_model(name: str, tag: str) -> str:
     ).stdout
 
 
-def required_fields(source: str) -> list[str]:
-    """Serialised names of every property declared without a default."""
+def model_fields(source: str) -> dict[str, dict]:
+    """
+    Every property, with what the client will and won't accept.
+
+    `required`  - declared without a default, so the key must be present.
+    `nullable`  - declared with a `?` type. A non-nullable field must never
+                  receive null, even when it HAS a default: kotlinx only
+                  coerces null-to-default under `coerceInputValues`, which
+                  the SDK does not enable. That is a separate failure mode
+                  from a missing key and produces a different exception
+                  (JsonDecodingException, not MissingFieldException).
+    """
     match = re.search(r"public data class \w+\s*\(", source)
     if not match:
-        return []
+        return {}
 
     depth, body = 1, []
     for char in source[match.end():]:
@@ -67,15 +77,19 @@ def required_fields(source: str) -> list[str]:
                 break
         body.append(char)
 
-    return [
-        prop.group(1)
-        for prop in re.finditer(
-            r'@SerialName\("([^"]+)"\)\s*(?:@[^\n]*\s*)*public val \w+:\s*'
-            r"([^,\n]+?)(\s*=\s*[^,\n]+)?,?\s*(?=@SerialName|\Z)",
-            "".join(body),
-        )
-        if prop.group(3) is None
-    ]
+    fields = {}
+    for prop in re.finditer(
+        r'@SerialName\("([^"]+)"\)\s*(?:@[^\n]*\s*)*public val \w+:\s*'
+        r"([^,\n]+?)(\s*=\s*[^,\n]+)?,?\s*(?=@SerialName|\Z)",
+        "".join(body),
+    ):
+        name, type_name, default = prop.group(1), prop.group(2).strip(), prop.group(3)
+        fields[name] = {
+            "required": default is None,
+            "nullable": type_name.endswith("?"),
+            "type": type_name,
+        }
+    return fields
 
 
 def get(base: str, path: str, key: str, method: str = "GET") -> dict:
@@ -94,7 +108,7 @@ def main() -> int:
     base, key = sys.argv[1].rstrip("/"), sys.argv[2]
     tag = sys.argv[3] if len(sys.argv) > 3 else "v1.7.1"
 
-    required = {name: required_fields(fetch_model(name, tag)) for name in MODELS}
+    models = {name: model_fields(fetch_model(name, tag)) for name in MODELS}
 
     user = get(base, "/Users/Me", key)
     items = get(base, "/Users/726976656e7470646200000000000002/Items?Limit=1", key)
@@ -115,10 +129,23 @@ def main() -> int:
 
     failed = False
     for name, payload in checks:
-        missing = [field for field in required.get(name, []) if field not in payload]
+        fields = models.get(name, {})
+        missing = [f for f, spec in fields.items() if spec["required"] and f not in payload]
+        # A non-nullable field given null fails just as hard as an absent one.
+        nulled = [
+            f
+            for f, spec in fields.items()
+            if not spec["nullable"] and payload.get(f, "") is None
+        ]
+
+        problems = []
         if missing:
+            problems.append(f"MISSING {missing}")
+        if nulled:
+            problems.append(f"NULL-BUT-NOT-NULLABLE {nulled}")
+        if problems:
             failed = True
-        print(f"{name}: {'MISSING ' + str(missing) if missing else 'OK'}")
+        print(f"{name}: {'; '.join(problems) if problems else 'OK'}")
 
     print("\nGAPS REMAIN" if failed else "\nAll required fields present.")
     return 1 if failed else 0
