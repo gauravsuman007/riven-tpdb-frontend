@@ -149,7 +149,10 @@
               : `query=${encodeURIComponent(title)}`;
 
         try {
-            const response = await fetch(`/api/v1/direct/search?${query}&limit=3`);
+            // No explicit limit: the backend falls back to the Plugins tab's
+            // "Results per site" setting, which is what the user actually
+            // wants adjustable without a code change.
+            const response = await fetch(`/api/v1/direct/search?${query}`);
             if (!response.ok) throw new Error(`Search returned ${response.status}`);
 
             const payload = await response.json();
