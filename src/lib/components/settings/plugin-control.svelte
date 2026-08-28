@@ -16,10 +16,13 @@
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
     import PuzzleIcon from "@lucide/svelte/icons/puzzle";
+    import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
+    import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import {
         getPlugins,
         rescanPlugins,
         setPluginEnabled,
+        setPluginOrder,
         type PluginsStatus
     } from "$lib/plugins";
 
@@ -74,6 +77,47 @@
 
     const builtins = $derived(status?.scrapers.filter((s) => s.kind === "builtin") ?? []);
     const plugins = $derived(status?.scrapers.filter((s) => s.kind === "plugin") ?? []);
+
+    /**
+     * Every working scraper in the order its results appear.
+     *
+     * Sites the user has placed come first in their stated order; everything
+     * else follows, so a newly-dropped plugin appears at the bottom rather
+     * than silently landing above a deliberate choice. Broken plugin files
+     * are left out -- they produce no results to order.
+     */
+    const ordered = $derived.by(() => {
+        const usable = (status?.scrapers ?? []).filter((s) => !s.error);
+        const stated = status?.site_order ?? [];
+        const byKey = new Map(usable.map((s) => [s.key, s]));
+
+        const placed = stated.map((key) => byKey.get(key)).filter((s) => s !== undefined);
+        const placedKeys = new Set(placed.map((s) => s!.key));
+
+        return [...placed, ...usable.filter((s) => !placedKeys.has(s.key))];
+    });
+
+    let reordering = $state(false);
+
+    async function move(index: number, delta: number) {
+        const next = ordered.map((s) => s!.key);
+        const target = index + delta;
+
+        if (target < 0 || target >= next.length) return;
+
+        [next[index], next[target]] = [next[target], next[index]];
+
+        reordering = true;
+        const result = await setPluginOrder(next);
+
+        if (result) {
+            status = result;
+            failure = null;
+        } else {
+            failure = "Could not save the scraper order";
+        }
+        reordering = false;
+    }
 </script>
 
 <div class="border-border/60 bg-muted/30 flex flex-col gap-4 rounded-lg border p-4">
@@ -150,6 +194,60 @@
                         onCheckedChange={(v: boolean) => toggle(scraper.key, v)} />
                 </div>
             {/if}
+        {/each}
+    </div>
+
+    <!--
+        Order is a separate list from the on/off switches above on purpose:
+        it spans built-ins and plugins together (the whole point is being able
+        to put a plugin above a built-in), and mixing a cross-cutting ordered
+        list into two type-grouped lists would make neither readable.
+    -->
+    <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
+        <div class="min-w-0">
+            <span class="text-xs font-medium text-muted-foreground">Result order</span>
+            <p class="text-muted-foreground text-xs">
+                Results appear in this order, best site first. A site higher in this list always
+                comes first, whatever the individual results' relevance scores say.
+            </p>
+        </div>
+        {#each ordered as scraper, index (scraper!.key)}
+            <div class="border-border/60 bg-background/60 flex items-center gap-3 rounded-lg border px-3 py-2">
+                <span
+                    class="text-muted-foreground w-5 shrink-0 text-right font-mono text-xs tabular-nums">
+                    {index + 1}
+                </span>
+                <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium">
+                        {scraper!.name}
+                        {#if !scraper!.enabled}
+                            <span class="text-muted-foreground text-xs">(off)</span>
+                        {/if}
+                    </p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="size-7"
+                        disabled={reordering || index === 0}
+                        onclick={() => move(index, -1)}>
+                        <ChevronUpIcon class="size-4" aria-hidden="true" />
+                        <span class="sr-only">Move {scraper!.name} up</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="size-7"
+                        disabled={reordering || index === ordered.length - 1}
+                        onclick={() => move(index, 1)}>
+                        <ChevronDownIcon class="size-4" aria-hidden="true" />
+                        <span class="sr-only">Move {scraper!.name} down</span>
+                    </Button>
+                </div>
+            </div>
         {/each}
     </div>
 </div>

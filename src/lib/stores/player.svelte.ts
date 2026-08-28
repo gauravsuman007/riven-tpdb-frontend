@@ -95,6 +95,17 @@ class PlayerStore {
     }
 
     openDirect(src: string, title: string, mimeType = "video/mp4", poster?: string) {
+        // External player chosen: hand over the scraped URL itself. Nothing
+        // about it is Jellyfin-shaped -- it is the site's own media URL --
+        // so the player has no session to carry and no reason to come back
+        // to us. `openExternal` returns false if the shell cannot do it, in
+        // which case fall through rather than leaving the tap dead.
+        if (window.RivenNative?.externalPlayerSelected?.()) {
+            const absolute = new URL(src, window.location.href).href;
+
+            if (window.RivenNative.openExternal(absolute)) return;
+        }
+
         if (nativePlayerAvailable()) {
             playDirectNative(src, mimeType);
             return;

@@ -43,6 +43,7 @@ import { jellyfinEnabled, jellyfinServerName, jellyfinUsername } from "$lib/serv
 import * as identity from "$lib/server/jellyfin/auth";
 import { LIBRARY_ID, SERVER_ID, USER_ID, fromGuid, toGuid } from "$lib/utils/jellyfin-ids";
 import { baseItem, mediaSourceDto } from "$lib/server/jellyfin/mapping";
+import { issuePlaySession, isValidPlaySession } from "$lib/server/jellyfin/play-sessions";
 import {
     getProgress,
     getProgressMany,
@@ -84,6 +85,28 @@ function requireAuth(event: Ctx, apiKey: string): identity.ClientIdentity {
 
     return id;
 }
+
+/**
+ * Auth for the stream routes specifically.
+ *
+ * Same as `requireAuth`, except a valid `playSessionId` for THIS item is also
+ * accepted. That is what lets an external player (VLC, MX Player) play a
+ * library title: the app builds its URL with no credentials at all -- see
+ * `play-sessions.ts` for the source trace -- so an api-key-only check 401s and
+ * the player reports "can't play this file".
+ */
+function requireStreamAuth(event: Ctx, apiKey: string, rivenId: number): void {
+    requireEnabled();
+
+    const playSession =
+        event.url.searchParams.get("playSessionId") ??
+        event.url.searchParams.get("PlaySessionId");
+
+    if (isValidPlaySession(playSession, rivenId)) return;
+
+    requireAuth(event, apiKey);
+}
+
 
 async function backendFetch(event: Ctx, path: string, init?: RequestInit): Promise<Response> {
     return event.fetch(`${event.locals.backendUrl}${path}`, {
@@ -590,33 +613,33 @@ const ROUTES: Route[] = [
 
     // --- Video delivery -- proxied to this app's own existing stream routes -
     route("GET", "/Videos/{itemId}/stream", async (event, match) => {
-        requireAuth(event, event.locals.apiKey);
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyStream(event, rivenId);
     }),
     route("GET", "/Videos/{itemId}/stream.{container}", async (event, match) => {
-        requireAuth(event, event.locals.apiKey);
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyStream(event, rivenId);
     }),
     route("GET", "/Videos/{itemId}/main.m3u8", async (event, match) => {
-        requireAuth(event, event.locals.apiKey);
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyHlsPlaylist(event, rivenId);
     }),
     route("GET", "/Videos/{itemId}/hls1/{playlist}/{seq}.ts", async (event, match) => {
-        requireAuth(event, event.locals.apiKey);
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyHlsSegment(event, rivenId, Number(match[3]));
     }),
     route("GET", "/Videos/{itemId}/segment/{seq}.ts", async (event, match) => {
-        requireAuth(event, event.locals.apiKey);
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyHlsSegment(event, rivenId, Number(match[2]));
     })
 ];
@@ -752,7 +775,7 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
     // PlaySessionId is an opaque, unrelated random token -- never derived
     // from the item id. Generating a real random id here removes any chance
     // of it later being reinterpreted as one.
-    return json({ MediaSources: [source], PlaySessionId: crypto.randomUUID().replace(/-/g, "") });
+    return json({ MediaSources: [source], PlaySessionId: issuePlaySession(rivenId) });
 }
 
 async function dispatch(event: Ctx): Promise<Response> {

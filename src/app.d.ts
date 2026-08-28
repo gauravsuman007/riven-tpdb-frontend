@@ -35,6 +35,10 @@ declare global {
             /** False when the human chose the "webui" player: use our own. */
             available: () => boolean;
             play: (itemId: string, startPositionTicks?: number) => boolean;
+            /** True when the human chose "external" (VLC/MX Player). */
+            externalPlayerSelected: () => boolean;
+            /** Hands a raw media URL to the OS chooser, bypassing Jellyfin. */
+            openExternal: (url: string) => boolean;
             /** Whether this shell can open its own native settings screen. */
             settingsAvailable: () => boolean;
             /** Opens them -- where the player type (web/integrated/external) lives. */

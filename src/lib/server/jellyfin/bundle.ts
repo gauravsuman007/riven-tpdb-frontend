@@ -159,6 +159,31 @@ export const BUNDLE_JS = `
       return true;
     },
 
+    /**
+     * Hand a RAW video URL straight to the OS, bypassing Jellyfin entirely.
+     *
+     * For direct-site videos there is no library item, so ExternalPlayer's
+     * own entry point cannot be used: initPlayer() takes item ids and
+     * resolves them through PlaybackInfo, which only exists for things in
+     * the library. NativeShell.openUrl() instead fires a plain
+     * Intent(ACTION_VIEW, uri) (ActivityEventHandler.kt:68-72), so Android
+     * offers whatever video players are installed and the chosen one gets
+     * nothing but the URL -- no session, no token, no dependency on the
+     * Jellyfin app still running.
+     */
+    externalPlayerSelected: externalAvailable,
+
+    openExternal: function (url) {
+      try {
+        if (!window.NativeShell || !window.NativeShell.openUrl) return false;
+        window.NativeShell.openUrl(url);
+        return true;
+      } catch (e) {
+        log("openUrl failed", e);
+        return false;
+      }
+    },
+
     // Opens the app's own settings screen, where the player type above is
     // chosen. This is the only way to reach those preferences: they are
     // native, per-device, and have no server-side representation, so a

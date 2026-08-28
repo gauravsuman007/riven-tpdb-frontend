@@ -20,6 +20,8 @@ export interface ScraperInfo {
 export interface PluginsStatus {
     plugin_dir: string;
     scrapers: ScraperInfo[];
+    /** Stated display order, best first. Empty means built-in defaults apply. */
+    site_order: string[];
 }
 
 export async function getPlugins(): Promise<PluginsStatus | null> {
@@ -53,6 +55,27 @@ export async function setPluginEnabled(key: string, enabled: boolean): Promise<P
                 body: JSON.stringify({ enabled })
             }
         );
+        if (!response.ok) return null;
+        return (await response.json()) as PluginsStatus;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Set the order results are displayed in, best first.
+ *
+ * The whole list is sent rather than a "move up" instruction, so the server
+ * never has to reconstruct what the user was looking at -- and two tabs open
+ * on this page cannot interleave two half-applied moves.
+ */
+export async function setPluginOrder(order: string[]): Promise<PluginsStatus | null> {
+    try {
+        const response = await fetch("/api/v1/direct/plugins/order", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ order })
+        });
         if (!response.ok) return null;
         return (await response.json()) as PluginsStatus;
     } catch {
