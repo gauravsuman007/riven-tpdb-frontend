@@ -25,11 +25,31 @@ git merge upstream/main
 
 ## What diverges
 
-| Kind | Count | Conflict risk |
-|---|---|---|
-| Modified | 14 | Real — the review list |
-| Deleted | 13 | Mechanical (modify/delete → stay deleted) |
-| Added | 6 | None |
+Run `./scripts/upstream-report.sh` for live counts; the shape is what
+matters here.
+
+| Kind | Conflict risk |
+|---|---|
+| Modified in place | Real — the review list |
+| Deleted | Mechanical (modify/delete → stay deleted) |
+| Added | None |
+
+### Where the risk actually is
+
+Measured, rather than assumed (`git diff --numstat` against the merge base,
+crossed with each file's upstream commit count):
+
+- **Roughly half of the fork's "modified" files have zero upstream history.**
+  They merge for free no matter how heavily they were changed.
+- **Lines we ADDED are cheap; lines we REMOVED are what conflicts.** The
+  largest edits in this fork are additive (`dashboard/+page.svelte` +533/-0,
+  `settings/+page.svelte` +388/-6, `hooks.server.ts` +132/-3) and are far
+  safer than their size suggests. The genuinely risky files are the ones
+  where upstream lines were *replaced*: `tmdb-now-playing.svelte` (+24/-47,
+  15 upstream commits), `explore/+page.svelte` (+21/-70, 8),
+  `lists/trending/{tv,movie}` (~+5/-60, 9 each).
+- Files deleted outright look enormous in a churn count (`-415`, `-190`)
+  but carry no content conflict at all — only a modify/delete prompt.
 
 The deletions are TMDB-only routes and helpers (`/api/tmdb/*`,
 `/api/ratings/*`, `/api/tvdb/search`, the TMDB resolver). They are gone on
@@ -57,6 +77,20 @@ npx openapi-typescript@7 "http://<backend>:8089/openapi.json" -o src/lib/provide
 3. **Prefer reusing upstream components over rewriting them.** The manual
    scrape dialog is upstream's, extended with one `tpdbId` prop rather than
    forked — so upstream fixes to it still apply.
+
+4. **Disable upstream features; do not excise them.** Plex sign-in is
+   removed from this fork by inverting one predicate to opt-in
+   (`plexEnabled()` in `src/lib/server/auth.ts`), leaving `plex-oauth.ts`
+   and `/api/plex/*` untouched. The login page shows no Plex button either
+   way, and every future upstream change to those files still merges. The
+   same reasoning applies to any upstream feature this fork does not want:
+   deleting it converts every later upstream touch into a conflict, and
+   buys nothing over never enabling it.
+
+5. **Add files rather than rewriting upstream ones**, when there is a
+   choice. This is the measured reason the fork is in good shape despite
+   its size: new files cannot conflict, and the fork's worst files are the
+   handful where upstream lines were replaced in place.
 
 ## Two traps specific to this codebase
 
