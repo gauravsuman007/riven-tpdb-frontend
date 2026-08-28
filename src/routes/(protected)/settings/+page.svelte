@@ -16,6 +16,7 @@
     import CheckIcon from "@lucide/svelte/icons/check";
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
+    import PluginControl from "$lib/components/settings/plugin-control.svelte";
 
     setShadcnContext();
 
@@ -155,7 +156,11 @@
         // fields below are only half of it -- logging in and picking an exit
         // node are live actions against the daemon, so this tab also carries
         // the control panel above the form.
-        { id: "vpn", label: "VPN", sections: ["vpn"] }
+        { id: "vpn", label: "VPN", sections: ["vpn"] },
+        // Its own tab, not a sub-section of Scraping: enabling/disabling a
+        // scraper is a live toggle against the plugin registry, same reason
+        // the VPN tab carries a control panel alongside its generated form.
+        { id: "plugins", label: "Plugins", sections: ["direct_scraping"] }
     ] as const;
 
     /**
@@ -242,6 +247,10 @@
                         -->
                         {#if tab.id === "vpn"}
                             <VpnControl />
+                        {/if}
+
+                        {#if tab.id === "plugins"}
+                            <PluginControl />
                         {/if}
 
                         {#if tab.id === "scraping"}
