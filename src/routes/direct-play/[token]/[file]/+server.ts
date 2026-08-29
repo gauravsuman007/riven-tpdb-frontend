@@ -1,0 +1,81 @@
+import { error } from "@sveltejs/kit";
+import type { RequestHandler } from "./$types";
+import { env } from "$env/dynamic/private";
+import { resolveDirectToken } from "$lib/server/direct-tokens";
+
+/**
+ * A direct-scrape video, addressed so another Android app can actually open it.
+ *
+ * Two things about this URL are load-bearing, and neither is cosmetic.
+ *
+ * 1. IT CARRIES ITS OWN AUTHORISATION. Deliberately outside `(protected)`:
+ *    the caller is a different application with no session cookie. The token
+ *    in the path is the credential, minted from an already-authenticated
+ *    request (see `direct-tokens.ts`).
+ *
+ * 2. IT ENDS IN A REAL VIDEO EXTENSION. jellyfin-android hands the URL to
+ *    `Intent(ACTION_VIEW, uri)` with NO MIME type set
+ *    (ActivityEventHandler.kt), so Android has only the URL to resolve
+ *    against. Video players register intent filters on path patterns like
+ *    `.*\\.mp4`; a query-string URL with no extension matches none of them, so
+ *    the only handler left is the browser -- which is why this previously
+ *    opened a download instead of a player chooser.
+ */
+export const GET: RequestHandler = async ({ params, request, fetch }) => {
+    const grant = resolveDirectToken(params.token);
+
+    if (!grant) error(404, "This link has expired");
+
+    const target =
+        `${env.BACKEND_URL}/api/v1/direct/stream` +
+        `?site=${encodeURIComponent(grant.site)}` +
+        `&video_id=${encodeURIComponent(grant.videoId)}` +
+        `&index=${encodeURIComponent(grant.index)}`;
+
+    const headers: HeadersInit = { "x-api-key": env.BACKEND_API_KEY ?? "" };
+    const range = request.headers.get("range");
+
+    // Forwarded so the player can seek. Without it a range request is
+    // answered 200-with-everything, and players that seek before playing
+    // simply fail.
+    if (range) headers["Range"] = range;
+
+    let upstream: Response;
+
+    try {
+        upstream = await fetch(target, { headers });
+    } catch {
+        error(502, "Could not reach the source");
+    }
+
+    if (!upstream.ok && upstream.status !== 206) {
+        error(upstream.status, "Source refused the request");
+    }
+
+    const out = new Headers();
+
+    for (const name of [
+        "content-type",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+        "cache-control"
+    ]) {
+        const value = upstream.headers.get(name);
+        if (value) out.set(name, value);
+    }
+
+    // Some of these CDNs answer application/octet-stream, which Android treats
+    // as a download rather than media. The extension in the path already says
+    // what this is; say it in the header too.
+    if (!out.has("content-type") || out.get("content-type") === "application/octet-stream") {
+        out.set("content-type", "video/mp4");
+    }
+
+    if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
+
+    return new Response(upstream.body, {
+        status: upstream.status,
+        headers: out
+    });
+};

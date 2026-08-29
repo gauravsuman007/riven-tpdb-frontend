@@ -46,6 +46,12 @@ declare global {
              */
             enableFullscreen: () => boolean;
             disableFullscreen: () => boolean;
+            /**
+             * Whether the client can be sent back to its server-selection
+             * screen. False outside the Jellyfin shell.
+             */
+            serverSelectionAvailable: () => boolean;
+            openServerSelection: () => boolean;
             /** Whether this shell can open its own native settings screen. */
             settingsAvailable: () => boolean;
             /** Opens them -- where the player type (web/integrated/external) lives. */

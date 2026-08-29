@@ -255,6 +255,31 @@ export const BUNDLE_JS = `
 
       try { host.openClientSettings(); return true; }
       catch (e) { log("openClientSettings failed", e); return false; }
+    },
+
+    /**
+     * Send the client back to its own "choose a server" screen.
+     *
+     * The only way out of this app when the client is pointed straight at it.
+     * Signing out lands on this app's login page, which inside the WebView is
+     * a dead end: there is no address bar, no back gesture out of the web
+     * content, and no other route to the client's server list. Reported
+     * exactly that way.
+     *
+     * NativeInterface.openServerSelection() (NativeInterface.kt:177) is what
+     * the client itself uses for this.
+     */
+    serverSelectionAvailable: function () {
+      var host = shell();
+      return !!(host && host.openServerSelection);
+    },
+
+    openServerSelection: function () {
+      var host = shell();
+      if (!host || !host.openServerSelection) return false;
+
+      try { host.openServerSelection(); return true; }
+      catch (e) { log("openServerSelection failed", e); return false; }
     }
   };
 

@@ -127,10 +127,53 @@ class PlayerStore {
         // so the player has no session to carry and no reason to come back
         // to us. `openExternal` returns false if the shell cannot do it, in
         // which case fall through rather than leaving the tap dead.
-        if (window.RivenNative?.externalPlayerSelected?.()) {
-            const absolute = new URL(src, window.location.href).href;
+        if (window.RivenNative?.externalPlayerSelected?.() && options.site && options.videoId) {
+            /*
+                Minted rather than handing over `src` directly. That URL is
+                cookie-authenticated and extensionless, so another app can
+                neither fetch it nor be matched to it by Android's intent
+                resolver -- which sent it to the browser as a download. The
+                minted one carries its own token and ends in .mp4.
 
-            if (window.RivenNative.openExternal(absolute)) return;
+                Async, so the in-page fallbacks below cannot run first: the
+                await is inside an immediately-invoked async function and this
+                returns straight after scheduling it.
+            */
+            const query = new URLSearchParams({
+                site: options.site,
+                videoId: options.videoId,
+                title: title || "video"
+            });
+
+            void (async () => {
+                try {
+                    const response = await fetch(`/api/direct/external_url?${query}`);
+
+                    if (response.ok) {
+                        const { url } = await response.json();
+
+                        if (url && window.RivenNative?.openExternal(url)) return;
+                    }
+                } catch {
+                    // Fall through to the in-page player below.
+                }
+
+                this.current = {
+                    kind: "direct",
+                    src,
+                    mimeType,
+                    title,
+                    poster,
+                    site: options.site,
+                    videoId: options.videoId,
+                    contextTitle: options.contextTitle,
+                    duration: options.duration,
+                    resolution: options.resolution,
+                    size: options.size
+                };
+            })();
+
+            return;
         }
 
         if (nativePlayerAvailable()) {

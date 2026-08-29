@@ -22,28 +22,10 @@
     import { getContext } from "svelte";
     import Tooltip from "./tooltip.svelte";
     import ThemeSwitcher from "./theme-switcher.svelte";
-    import { onMount } from "svelte";
-    import Grid from "@lucide/svelte/icons/layout-grid";
+    import ShellExit from "$lib/components/shell-exit.svelte";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
-
-    /*
-        Only rendered when this app is being served through
-        jellyfin-client-multiplexer, which sets `x-multiplexer-app` on the
-        request it proxies. Without a way back, entering an app inside the
-        Jellyfin client is one-way: the client has no address bar and no back
-        affordance of its own.
-
-        /apps rather than / on purpose -- once this app is the active one, /
-        is THIS app's home page, which is what the Home link above should
-        keep doing.
-    */
-    let behindMultiplexer = $state(false);
-
-    onMount(() => {
-        behindMultiplexer = document.documentElement.dataset.multiplexer === "1";
-    });
 
     const navItems = [
         { href: "/", icon: Home, label: "Home" },
@@ -71,22 +53,12 @@
         </div>
     </div>
     <nav class="mt-4 flex flex-col items-center gap-3.5" aria-label="Main Navigation">
-        {#if behindMultiplexer}
-            <Tooltip>
-                {#snippet trigger()}
-                    <a
-                        href="/apps"
-                        data-sveltekit-reload
-                        class="hover:bg-accent/80 group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors"
-                        aria-label="Switch app">
-                        <Grid class="size-5" />
-                    </a>
-                {/snippet}
-                {#snippet content()}
-                    <p>Switch app</p>
-                {/snippet}
-            </Tooltip>
-        {/if}
+        <!--
+            Covers both "behind the multiplexer" and "pointed straight at this
+            app from the Jellyfin client" -- see shell-exit.svelte. Renders
+            nothing in an ordinary browser.
+        -->
+        <ShellExit />
         {#each navItems as item (item.href)}
             <Tooltip>
                 {#snippet trigger()}

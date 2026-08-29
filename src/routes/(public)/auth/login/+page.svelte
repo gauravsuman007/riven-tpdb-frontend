@@ -1,6 +1,7 @@
 <script lang="ts">
     import Mountain from "@lucide/svelte/icons/mountain";
     import * as Card from "$lib/components/ui/card/index.js";
+    import ShellExit from "$lib/components/shell-exit.svelte";
     import * as Form from "$lib/components/ui/form/index.js";
     import * as Tabs from "$lib/components/ui/tabs/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
@@ -307,6 +308,17 @@
                             </div>
                         </Card.Content>
                     </Card.Root>
+
+                    <!--
+                        The way out. Signing out inside the Jellyfin client
+                        lands here, and the WebView has no address bar and no
+                        back gesture out of the web content -- so without this
+                        the only escape from the login page was force-quitting
+                        the client. Renders nothing in an ordinary browser.
+                    -->
+                    <div class="mt-4 flex justify-center">
+                        <ShellExit labelled />
+                    </div>
                 </Tabs.Content>
                 {#if isSignupEnabled && registerForm && registerEnhance && $registerFormData}
                     <Tabs.Content value="register">

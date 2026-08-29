@@ -669,8 +669,22 @@
             let url: string | null = null;
 
             if (target.kind === "direct") {
-                // Already a URL this server proxies; nothing to mint.
-                url = new URL(target.src, window.location.href).href;
+                /*
+                    NOT the in-page player's own URL. That one is
+                    cookie-authenticated and has no file extension, so another
+                    app cannot fetch it and Android cannot tell it is a video
+                    -- between them, exactly why this used to open a download
+                    in a browser instead of a player chooser. Mint one that
+                    carries its own token and ends in .mp4.
+                */
+                const query = new URLSearchParams({
+                    site: target.site ?? "",
+                    videoId: target.videoId ?? "",
+                    title: target.title ?? "video"
+                });
+                const response = await fetch(`/api/direct/external_url?${query}`);
+
+                if (response.ok) url = (await response.json()).url ?? null;
             } else {
                 /*
                     A library item's own player URL is cookie-authenticated
