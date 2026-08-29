@@ -167,11 +167,24 @@ const configureLocals: Handle = async ({ event, resolve }) => {
 const injectJellyfinBundle: Handle = async ({ event, resolve }) => {
     if (!jellyfinEnabled()) return resolve(event);
 
+    /*
+        `x-multiplexer-app` is set by jellyfin-client-multiplexer on every
+        request it proxies. Marked on <html> so the UI can offer a way back to
+        the app picker -- inside the Jellyfin client there is no address bar
+        and no other way out.
+    */
+    const viaMultiplexer = event.request.headers.has("x-multiplexer-app");
+
     return resolve(event, {
-        transformPageChunk: ({ html }) =>
-            html.includes(BUNDLE_PATH)
+        transformPageChunk: ({ html }) => {
+            const withBundle = html.includes(BUNDLE_PATH)
                 ? html
-                : html.replace("</head>", `<script src="${BUNDLE_PATH}" defer></script></head>`)
+                : html.replace("</head>", `<script src="${BUNDLE_PATH}" defer></script></head>`);
+
+            return viaMultiplexer
+                ? withBundle.replace("<html", '<html data-multiplexer="1"')
+                : withBundle;
+        }
     });
 };
 
