@@ -15,6 +15,8 @@
     import PageShell from "$lib/components/page-shell.svelte";
     import PlayIcon from "@lucide/svelte/icons/play";
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
+    import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import TpdbLink from "$lib/components/media/riven/tpdb-link.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { openPlayer } from "$lib/stores/player.svelte";
@@ -23,6 +25,8 @@
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
     const item = $derived(data.item as Record<string, any>);
+    const libraryState = $derived(data.libraryState ?? null);
+    const releases = $derived(libraryState?.streams ?? []);
     const status = $derived(item.state ? describeState(item.state) : null);
     const performers = $derived((item.performers ?? []).filter((p: any) => p));
     const entry = $derived(item.filesystem_entry ?? null);
@@ -109,7 +113,28 @@
             </div>
         {/if}
 
-        <div class="mt-8">
+        <div class="mt-8 flex flex-col gap-2">
+            <!--
+                The two controls this page shipped without. A title reaches
+                this route precisely because TPDB had no confident match for
+                it, which makes it MORE likely to need a manual scrape and a
+                look at the release list, not less.
+            -->
+            <CandidateReleases {releases} rivenId={item.id} />
+
+            <!--
+                Addressed by riven item id, not a TPDB uuid: this page exists
+                for titles that have no TPDB record, so that is the one
+                identifier guaranteed to be present.
+            -->
+            <ItemManualScrape
+                itemId={String(item.id)}
+                title={item.title}
+                externalId=""
+                mediaType="movie"
+                variant="outline"
+                size="default" />
+
             <DirectSearch title={item.title} itemId={item.id} />
         </div>
     </div>

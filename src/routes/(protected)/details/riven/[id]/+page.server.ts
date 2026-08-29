@@ -37,11 +37,22 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         error(404, "Item not found");
     }
 
-    // Rendered straight from the item. The TPDB page reaches for
-    // `library_states` because it starts from a TPDB uuid and has to find the
-    // library row behind it; here the library row IS the source, and it
-    // already carries state and filesystem_entry.
-    return { item: response.data as Record<string, unknown> };
+    /*
+        Files and candidate releases come from the same `library_states` call
+        the TPDB page makes, keyed by item id rather than TPDB uuid. Asked for
+        separately from the item itself because that endpoint is what builds
+        the release list, and rendering releases from two different shapes on
+        two pages is exactly how they drift apart.
+    */
+    const library = await providers.riven.GET("/api/v1/items/library_states", {
+        ...auth,
+        params: { query: { item_ids: [id], detailed: true } }
+    });
+
+    return {
+        item: response.data as Record<string, unknown>,
+        libraryState: library.data?.states?.[String(id)] ?? null
+    };
 };
 
 export const actions = {

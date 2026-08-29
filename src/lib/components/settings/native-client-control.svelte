@@ -22,6 +22,16 @@
 
     onMount(() => {
         available = window.RivenNative?.settingsAvailable() ?? false;
+
+        // The bridge script is deferred, so on a cold load straight to this
+        // page hydration can beat it and latch `available` to false for good.
+        // One re-check on the next frame is enough -- the same race made the
+        // player's external-player button disappear permanently.
+        if (!available) {
+            requestAnimationFrame(() => {
+                available = window.RivenNative?.settingsAvailable() ?? false;
+            });
+        }
     });
 </script>
 

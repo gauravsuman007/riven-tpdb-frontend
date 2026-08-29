@@ -26,7 +26,7 @@
      * Zoom runs from fit (the whole frame, letterboxed) to cover (the bars
      * exactly gone) and stops there. Zooming past cover only discards picture.
      */
-    import { onDestroy, onMount } from "svelte";
+    import { onDestroy } from "svelte";
     import { player } from "$lib/stores/player.svelte";
     import { toast } from "svelte-sonner";
     import VideoPlayer from "./video-player.svelte";
@@ -638,7 +638,23 @@
     */
     let canOpenExternal = $state(false);
 
-    onMount(() => {
+    /*
+        Re-checked every time the player opens, not once on mount.
+
+        This component mounts with the protected layout, which can happen
+        BEFORE the bridge exists: the shell script is injected with `defer`,
+        so it runs after parsing, and hydration can win that race. Checking
+        once at mount latched this to false and the button never appeared --
+        reported as "the open in external app button is missing", and it was,
+        permanently, for the whole session.
+
+        By the time a video is actually opened the bundle has long since run,
+        so keying this on `target` is both correct and the latest possible
+        moment to ask.
+    */
+    $effect(() => {
+        if (!target) return;
+
         canOpenExternal = !!window.RivenNative?.openExternal;
     });
 

@@ -8348,6 +8348,8 @@ export interface operations {
                 tpdb_ids?: string[] | null;
                 /** @description Adult Empire product ids to look up. Brochure titles carry no TPDB id, so this is how they are addressed. */
                 adultempire_ids?: string[] | null;
+                /** @description Riven item ids to look up. Needed for a title with no external id at all -- one TPDB has no confident match for -- which is addressable only by its own id. */
+                item_ids?: number[] | null;
                 /** @description Include per-file details and candidate releases. A detail page wants these; a poster grid does not. */
                 detailed?: boolean;
                 api_key?: string | null;
