@@ -28,10 +28,12 @@
      */
     import { onDestroy } from "svelte";
     import { player } from "$lib/stores/player.svelte";
+    import { toGuid } from "$lib/utils/jellyfin-ids";
     import VideoPlayer from "./video-player.svelte";
     import XIcon from "@lucide/svelte/icons/x";
     import PlayIcon from "@lucide/svelte/icons/play";
     import PauseIcon from "@lucide/svelte/icons/pause";
+    import ShareIcon from "@lucide/svelte/icons/share";
     import Volume2Icon from "@lucide/svelte/icons/volume-2";
     import VolumeXIcon from "@lucide/svelte/icons/volume-x";
     import MaximizeIcon from "@lucide/svelte/icons/maximize";
@@ -591,6 +593,29 @@
         }
     }
 
+    
+    /**
+     * Whether we can open the current video in an external player.
+     * True when: (1) external player is available on the Jellyfin shell,
+     * or (2) no shell (browser playback).
+     */
+    let canOpenExternal = $derived(!!target);
+
+    function openInExternal() {
+        if (!target) return;
+
+        if (target.kind === "library" && "itemId" in target) {
+            // Library item: use the Jellyfin bridge's external player flow
+            window.RivenNative?.play(toGuid(target.itemId));
+        } else if (target.kind === "direct" && "src" in target) {
+            // Direct web link: hand over the scraped URL to the external player
+            const absolute = new URL(target.src, window.location.href).href;
+            if (window.RivenNative?.externalPlayerSelected?.()) {
+                window.RivenNative.openExternal(absolute);
+            }
+        }
+    }
+
     $effect(() => {
         // Reset zoom whenever a different title is opened, so one title's zoom
         // does not carry into the next.
@@ -880,6 +905,17 @@
                         {:else}
                             <PauseIcon class="size-6" />
                         {/if}
+                    </button>
+
+
+                    <button
+                        type="button"
+                        onclick={openInExternal}
+                        title="Open in external player"
+                        aria-label="Open in external player"
+                        class="rounded-lg p-1.5 text-white/90 hover:bg-white/10 hover:text-white"
+                        class:hidden={!canOpenExternal}>
+                        <ShareIcon class="size-5" />
                     </button>
 
                     <button
