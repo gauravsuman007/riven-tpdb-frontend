@@ -127,7 +127,7 @@
             <div class="min-w-0">
                 <p class="text-sm font-medium">Direct-scrape scrapers</p>
                 <p class="text-muted-foreground text-xs">
-                    Built-in sites, plus anything dropped into
+                    Every site scraper dropped into
                     <code class="rounded bg-background px-1 py-0.5 font-mono text-[11px]">
                         {status?.plugin_dir ?? "…"}
                     </code>
@@ -145,21 +145,23 @@
         <p class="text-destructive text-xs">{failure}</p>
     {/if}
 
-    <div class="flex flex-col gap-2">
-        <span class="text-xs font-medium text-muted-foreground">Built-in</span>
-        {#each builtins as scraper (scraper.key)}
-            <div class="border-border/60 bg-background/60 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-                <div class="min-w-0">
-                    <p class="truncate text-sm font-medium">{scraper.name}</p>
-                    <p class="text-muted-foreground truncate text-xs font-mono">{scraper.base_url}</p>
+    {#if builtins.length}
+        <div class="flex flex-col gap-2">
+            <span class="text-xs font-medium text-muted-foreground">Built-in</span>
+            {#each builtins as scraper (scraper.key)}
+                <div class="border-border/60 bg-background/60 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-medium">{scraper.name}</p>
+                        <p class="text-muted-foreground truncate text-xs font-mono">{scraper.base_url}</p>
+                    </div>
+                    <Switch
+                        checked={scraper.enabled}
+                        disabled={busyKey === scraper.key}
+                        onCheckedChange={(v: boolean) => toggle(scraper.key, v)} />
                 </div>
-                <Switch
-                    checked={scraper.enabled}
-                    disabled={busyKey === scraper.key}
-                    onCheckedChange={(v: boolean) => toggle(scraper.key, v)} />
-            </div>
-        {/each}
-    </div>
+            {/each}
+        </div>
+    {/if}
 
     <div class="flex flex-col gap-2 border-t border-white/10 pt-3">
         <span class="text-xs font-medium text-muted-foreground">
