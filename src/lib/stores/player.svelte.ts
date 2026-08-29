@@ -37,6 +37,20 @@ interface DirectTarget {
     mimeType: string;
     title: string;
     poster?: string;
+    /**
+     * Identifies this video for bookmarking and metadata lookup -- the site
+     * key and the site's own video id, same pair `/direct/sources` and the
+     * bookmarks API are keyed on. Optional because a caller that only has a
+     * bare URL (nothing scraped it, there is no site/id to speak of) can
+     * still play one; it just cannot be bookmarked from the player.
+     */
+    site?: string;
+    videoId?: string;
+    /** Context the bookmark should be scoped to -- see schema/bookmarks.ts. */
+    contextTitle?: string;
+    duration?: number | null;
+    resolution?: string | null;
+    size?: number | null;
 }
 
 export type PlayerTarget = LibraryTarget | DirectTarget;
@@ -94,7 +108,20 @@ class PlayerStore {
         this.current = { kind: "library", itemId, title };
     }
 
-    openDirect(src: string, title: string, mimeType = "video/mp4", poster?: string) {
+    openDirect(options: {
+        src: string;
+        title: string;
+        mimeType?: string;
+        poster?: string;
+        site?: string;
+        videoId?: string;
+        contextTitle?: string;
+        duration?: number | null;
+        resolution?: string | null;
+        size?: number | null;
+    }) {
+        const { src, title, mimeType = "video/mp4", poster } = options;
+
         // External player chosen: hand over the scraped URL itself. Nothing
         // about it is Jellyfin-shaped -- it is the site's own media URL --
         // so the player has no session to carry and no reason to come back
@@ -110,7 +137,19 @@ class PlayerStore {
             playDirectNative(src, mimeType);
             return;
         }
-        this.current = { kind: "direct", src, mimeType, title, poster };
+        this.current = {
+            kind: "direct",
+            src,
+            mimeType,
+            title,
+            poster,
+            site: options.site,
+            videoId: options.videoId,
+            contextTitle: options.contextTitle,
+            duration: options.duration,
+            resolution: options.resolution,
+            size: options.size
+        };
     }
 
     close() {

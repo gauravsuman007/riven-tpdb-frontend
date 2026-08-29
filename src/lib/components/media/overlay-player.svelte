@@ -40,6 +40,8 @@
     import MinimizeIcon from "@lucide/svelte/icons/minimize";
     import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
     import ZoomOutIcon from "@lucide/svelte/icons/zoom-out";
+    import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+    import { formatBytes } from "$lib/helpers";
     import {
         MIN_SCALE,
         clampTransform,
@@ -616,6 +618,116 @@
         }
     }
 
+    /**
+     * Bookmarking and resolution/size, for a direct-scrape video only --
+     * a library item is already saved by definition (it is in the library),
+     * and the description area shows the real ffprobe'd values for those
+     * already, from `video-player.svelte`'s own playback-info fetch.
+     */
+    let bookmarked = $state(false);
+    let bookmarkBusy = $state(false);
+    let liveResolution = $state<string | null>(null);
+    let liveSize = $state<number | null>(null);
+    let metaLoading = $state(false);
+
+    const directTarget = $derived(target?.kind === "direct" ? target : null);
+    const canBookmark = $derived(!!directTarget?.site && !!directTarget?.videoId);
+
+    async function checkBookmarked() {
+        if (!directTarget?.site || !directTarget?.videoId || !directTarget?.contextTitle) {
+            bookmarked = false;
+            return;
+        }
+        try {
+            const response = await fetch(
+                `/api/bookmarks?contextTitle=${encodeURIComponent(directTarget.contextTitle)}`
+            );
+            if (!response.ok) return;
+            const payload = await response.json();
+            const bookmarks: { site: string; videoId: string }[] = payload.bookmarks ?? [];
+            bookmarked = bookmarks.some(
+                (b) => b.site === directTarget.site && b.videoId === directTarget.videoId
+            );
+        } catch {
+            // Not knowing is not worth failing over -- the toggle button
+            // just falls back to "not bookmarked" and the user can retry.
+        }
+    }
+
+    async function toggleBookmark() {
+        if (!directTarget?.site || !directTarget?.videoId) return;
+        bookmarkBusy = true;
+
+        try {
+            if (bookmarked) {
+                const response = await fetch(
+                    `/api/bookmarks?site=${encodeURIComponent(directTarget.site)}&videoId=${encodeURIComponent(directTarget.videoId)}`,
+                    { method: "DELETE" }
+                );
+                if (response.ok) bookmarked = false;
+            } else {
+                const response = await fetch("/api/bookmarks", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        site: directTarget.site,
+                        videoId: directTarget.videoId,
+                        contextTitle: directTarget.contextTitle ?? directTarget.title,
+                        title: directTarget.title,
+                        pageUrl: directTarget.src,
+                        thumbnail: directTarget.poster ?? null,
+                        duration: directTarget.duration ?? null,
+                        resolution: liveResolution ?? directTarget.resolution ?? null,
+                        size: liveSize ?? directTarget.size ?? null
+                    })
+                });
+                if (response.ok) bookmarked = true;
+            }
+        } finally {
+            bookmarkBusy = false;
+        }
+    }
+
+    /**
+     * Non-blocking: playback already started by the time this runs (the
+     * video element has its src and is decoding), so this only ever fills in
+     * the description a moment later. Skipped entirely when the search
+     * result already carried real numbers -- most sites do not, but the ones
+     * that do should not cost a redundant request for something already
+     * known.
+     */
+    async function fetchLiveMeta() {
+        if (!directTarget?.site || !directTarget?.videoId) return;
+        if (directTarget.resolution && directTarget.size) return;
+
+        metaLoading = true;
+        try {
+            const response = await fetch(
+                `/api/direct/meta?site=${encodeURIComponent(directTarget.site)}&videoId=${encodeURIComponent(directTarget.videoId)}`
+            );
+            if (!response.ok) return;
+            const data = await response.json();
+            liveResolution = data.resolution ?? null;
+            liveSize = data.size ?? null;
+        } catch {
+            // The player itself is already running -- a failed enrichment
+            // fetch just means the description stays blank, not an error.
+        } finally {
+            metaLoading = false;
+        }
+    }
+
+    $effect(() => {
+        liveResolution = null;
+        liveSize = null;
+        bookmarked = false;
+
+        if (directTarget) {
+            checkBookmarked();
+            fetchLiveMeta();
+        }
+    });
+
     $effect(() => {
         // Reset zoom whenever a different title is opened, so one title's zoom
         // does not carry into the next.
@@ -722,10 +834,44 @@
                 : 'shrink-0'} flex items-center justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 transition-opacity duration-300 {controlsVisible
                 ? 'opacity-100'
                 : 'pointer-events-none opacity-0'}">
-            <p class="min-w-0 truncate text-sm font-medium text-white">{target.title}</p>
+            <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-white">{target.title}</p>
+                <!--
+                    Resolution/size for a direct-scrape video only -- a
+                    library item's real probed values live in the player's
+                    own description elsewhere, and duplicating that here
+                    would just be two places disagreeing if they ever drift.
+                -->
+                {#if directTarget}
+                    {@const resolution = liveResolution ?? directTarget.resolution}
+                    {@const size = liveSize ?? directTarget.size}
+                    {#if metaLoading && !resolution && !size}
+                        <p class="text-xs text-white/50">Fetching quality&hellip;</p>
+                    {:else if resolution || size}
+                        <p class="font-mono text-xs text-white/60">
+                            {[resolution, size ? formatBytes(size) : null]
+                                .filter(Boolean)
+                                .join(" · ")}
+                        </p>
+                    {/if}
+                {/if}
+            </div>
 
             <div class="flex shrink-0 items-center gap-1">
                 <span class="mr-1 font-mono text-xs text-white/60">{scale.toFixed(1)}x</span>
+
+                {#if canBookmark}
+                    <button
+                        type="button"
+                        onclick={toggleBookmark}
+                        disabled={bookmarkBusy}
+                        aria-label={bookmarked ? "Remove bookmark" : "Bookmark this video"}
+                        class="rounded-lg p-2 hover:bg-white/10 {bookmarked
+                            ? 'text-amber-400 hover:text-amber-300'
+                            : 'text-white/80 hover:text-white'}">
+                        <BookmarkIcon class={bookmarked ? "size-5 fill-current" : "size-5"} />
+                    </button>
+                {/if}
 
                 <button
                     type="button"

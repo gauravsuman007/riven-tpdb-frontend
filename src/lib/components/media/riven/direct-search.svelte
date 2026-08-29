@@ -15,6 +15,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import * as Collapsible from "$lib/components/ui/collapsible/index.js";
+    import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { formatBytes } from "$lib/helpers";
     import { player } from "$lib/stores/player.svelte";
     import { cn } from "$lib/utils";
@@ -23,6 +24,8 @@
     import PlayIcon from "@lucide/svelte/icons/play";
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import SearchIcon from "@lucide/svelte/icons/search";
+    import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+    import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
     import VpnRouteBanner from "$lib/components/media/riven/vpn-route-banner.svelte";
     import { getVpnStatus, routeState, type VpnStatus } from "$lib/vpn";
     import { onMount } from "svelte";
@@ -40,6 +43,18 @@
         views: number | null;
         hd: boolean;
         relevance: number | null;
+    }
+
+    interface Bookmark {
+        site: string;
+        videoId: string;
+        title: string;
+        pageUrl: string;
+        thumbnail: string | null;
+        duration: number | null;
+        resolution: string | null;
+        size: number | null;
+        metadataStatus: "pending" | "ready" | "failed";
     }
 
     interface Props {
@@ -92,6 +107,119 @@
     const scrapeRoute = $derived(routeState(vpnStatus, "scraping"));
     const streamRoute = $derived(routeState(vpnStatus, "streaming"));
 
+    /*
+        Bookmarks render below the trigger unconditionally -- see the markup
+        below -- so they have to be loaded on mount, not gated behind opening
+        the panel the way search results are. There is no live-request cost
+        to worry about here the way there is with search: this is one read
+        from this app's own database.
+    */
+    let bookmarks = $state<Bookmark[]>([]);
+    let bookmarkKeyPendingRemoval = $state<string | null>(null);
+    let bookmarkBusy = $state<Set<string>>(new Set());
+
+    const bookmarkKey = (site: string, videoId: string) => `${site}:${videoId}`;
+    const bookmarkedKeys = $derived(new Set(bookmarks.map((b) => bookmarkKey(b.site, b.videoId))));
+
+    async function loadBookmarks() {
+        try {
+            const response = await fetch(`/api/bookmarks?contextTitle=${encodeURIComponent(title)}`);
+            if (!response.ok) return;
+            const payload = await response.json();
+            bookmarks = payload.bookmarks ?? [];
+        } catch {
+            // Bookmarks are a convenience layered on top of search, not a
+            // blocking dependency -- a failed load here should not stop the
+            // rest of the panel from working.
+        }
+    }
+
+    onMount(loadBookmarks);
+
+    /*
+        A bookmark saved as "pending" gets its resolution/size filled in by a
+        background fetch on the server -- see bookmarks.ts. Polling is the
+        only way this component finds out that finished: there is no push
+        channel from a one-off background task to a browser tab. Stops itself
+        once nothing is pending, so an idle panel with all-resolved bookmarks
+        costs nothing.
+    */
+    $effect(() => {
+        if (!bookmarks.some((b) => b.metadataStatus === "pending")) return;
+
+        const timer = setInterval(loadBookmarks, 4000);
+        return () => clearInterval(timer);
+    });
+
+    async function addBookmark(result: DirectResult) {
+        const key = bookmarkKey(result.site, result.video_id);
+        bookmarkBusy = new Set(bookmarkBusy).add(key);
+
+        try {
+            const response = await fetch("/api/bookmarks", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    site: result.site,
+                    videoId: result.video_id,
+                    contextTitle: title,
+                    title: result.title,
+                    pageUrl: result.page_url,
+                    thumbnail: result.thumbnail,
+                    duration: result.duration,
+                    resolution: result.resolution,
+                    size: result.size
+                })
+            });
+            if (response.ok) await loadBookmarks();
+        } finally {
+            const next = new Set(bookmarkBusy);
+            next.delete(key);
+            bookmarkBusy = next;
+        }
+    }
+
+    async function confirmRemoveBookmark() {
+        const key = bookmarkKeyPendingRemoval;
+        if (!key) return;
+        bookmarkKeyPendingRemoval = null;
+
+        const [site, videoId] = key.split(/:(.+)/);
+        bookmarkBusy = new Set(bookmarkBusy).add(key);
+
+        try {
+            const response = await fetch(
+                `/api/bookmarks?site=${encodeURIComponent(site)}&videoId=${encodeURIComponent(videoId)}`,
+                { method: "DELETE" }
+            );
+            if (response.ok) await loadBookmarks();
+        } finally {
+            const next = new Set(bookmarkBusy);
+            next.delete(key);
+            bookmarkBusy = next;
+        }
+    }
+
+    function playBookmark(bookmark: Bookmark) {
+        if (streamRoute.blocked) return;
+
+        const src =
+            `/api/direct/stream?site=${encodeURIComponent(bookmark.site)}` +
+            `&video_id=${encodeURIComponent(bookmark.videoId)}`;
+        player.openDirect({
+            src,
+            title: bookmark.title,
+            mimeType: "video/mp4",
+            poster: bookmark.thumbnail ?? undefined,
+            site: bookmark.site,
+            videoId: bookmark.videoId,
+            contextTitle: title,
+            duration: bookmark.duration,
+            resolution: bookmark.resolution,
+            size: bookmark.size
+        });
+    }
+
     /**
      * Tiers a site's row sorts by ahead of relevance -- has to match the
      * backend's `DirectScraperService.SITE_TIERS` exactly, or the same search
@@ -119,6 +247,11 @@
     const rows = $derived.by(() => {
         const grouped = new Map<string, { name: string; items: DirectResult[] }>();
         for (const result of results) {
+            // Already saved -- shown in the bookmarks section instead, which
+            // renders unconditionally above this one. Listing it again here
+            // would be the same video in two places on the same panel.
+            if (bookmarkedKeys.has(bookmarkKey(result.site, result.video_id))) continue;
+
             const row = grouped.get(result.site) ?? { name: result.site_name, items: [] };
             row.items.push(result);
             grouped.set(result.site, row);
@@ -207,7 +340,18 @@
         // The mime type is not known until the backend resolves the source, and
         // the proxy reports the real one on the response. MP4 is the right
         // opening guess; the player falls back if the element rejects it.
-        player.openDirect(src, result.title, "video/mp4", result.thumbnail ?? undefined);
+        player.openDirect({
+            src,
+            title: result.title,
+            mimeType: "video/mp4",
+            poster: result.thumbnail ?? undefined,
+            site: result.site,
+            videoId: result.video_id,
+            contextTitle: title,
+            duration: result.duration,
+            resolution: result.resolution,
+            size: result.size
+        });
     }
 
     function formatDuration(seconds: number | null): string | null {
@@ -276,6 +420,119 @@
         </Button>
     </div>
   </div>
+
+  <!--
+      Below the trigger unconditionally, not inside Collapsible.Content:
+      a bookmarked video should be reachable without opening (or re-running)
+      a search, since the whole point of bookmarking one is not having to
+      find it again.
+  -->
+  {#if bookmarks.length}
+    <div class="mt-3 flex flex-col gap-2">
+        <div class="flex items-center gap-2">
+            <BookmarkIcon class="size-3.5 fill-current text-amber-500" aria-hidden="true" />
+            <span class="text-xs font-medium text-muted-foreground">
+                Bookmarked ({bookmarks.length})
+            </span>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {#each bookmarks as bookmark (bookmarkKey(bookmark.site, bookmark.videoId))}
+                {@const key = bookmarkKey(bookmark.site, bookmark.videoId)}
+                <div
+                    class="border-amber-500/30 bg-amber-500/5 group relative flex flex-col overflow-hidden rounded-xl border">
+                    <button
+                        type="button"
+                        disabled={streamRoute.blocked}
+                        onclick={() => !streamRoute.blocked && playBookmark(bookmark)}
+                        class={cn(
+                            "flex flex-col text-left",
+                            streamRoute.blocked && "pointer-events-none cursor-not-allowed opacity-40"
+                        )}>
+                        <div class="bg-muted relative aspect-video w-full overflow-hidden">
+                            {#if bookmark.thumbnail}
+                                <img
+                                    src={bookmark.thumbnail}
+                                    alt=""
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                    class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                            {/if}
+                            <div
+                                class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
+                                <PlayIcon
+                                    class="size-8 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                            </div>
+                            {#if formatDuration(bookmark.duration)}
+                                <span
+                                    class="absolute right-2 bottom-2 rounded bg-black/75 px-2 py-0.5 font-mono text-xs text-white tabular-nums">
+                                    {formatDuration(bookmark.duration)}
+                                </span>
+                            {/if}
+                        </div>
+                        <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3 pr-9">
+                            <p class="line-clamp-2 text-sm leading-relaxed font-medium">
+                                {bookmark.title}
+                            </p>
+                            <div class="mt-auto flex flex-wrap items-center gap-1.5">
+                                {#if bookmark.metadataStatus === "pending"}
+                                    <span
+                                        class="text-muted-foreground flex items-center gap-1 text-[11px]">
+                                        <LoaderCircleIcon class="size-3 animate-spin" aria-hidden="true" />
+                                        Fetching quality&hellip;
+                                    </span>
+                                {:else}
+                                    {#if bookmark.resolution}
+                                        <Badge variant="outline" class="font-mono text-[11px]">
+                                            {bookmark.resolution}
+                                        </Badge>
+                                    {/if}
+                                    {#if bookmark.size}
+                                        <Badge variant="outline" class="font-mono text-[11px]">
+                                            {formatBytes(bookmark.size)}
+                                        </Badge>
+                                    {/if}
+                                {/if}
+                            </div>
+                        </div>
+                    </button>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={bookmarkBusy.has(key)}
+                        onclick={() => (bookmarkKeyPendingRemoval = key)}
+                        aria-label={`Remove ${bookmark.title} from bookmarks`}
+                        class="absolute top-2 right-2 size-7 bg-black/60 text-amber-400 hover:bg-black/80 hover:text-amber-300">
+                        <BookmarkIcon class="size-4 fill-current" aria-hidden="true" />
+                    </Button>
+                </div>
+            {/each}
+        </div>
+    </div>
+  {/if}
+
+  <AlertDialog.Root
+      open={bookmarkKeyPendingRemoval !== null}
+      onOpenChange={(next) => {
+          if (!next) bookmarkKeyPendingRemoval = null;
+      }}>
+      <AlertDialog.Content>
+          <AlertDialog.Header>
+              <AlertDialog.Title>Remove this bookmark?</AlertDialog.Title>
+              <AlertDialog.Description>
+                  It stays reachable from the site's own search results if you look for it again --
+                  this only removes it from your saved list here.
+              </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+              <AlertDialog.Cancel onclick={() => (bookmarkKeyPendingRemoval = null)}>
+                  Cancel
+              </AlertDialog.Cancel>
+              <AlertDialog.Action onclick={confirmRemoveBookmark}>Remove</AlertDialog.Action>
+          </AlertDialog.Footer>
+      </AlertDialog.Content>
+  </AlertDialog.Root>
 
   <!-- One line at the bottom of the row, saying how the search is routed. -->
   <div class="mt-1.5">
@@ -346,13 +603,15 @@
 
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                 {#each row.items as result, index (`${result.site}:${result.video_id}`)}
+                                {@const key = bookmarkKey(result.site, result.video_id)}
+                                <div class="group border-border/60 hover:border-primary/50 relative flex flex-col overflow-hidden rounded-xl border transition-colors">
                                     <button
                                         type="button"
                                         disabled={streamRoute.blocked}
                                         onclick={() => !streamRoute.blocked && play(result)}
                                         class={cn(
-                                            "group focus-visible:ring-ring border-border/60 hover:border-primary/50 hover:bg-muted/30 flex flex-col overflow-hidden rounded-xl border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                                            streamRoute.blocked && "pointer-events-none cursor-not-allowed opacity-40 hover:border-border/60"
+                                            "focus-visible:ring-ring hover:bg-muted/30 flex flex-col text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                                            streamRoute.blocked && "pointer-events-none cursor-not-allowed opacity-40"
                                         )}>
                                         <div
                                             class="bg-muted relative aspect-video w-full overflow-hidden">
@@ -383,7 +642,7 @@
                                             {/if}
                                         </div>
 
-                                        <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3">
+                                        <div class="flex min-w-0 flex-1 flex-col gap-2.5 p-3 pr-9">
                                             <p
                                                 class="line-clamp-2 text-sm leading-relaxed font-medium">
                                                 {result.title}
@@ -418,6 +677,22 @@
                                             </div>
                                         </div>
                                     </button>
+
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        disabled={bookmarkBusy.has(key)}
+                                        onclick={() => addBookmark(result)}
+                                        aria-label={`Bookmark ${result.title}`}
+                                        class="absolute top-2 right-2 size-7 bg-black/50 text-white/80 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/70 hover:text-white focus-visible:opacity-100">
+                                        {#if bookmarkBusy.has(key)}
+                                            <LoaderCircleIcon class="size-4 animate-spin" aria-hidden="true" />
+                                        {:else}
+                                            <BookmarkIcon class="size-4" aria-hidden="true" />
+                                        {/if}
+                                    </Button>
+                                </div>
                                 {/each}
                             </div>
                         </div>
