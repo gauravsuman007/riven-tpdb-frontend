@@ -136,10 +136,7 @@ export function removeBookmark(userId: string, site: string, videoId: string): v
 
 /**
  * Resolves the video's real sources on the backend and stores the best
- * rendition's resolution/size. Exported so a caller that already has a live
- * player open (which needs the same numbers right away, not on the next page
- * load) can call it directly instead of waiting on this same background path
- * -- see `enrichForPlayer` below.
+ * rendition's resolution/size.
  */
 async function enrich(
     userId: string,
@@ -148,12 +145,34 @@ async function enrich(
     backendUrl: string,
     apiKey: string
 ): Promise<void> {
+    const existing = db
+        .select({
+            resolution: directVideoBookmark.resolution,
+            size: directVideoBookmark.size
+        })
+        .from(directVideoBookmark)
+        .where(
+            and(
+                eq(directVideoBookmark.userId, userId),
+                eq(directVideoBookmark.site, site),
+                eq(directVideoBookmark.videoId, videoId)
+            )
+        )
+        .get();
+
     const result = await resolveBest(site, videoId, backendUrl, apiKey);
 
     db.update(directVideoBookmark)
         .set({
-            resolution: result?.resolution ?? null,
-            size: result?.size ?? null,
+            // Merged, never overwritten wholesale. Several sites report a
+            // resolution on the SEARCH card but not on the resolved source
+            // (upornia is the clearest: search carries real dimensions, its
+            // videofile API carries only a format name), so assigning the
+            // resolve's value unconditionally would throw away a known-good
+            // number and replace it with null -- the enrichment step making
+            // the data worse than not running at all.
+            resolution: result?.resolution ?? existing?.resolution ?? null,
+            size: result?.size ?? existing?.size ?? null,
             metadataStatus: result ? "ready" : "failed"
         })
         .where(
@@ -203,13 +222,110 @@ export async function resolveBest(
 
         if (!best) return null;
 
-        return {
-            resolution: best.resolution ?? null,
-            size: best.size ?? null
-        };
+        let resolution: string | null = best.resolution ?? null;
+        let size: number | null = best.size ?? null;
+
+        // Most sites state neither. Measured across all eight: only two
+        // report a resolution from the scraper and only one a size, because
+        // the rest simply do not publish it anywhere a scraper can read --
+        // the file itself is the only source of truth. Probing costs one
+        // two-byte request and answers it for nearly all of them, so it is
+        // worth doing whenever the scraper came up short.
+        if (resolution === null || size === null) {
+            const probed = await probeStream(site, videoId, backendUrl, apiKey);
+
+            resolution ??= probed.resolution;
+            size ??= probed.size;
+        }
+
+        return { resolution, size };
     } catch (err) {
         logger.debug(`resolve failed for ${site}:${videoId}`, err);
         return null;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+/**
+ * Reads what the file itself says, for the sites that publish nothing a
+ * scraper can parse.
+ *
+ * One `Range: bytes=0-1` request. The 206 response's `Content-Range` ends in
+ * the total byte count, which is the real file size -- measured across all
+ * eight sites, this recovers a size for seven of them, including every site
+ * that reports none at all (xfreehd, fpoxxx, paradisehill, tnaflix,
+ * noodlemagazine). Two bytes, so it costs essentially nothing and never
+ * pulls the media itself.
+ *
+ * The eighth (iporntv) serves an HLS master playlist rather than a file, so
+ * its "size" is the playlist's own 233 bytes and is meaningless -- but that
+ * playlist body carries `RESOLUTION=854x480` on its stream-info line, which
+ * is a real measurement of the video. Both cases are handled here: whichever
+ * the response turns out to be, take the fact it actually offers.
+ */
+async function probeStream(
+    site: string,
+    videoId: string,
+    backendUrl: string,
+    apiKey: string
+): Promise<ResolvedMeta> {
+    const none: ResolvedMeta = { resolution: null, size: null };
+
+    const controller = new AbortController();
+    // Shorter than the resolve above: this is the optional half of an already
+    // optional step, and the resolve has usually spent time by the time it
+    // runs.
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    try {
+        const response = await fetch(
+            `${backendUrl}/api/v1/direct/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+            {
+                // 0-1 rather than 0-0: a couple of CDNs answer a single-byte
+                // range with 200 and the whole file, which would mean
+                // downloading the media to read its length.
+                headers: { "x-api-key": apiKey, Range: "bytes=0-1" },
+                signal: controller.signal
+            }
+        );
+
+        if (!response.ok) return none;
+
+        const contentType = response.headers.get("content-type") ?? "";
+        const isPlaylist =
+            contentType.includes("mpegurl") || contentType.includes("x-mpegURL");
+
+        if (isPlaylist) {
+            // Re-fetched without a Range header: two bytes of a playlist is
+            // not parseable, and a playlist is small enough that reading all
+            // of it is cheaper than the request that asked for part of it.
+            const full = await fetch(
+                `${backendUrl}/api/v1/direct/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+                { headers: { "x-api-key": apiKey }, signal: controller.signal }
+            );
+
+            if (!full.ok) return none;
+
+            const body = await full.text();
+            const match = body.match(/RESOLUTION=\d+x(\d+)/i);
+
+            return match
+                ? { resolution: `${match[1]}p`, size: null }
+                : none;
+        }
+
+        // "bytes 0-1/821346051" -- the figure after the slash is the whole
+        // file. "*" appears instead when the server will not state a length.
+        const total = (response.headers.get("content-range") ?? "").split("/")[1];
+        const parsed = Number(total);
+
+        return Number.isFinite(parsed) && parsed > 0
+            ? { resolution: null, size: parsed }
+            : none;
+    } catch (err) {
+        logger.debug(`probe failed for ${site}:${videoId}`, err);
+        return none;
     } finally {
         clearTimeout(timeout);
     }
