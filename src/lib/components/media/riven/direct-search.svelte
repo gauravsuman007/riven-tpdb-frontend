@@ -28,7 +28,7 @@
     import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
     import VpnRouteBanner from "$lib/components/media/riven/vpn-route-banner.svelte";
     import { getVpnStatus, routeState, type VpnStatus } from "$lib/vpn";
-    import { onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
 
     interface DirectResult {
         site: string;
@@ -89,6 +89,14 @@
     let results = $state<DirectResult[]>([]);
     let siteErrors = $state<Record<string, string>>({});
     let failure = $state<string | null>(null);
+    /*
+        Progress across the streamed run. `pendingSites` is how many the
+        backend said it would search, `completedSites` how many have reported
+        either results or a failure -- the difference is what is still out.
+    */
+    let pendingSites = $state(0);
+    let completedSites = $state(0);
+    let eventSource: EventSource | null = null;
 
     /*
         Fetched on mount rather than only when the panel opens: whether search
@@ -265,9 +273,23 @@
             });
     });
 
-    async function search() {
+    /**
+     * Runs the search as a stream, showing each site the moment it lands.
+
+     * Measured against the live deployment: nine of ten sites answer in under
+     * half a second, and one (hqporner) spends its full 20s timeout. Waiting
+     * for all of them meant every result appeared 20s late because of the one
+     * site that had nothing to give.
+     */
+    function search() {
+        eventSource?.close();
+
         loading = true;
         failure = null;
+        results = [];
+        siteErrors = {};
+        pendingSites = 0;
+        completedSites = 0;
 
         /*
             A typed term wins over item_id. Passing both would let the backend
@@ -281,26 +303,71 @@
               ? `item_id=${itemId}`
               : `query=${encodeURIComponent(title)}`;
 
-        try {
-            // No explicit limit: the backend falls back to the Plugins tab's
-            // "Results per site" setting, which is what the user actually
-            // wants adjustable without a code change.
-            const response = await fetch(`/api/v1/direct/search?${query}`);
-            if (!response.ok) throw new Error(`Search returned ${response.status}`);
+        // No explicit limit: the backend falls back to the Plugins tab's
+        // "Results per site" setting, which is what the user actually wants
+        // adjustable without a code change.
+        const source = new EventSource(`/api/direct/search_stream?${query}`);
+        eventSource = source;
 
-            const payload = await response.json();
-            results = payload.results ?? [];
-            // A site being down is normal here and must be visible, otherwise
-            // "fewer results than usual" is indistinguishable from "that site
-            // has nothing".
-            siteErrors = payload.errors ?? {};
+        source.onmessage = (event) => {
+            let data: {
+                event: string;
+                site?: string;
+                site_name?: string;
+                results?: DirectResult[];
+                error?: string | null;
+                sites_completed?: number;
+                total_sites?: number;
+            };
+
+            try {
+                data = JSON.parse(event.data);
+            } catch {
+                return;
+            }
+
+            if (data.total_sites) pendingSites = data.total_sites;
+
+            if (data.event === "site") {
+                completedSites = data.sites_completed ?? completedSites + 1;
+                searched = true;
+
+                if (data.results?.length) results = [...results, ...data.results];
+
+                // A site being down is normal here and must be visible,
+                // otherwise "fewer results than usual" is indistinguishable
+                // from "that site has nothing".
+                if (data.error && data.site) siteErrors[data.site] = data.error;
+
+                return;
+            }
+
+            if (data.event === "error") {
+                failure = data.error ?? "Search failed";
+            }
+
+            // "complete" or "error" both end the run.
             searched = true;
-        } catch (e) {
-            failure = e instanceof Error ? e.message : "Search failed";
-        } finally {
             loading = false;
-        }
+            source.close();
+            eventSource = null;
+        };
+
+        source.onerror = () => {
+            // EventSource retries by itself, which is wrong here: this is a
+            // one-shot search, not a subscription, and letting it reconnect
+            // would silently re-run all ten sites. Only report a failure if
+            // nothing arrived at all -- a drop after the last site is just
+            // the stream ending.
+            source.close();
+            eventSource = null;
+
+            if (!searched) failure = "Search failed";
+            loading = false;
+        };
     }
+
+    onDestroy(() => eventSource?.close());
 
     /*
         Always re-runs, unlike opening the panel. The user typed a new term and
@@ -378,7 +445,14 @@
             <span class="text-primary block text-sm font-semibold">Watch from a site</span>
             <span class="text-muted-foreground block text-xs">
                 {#if loading}
-                    Searching&hellip;
+                    <!--
+                        Counts while streaming: the panel may be collapsed, so
+                        this line is the only progress the user sees, and
+                        "Searching..." alone cannot say how much is left.
+                    -->
+                    Searching{#if pendingSites}
+                        {" "}&mdash; {completedSites}/{pendingSites} sites{/if}{#if results.length}
+                        , {results.length} so far{/if}&hellip;
                 {:else if searched}
                     {results.length} found{#if rows.length}
                         &middot; {rows.map((r) => `${r.name} ${r.items.length}`).join(", ")}{/if}
@@ -565,12 +639,19 @@
                 </div>
             {/if}
 
-            {#if loading}
+            <!--
+                Results stream in one site at a time, so this is no longer an
+                "either a spinner or results" choice: the spinner belongs
+                BELOW whatever has already arrived, for as long as anything is
+                still out. Only an empty run shows a spinner on its own.
+            -->
+            {#if loading && !results.length}
                 <div class="text-muted-foreground flex items-center gap-2 py-6 text-sm">
                     <div
                         class="border-muted-foreground/30 border-t-primary size-4 animate-spin rounded-full border-2">
                     </div>
-                    Searching eight sites for &ldquo;{searchedFor}&rdquo;&hellip;
+                    Searching{#if pendingSites}
+                        {" "}{pendingSites} sites{/if} for &ldquo;{searchedFor}&rdquo;&hellip;
                 </div>
             {:else if failure}
                 <div class="flex flex-col items-start gap-2 py-4">
@@ -580,7 +661,7 @@
                         Try again
                     </Button>
                 </div>
-            {:else if searched && !results.length}
+            {:else if searched && !loading && !results.length}
                 <div class="flex flex-col items-start gap-2 py-4">
                     <p class="text-muted-foreground text-sm">
                         No site had anything for &ldquo;{searchedFor}&rdquo;.
@@ -697,6 +778,27 @@
                             </div>
                         </div>
                     {/each}
+                </div>
+            {/if}
+
+            <!--
+                Sits after the rows that have landed, not in place of them.
+                Named counts rather than a bare spinner: "3 sites still
+                searching" is the difference between "this is still going" and
+                "this is all there is", which is exactly what a single
+                end-of-run spinner could not say.
+            -->
+            {#if loading && results.length}
+                <div
+                    class="text-muted-foreground mt-6 flex items-center gap-2 border-t border-white/5 pt-4 text-sm">
+                    <div
+                        class="border-muted-foreground/30 border-t-primary size-4 animate-spin rounded-full border-2">
+                    </div>
+                    {#if pendingSites}
+                        {pendingSites - completedSites} of {pendingSites} sites still searching&hellip;
+                    {:else}
+                        Still searching&hellip;
+                    {/if}
                 </div>
             {/if}
 
