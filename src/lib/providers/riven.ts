@@ -933,6 +933,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/direct/search_stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct Search Stream
+         * @description `/search`, but delivering each site as it finishes rather than all at once.
+         *
+         *     Same target, same ranking, same per-site limit. The only difference is
+         *     when a site's slice is sent: the blocking route cannot answer until the
+         *     slowest of eight independent third-party sites does, so a single site
+         *     timing out at 20s delays every other site's results by 20s.
+         */
+        get: operations["direct_search_stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/direct/sources": {
         parameters: {
             query?: never;
@@ -982,7 +1007,7 @@ export interface paths {
         };
         /**
          * Direct Plugins
-         * @description Every known scraper -- built-in and plugin, enabled or not.
+         * @description Every known scraper, enabled or not.
          *
          *     Re-scans the plugin folder on every call. These are a handful of files
          *     parsed from local disk, not a network request, so there is nothing to
@@ -1034,7 +1059,7 @@ export interface paths {
         put?: never;
         /**
          * Direct Plugin Set Enabled
-         * @description Switch one scraper on or off, built-in or plugin alike.
+         * @description Switch one scraper on or off.
          *
          *     Written to `direct_scraping.disabled` directly rather than through the
          *     generic settings form -- that field is hidden from the schema for the
@@ -1043,6 +1068,36 @@ export interface paths {
          *     current is exactly the "two auth key fields" bug repeating itself.
          */
         post: operations["direct_plugin_set_enabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct/plugins/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Direct Plugins Set Order
+         * @description Set the order scraper results are displayed in, best first.
+         *
+         *     Written straight to `direct_scraping.site_order` rather than through the
+         *     generic settings form, for the same reason `disabled` is -- see
+         *     `settings/visibility.py`.
+         *
+         *     Unknown keys are dropped rather than rejected: the list is built from a
+         *     registry that can change under the user (a plugin file deleted while the
+         *     settings tab is open), and failing the whole reorder because one stale
+         *     key came back would be a worse answer than saving the part that still
+         *     means something.
+         */
+        post: operations["direct_plugins_set_order"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1502,6 +1557,36 @@ export interface paths {
         get: operations["get_item_metadata"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}/tpdb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set or clear an item's TPDB association
+         * @description Point an item at a different TPDB record, or detach it entirely.
+         *
+         *     The automatic matcher refuses to guess when the evidence is weak, which is
+         *     correct, but leaves no way to supply an answer a human is sure of -- and
+         *     no way to withdraw one it got wrong. Both directions are needed: a wrong
+         *     association renders a different film's cast, poster and description over
+         *     a title that is otherwise perfectly correct.
+         *
+         *     Clearing is safe here specifically because the UI has a riven-id detail
+         *     route to fall back on; before that existed, an item with no external id
+         *     was dropped from the library grid entirely.
+         */
+        post: operations["set_item_tpdb"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2461,10 +2546,8 @@ export interface components {
             local_access?: components["schemas"]["LocalAccessModel"];
             /** @description Route scraper and streaming traffic through a VPN */
             vpn?: components["schemas"]["VpnModel"];
-            /** @description Direct streaming-site scrapers, built-in and plugin */
+            /** @description Direct streaming-site scrapers, all loaded as plugins */
             direct_scraping?: components["schemas"]["DirectScrapingModel"];
-            /** @description Serve the library to Jellyfin clients (TV playback) */
-            jellyfin_server?: components["schemas"]["JellyfinServerModel"];
             /** @description Filesystem configuration */
             filesystem?: components["schemas"]["FilesystemModel"];
             /** @description Library updaters configuration */
@@ -3132,12 +3215,13 @@ export interface components {
         };
         /**
          * DirectScrapingModel
-         * @description Which direct-site scrapers run, built-in and user-supplied alike.
+         * @description Which direct-site scrapers run.
          *
          *     A scraper is just a Python file defining a `DirectScraper` subclass --
-         *     see the Plugins tab and README for the interface. The built-in sites ship
-         *     with the image; anything dropped into `plugin_dir` is discovered the same
-         *     way and toggled the same way, so there is one mechanism, not two.
+         *     see the Plugins tab and README for the interface. None ship with the
+         *     image; every site scraper is a plugin, discovered from `plugin_dir` at
+         *     startup and rescan. See the `riven-tpdb-scrapers` repo for the maintained
+         *     set -- drop any of its files in to enable that site.
          */
         DirectScrapingModel: {
             /**
@@ -3148,9 +3232,20 @@ export interface components {
             plugin_dir: string;
             /**
              * Disabled
-             * @description Scraper keys switched off, whether built-in or from a plugin file. Written by the Plugins tab's toggle, not meant to be edited here directly.
+             * @description Scraper keys switched off. Written by the Plugins tab's toggle, not meant to be edited here directly.
              */
             disabled?: string[];
+            /**
+             * Site Order
+             * @description Scraper keys in the order their results should appear. A site listed earlier always outranks a later one, whatever the two results' relevance scores say -- this is a stated preference, not a measurement. Anything not listed sorts after everything that is. Written by the Plugins tab's reorder controls, not meant to be edited here directly.
+             */
+            site_order?: string[];
+            /**
+             * Results Per Site
+             * @description How many results to keep per site, after ranking, when no explicit limit is given in the search request. The Riven UI's own direct-search box always uses this value; the raw API still accepts a one-off `limit` query param that overrides it for a single call.
+             * @default 3
+             */
+            results_per_site: number;
         };
         /** DirectSearchResponse */
         DirectSearchResponse: {
@@ -3580,6 +3675,37 @@ export interface components {
              */
             episode_file_template: string;
         };
+        /**
+         * GluetunModel
+         * @description Gluetun-specific wiring. Everything here is about reaching the sidecar.
+         *
+         *     Gluetun is usually wired up by putting other containers on its network
+         *     stack, which routes everything they do through the tunnel. That is exactly
+         *     what this integration must not do -- TPDB, the debrid providers and the
+         *     library scan are supposed to go out directly. So it is used as a proxy that
+         *     traffic is pointed at, which means the gluetun service needs
+         *     ``HTTPPROXY=on`` and must NOT be this container's ``network_mode``.
+         */
+        GluetunModel: {
+            /**
+             * Control Url
+             * @description Gluetun's control server (HTTP_CONTROL_SERVER_ADDRESS). Used to read tunnel status and to start or stop it.
+             * @default http://gluetun:8000
+             */
+            control_url: string;
+            /**
+             * Proxy Url
+             * @description Gluetun's built-in HTTP proxy (HTTPPROXY=on). This is what routed traffic is actually sent through; without it there is nothing to point at and routing stays unavailable.
+             * @default http://gluetun:8888
+             */
+            proxy_url: string;
+            /**
+             * Api Key
+             * @description Only needed if this Gluetun requires one (v3.40+ with a role configured). Sent as X-API-Key to the control server.
+             * @default
+             */
+            api_key: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3723,58 +3849,6 @@ export interface components {
              * @default http://localhost:8096
              */
             url: string;
-        };
-        /**
-         * JellyfinServerModel
-         * @description Serve the library to Jellyfin clients, so it plays on a television.
-         *
-         *     This is the opposite direction from `updaters.jellyfin`, which tells a real
-         *     Jellyfin server to rescan. Here Riven IS the server: clients authenticate
-         *     against it, browse the library out of Postgres, and stream through the
-         *     existing playback path. Nothing scans the VFS mount -- see AGENTS.md for
-         *     why letting a real media server near it is a trap.
-         *
-         *     There is no password field on purpose. The password is the Riven API key,
-         *     so this exposes no second credential and cannot grant access the existing
-         *     API would refuse.
-         */
-        JellyfinServerModel: {
-            /**
-             * Enabled
-             * @description Answer the Jellyfin client protocol. Log in from a Jellyfin app with the username below and your Riven API key as the password.
-             * @default false
-             */
-            enabled: boolean;
-            /**
-             * Server Name
-             * @description Name clients show for this server in their server list
-             * @default Riven
-             */
-            server_name: string;
-            /**
-             * Username
-             * @description Username Jellyfin clients log in with. The password is always the Riven API key.
-             * @default riven
-             */
-            username: string;
-            /**
-             * Discovery
-             * @description Answer the UDP broadcast on port 7359 that lets Jellyfin apps find this server without typing its address.
-             * @default true
-             */
-            discovery: boolean;
-            /**
-             * Library Name
-             * @description Name of the single library clients see
-             * @default Library
-             */
-            library_name: string;
-            /**
-             * Advertised Url
-             * @description Address discovery hands to clients, e.g. http://192.168.1.10:8080. Leave blank to work it out from the network interface the client reached us on, which is right unless Riven sits behind a reverse proxy or a non-default port.
-             * @default
-             */
-            advertised_url: string;
         };
         /**
          * LanguagesConfig
@@ -4637,6 +4711,8 @@ export interface components {
             mime_type?: string | null;
             /** Reason */
             reason: string;
+            /** File Size */
+            file_size?: number | null;
         };
         /** PlexLibraryModel */
         PlexLibraryModel: {
@@ -4685,6 +4761,11 @@ export interface components {
             plugin_dir: string;
             /** Scrapers */
             scrapers: components["schemas"]["ScraperInfoModel"][];
+            /**
+             * Site Order
+             * @default []
+             */
+            site_order: string[];
         };
         /**
          * PopularTagsResponse
@@ -5223,6 +5304,11 @@ export interface components {
                 [key: string]: components["schemas"]["DebridFile"];
             };
         };
+        /** SiteOrderBody */
+        SiteOrderBody: {
+            /** Order */
+            order: string[];
+        };
         /**
          * SortOrderEnum
          * @enum {string}
@@ -5633,6 +5719,11 @@ export interface components {
              * @default
              */
             proxy_url: string;
+        };
+        /** TpdbAssociationBody */
+        TpdbAssociationBody: {
+            /** Tpdb Id */
+            tpdb_id?: string | null;
         };
         /** TpdbContentModel */
         TpdbContentModel: {
@@ -6095,11 +6186,11 @@ export interface components {
             enabled: boolean;
             /**
              * Provider
-             * @description Which VPN provider to use
+             * @description Which VPN provider to use. Tailscale routes through a machine on your own tailnet; Gluetun routes through a commercial VPN account. Both are used as a proxy so only the traffic selected below goes through them.
              * @default tailscale
-             * @constant
+             * @enum {string}
              */
-            provider: "tailscale";
+            provider: "tailscale" | "gluetun";
             /**
              * Route Scraping
              * @description Send streaming-site searches through the VPN. If the tunnel is down, searches fail rather than falling back to a direct connection.
@@ -6114,6 +6205,8 @@ export interface components {
             route_streaming: boolean;
             /** @description Tailscale settings */
             tailscale?: components["schemas"]["TailscaleModel"];
+            /** @description Gluetun settings */
+            gluetun?: components["schemas"]["GluetunModel"];
         };
         /** VpnStatusResponse */
         VpnStatusResponse: {
@@ -7740,8 +7833,8 @@ export interface operations {
                 query?: string | null;
                 /** @description Use this library item's title as the query */
                 item_id?: number | null;
-                /** @description Maximum results kept per site, after ranking */
-                limit?: number;
+                /** @description Maximum results kept per site, after ranking. Defaults to the Plugins tab's 'Results per site' setting when omitted; pass this to override it for a single call. */
+                limit?: number | null;
                 /** @description Comma-separated site keys */
                 sites?: string | null;
                 api_key?: string | null;
@@ -7759,6 +7852,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectSearchResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_search_stream: {
+        parameters: {
+            query?: {
+                /** @description Free-text search */
+                query?: string | null;
+                /** @description Use this library item's title as the query */
+                item_id?: number | null;
+                /** @description Maximum results kept per site, after ranking. */
+                limit?: number | null;
+                /** @description Comma-separated site keys */
+                sites?: string | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Not found */
@@ -7950,6 +8089,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ScraperToggleBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginsResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    direct_plugins_set_order: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteOrderBody"];
             };
         };
         responses: {
@@ -8931,6 +9112,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaMetadata"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_item_tpdb: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description The ID of the media item */
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TpdbAssociationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Not found */

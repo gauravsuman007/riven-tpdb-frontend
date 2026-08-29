@@ -33,6 +33,14 @@
     let mediaURL = $derived.by(() => {
         if (!data.id) return null;
 
+        // A library row with no external id at all -- rendered from the item
+        // itself. Routed explicitly rather than through the generic fallback
+        // at the bottom, which would build "/details/riven/movie/{id}" and
+        // 404: this page takes only an id.
+        if (indexer === "riven") {
+            return `/details/riven/${data.id}`;
+        }
+
         // TPDB items are addressed by their UUID and have their own detail
         // page; the TMDB one expects seasons/episodes and external ids.
         if (indexer === "tpdb") {

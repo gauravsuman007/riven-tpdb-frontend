@@ -71,12 +71,29 @@ function transformItems(items: RivenLibraryItem[]) {
                 indexer = "tvdb";
             }
 
-            // Skip items without valid navigation IDs
+            // No external id -- render it from the library row itself rather
+            // than dropping it. An adult title TPDB has no confident match
+            // for has no TMDB, TVDB or TPDB id to route by, and returning
+            // null here made it vanish from the library entirely: present in
+            // the database, downloaded, playable, and unreachable.
+            //
+            // That also made a WRONG TPDB association impossible to withdraw,
+            // since detaching one would have hidden the title. The riven-id
+            // route is what makes removing a bad match a safe action.
             if (!id || id === "") {
-                logger.warn(
-                    `Skipping item "${item.title}" (riven_id: ${item.id}, type: ${item.type}): missing required ID field`
-                );
-                return null;
+                return {
+                    id: Number(item.id),
+                    title: item.title,
+                    poster_path: item.poster_path,
+                    media_type: item.type,
+                    year: extractYear(item.aired_at),
+                    indexer: "riven" as const,
+                    tpdb_uuid: null,
+                    type: getItemType(item.type),
+                    riven_id: Number(item.id),
+                    state: item.state ?? null,
+                    badge: stateBadge(item.state)
+                };
             }
 
             return {
