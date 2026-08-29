@@ -263,14 +263,6 @@
                 {/if}
 
                 <!--
-                    Sits above the candidate releases on purpose. A user who
-                    opens this section wants to watch the title now; the
-                    releases below are about getting it into the library, which
-                    is a slower and different intention.
-                -->
-                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
-
-                <!--
                     Candidate releases: every release the scrapers found for
                     this title. Shown whether or not something is downloaded,
                     because swapping to a different release is the whole point
@@ -297,6 +289,17 @@
                                 <span class="text-muted-foreground block text-xs">
                                     {releases.length} found{#if seededCount !== null}, {seededCount}
                                         with seeders{/if}{#if rejectedCount}
+
+
+                <!--
+                    Watch from a site: play a direct link without downloading
+                    or adding to the library. This section appears below
+                    candidate releases because the releases are what you'd use
+                    to add something new; watching direct is for when you just
+                    want to stream now.
+                -->
+                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
+
                                         &middot; {rejectedCount} rejected{/if}
                                 </span>
                             </span>
