@@ -781,7 +781,30 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
 async function dispatch(event: Ctx): Promise<Response> {
     if (!jellyfinEnabled()) return notFound();
 
-    const pathname = "/" + (event.params.jellyfin || "");
+    let pathname = "/" + (event.params.jellyfin || "");
+
+    /*
+        Emby clients prefix every call with /emby.
+
+        Jellyfin forked from Emby 3.5.2, so the two protocols share an
+        ancestor and, for everything this server implements, still agree:
+        confirmed against Emby's own Java client (MediaBrowser/
+        Emby.ApiClient.Java), whose BaseApiClient.getApiUrl() returns
+        `serverAddress + "/emby"` and whose authorization scheme is the same
+        "MediaBrowser" header this already parses. Its endpoint list --
+        Users/AuthenticateByName, Users/Public, System/Info/Public,
+        System/Endpoint, Sessions/Capabilities/Full, Sessions/Playing and its
+        Progress/Stopped variants, Items, Videos -- is one this route table
+        already serves in full.
+
+        So the prefix is the whole difference, and stripping it here is the
+        whole of Emby support. Done at dispatch rather than by registering a
+        second set of routes: two tables would drift, and every handler below
+        is prefix-agnostic already.
+    */
+    if (/^\/emby(\/|$)/i.test(pathname)) {
+        pathname = pathname.slice(5) || "/";
+    }
 
     for (const candidate of ROUTES) {
         if (candidate.method !== event.request.method) continue;
