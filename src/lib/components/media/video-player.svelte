@@ -130,6 +130,26 @@
         return probe.canPlayType(mimeType) !== "";
     }
 
+    /**
+     * Start playback explicitly, rather than trusting the `autoplay`
+     * attribute.
+     *
+     * `autoplay` is only reliable when the source is present at parse time.
+     * Here it is assigned after an async playback_info round trip, by which
+     * point the browser has already decided the element had nothing to play
+     * and moved on -- so the overlay opened paused and had to be started by
+     * hand.
+     *
+     * Not a policy violation: opening this player is itself a click, and
+     * user activation is document-wide and outlives that async gap. If a
+     * browser refuses anyway the overlay's own play button is right there,
+     * so a rejection is left alone rather than retried muted -- starting
+     * silently would be a worse surprise than starting paused.
+     */
+    function attemptPlay(): void {
+        videoElement?.play().catch(() => {});
+    }
+
     function startDirect() {
         mode = "direct";
         if (videoElement) videoElement.src = directUrl;
@@ -408,6 +428,7 @@
             bind:this={videoElement}
             onerror={onVideoError}
             onloadedmetadata={applyResume}
+            oncanplay={attemptPlay}
             onplay={startProgressReporting}
             onpause={reportProgress}
             {controls}

@@ -26,9 +26,9 @@
      * Zoom runs from fit (the whole frame, letterboxed) to cover (the bars
      * exactly gone) and stops there. Zooming past cover only discards picture.
      */
-    import { onDestroy } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import { player } from "$lib/stores/player.svelte";
-    import { toGuid } from "$lib/utils/jellyfin-ids";
+    import { toast } from "svelte-sonner";
     import VideoPlayer from "./video-player.svelte";
     import XIcon from "@lucide/svelte/icons/x";
     import PlayIcon from "@lucide/svelte/icons/play";
@@ -626,20 +626,64 @@
      * True when: (1) external player is available on the Jellyfin shell,
      * or (2) no shell (browser playback).
      */
-    let canOpenExternal = $derived(!!target);
+    /*
+        Only when a shell bridge is actually there to hand a URL to. In a
+        plain browser there is nothing to open with, and a control that
+        cannot do anything is worse than no control -- which is what this
+        was, since it rendered whenever something was playing.
 
-    function openInExternal() {
-        if (!target) return;
+        Resolved on mount rather than inline: the bridge is injected by a
+        deferred script, so it can be absent for the first render even inside
+        the shell.
+    */
+    let canOpenExternal = $state(false);
 
-        if (target.kind === "library" && "itemId" in target) {
-            // Library item: use the Jellyfin bridge's external player flow
-            window.RivenNative?.play(toGuid(target.itemId));
-        } else if (target.kind === "direct" && "src" in target) {
-            // Direct web link: hand over the scraped URL to the external player
-            const absolute = new URL(target.src, window.location.href).href;
-            if (window.RivenNative?.externalPlayerSelected?.()) {
-                window.RivenNative.openExternal(absolute);
+    onMount(() => {
+        canOpenExternal = !!window.RivenNative?.openExternal;
+    });
+
+    let openingExternal = $state(false);
+
+    async function openInExternal() {
+        if (!target || openingExternal) return;
+
+        openingExternal = true;
+
+        try {
+            let url: string | null = null;
+
+            if (target.kind === "direct") {
+                // Already a URL this server proxies; nothing to mint.
+                url = new URL(target.src, window.location.href).href;
+            } else {
+                /*
+                    A library item's own player URL is cookie-authenticated
+                    and useless to another app, so ask for one carrying a
+                    play-session capability token instead.
+                */
+                const response = await fetch(`/api/stream/${target.itemId}/external_url`);
+
+                if (response.ok) url = (await response.json()).url ?? null;
             }
+
+            if (!url) {
+                toast.error("Could not build a link for an external player");
+                return;
+            }
+
+            /*
+                Deliberately NOT gated on externalPlayerSelected(). That
+                setting picks the DEFAULT for tapping Play; this button is an
+                explicit "open this one in something else right now", and
+                gating it meant the button did nothing whenever the default
+                was the web player -- which is exactly when someone reaches
+                for it.
+            */
+            if (!window.RivenNative?.openExternal(url)) {
+                toast.error("No app available to open this video");
+            }
+        } finally {
+            openingExternal = false;
         }
     }
 
