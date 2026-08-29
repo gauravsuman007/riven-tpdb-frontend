@@ -289,17 +289,6 @@
                                 <span class="text-muted-foreground block text-xs">
                                     {releases.length} found{#if seededCount !== null}, {seededCount}
                                         with seeders{/if}{#if rejectedCount}
-
-
-                <!--
-                    Watch from a site: play a direct link without downloading
-                    or adding to the library. This section appears below
-                    candidate releases because the releases are what you'd use
-                    to add something new; watching direct is for when you just
-                    want to stream now.
-                -->
-                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
-
                                         &middot; {rejectedCount} rejected{/if}
                                 </span>
                             </span>
@@ -454,6 +443,15 @@
                         </Collapsible.Content>
                     </Collapsible.Root>
                 {/if}
+
+                <!--
+                    Watch from a site: play a direct link without downloading
+                    or adding to the library. This section appears below
+                    candidate releases because the releases are what you'd use
+                    to add something new; watching direct is for when you just
+                    want to stream now.
+                -->
+                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
 
                 {#if collected}
                     <p class="text-muted-foreground text-xs">
