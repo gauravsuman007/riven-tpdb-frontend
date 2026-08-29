@@ -67,18 +67,35 @@
         // be emptied after submitting, and relying on that Svelte behaviour to
         // save us is not something to leave to chance.
         reset: false,
+        /*
+            Deliberately NOT invalidating every load function on the site
+            after a save.
+
+            The integration's default is invalidateAll(), which re-runs EVERY
+            page's load. That call sits outside the request task's own
+            try/catch, so if any one of them fails -- a slow backend, a
+            transient error on a page unrelated to settings -- the task
+            rejects and `onFailure` reports "something went wrong while
+            saving" for a save that already succeeded. That is the reported
+            bug: the settings were written and the UI said they were not.
+
+            The response already carries what the server validated and
+            stored, so nothing here needs the refetch.
+        */
+        invalidateAll: false,
         onSuccess: (result) => {
             if (result.type === "success") {
                 // Snap every control back to what the backend actually stored.
                 //
-                // The integration calls invalidateAll() before this runs, so
-                // `page.data` is already refreshed -- but the form captures its
-                // initial value once at setup and never re-reads it, so the
-                // widgets can drift from the saved settings and stay drifted
-                // until a manual reload. This makes the stored value the single
-                // source of truth after every save, whatever the controls were
-                // showing a moment earlier.
-                const stored = (page.data as any)?.form?.initialValue;
+                // Taken from the RESPONSE rather than `page.data`: with
+                // invalidateAll off, page.data still holds the value from the
+                // last full load, and the form captures its initial value
+                // once at setup and never re-reads it. The action returns the
+                // validated result, which is the authoritative "what is now
+                // stored".
+                const stored =
+                    (result as any)?.data?.form?.data ??
+                    (page.data as any)?.form?.initialValue;
 
                 if (stored) setValue(form, structuredClone(stored));
 
@@ -110,9 +127,25 @@
                 });
             }
         },
-        onFailure: () => {
+        onFailure: (error: unknown) => {
             settle(false);
-            toast.error("Something went wrong while saving settings");
+
+            /*
+                Reached only when the request task itself threw, which now
+                means the response could not be parsed or the network dropped
+                -- not that the server rejected the settings, which arrives
+                through onSuccess with a failure result above.
+
+                The message says what is actually known and the real error is
+                logged, because the previous wording ("something went wrong")
+                described every possible cause equally and made the one real
+                report of it impossible to diagnose from.
+            */
+            console.error("[settings] save request failed:", error);
+            toast.error("Could not reach the server to save settings", {
+                description: "Your changes are still in the form -- try again.",
+                duration: 8000
+            });
         }
     });
 

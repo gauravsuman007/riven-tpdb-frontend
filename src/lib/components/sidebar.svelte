@@ -7,7 +7,6 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { getInitials } from "$lib/utils";
     import { resolve } from "$app/paths";
-    import CalendarDays from "@lucide/svelte/icons/calendar-days";
     import FileClock from "@lucide/svelte/icons/file-clock";
     import Home from "@lucide/svelte/icons/home";
     import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
@@ -34,7 +33,6 @@
         { href: "/brochure", icon: BookOpen, label: "Brochure" },
         { href: "/avn", icon: Trophy, label: "AVN" },
         { href: "/explore", icon: Search, label: "Explore" },
-        { href: "/calendar", icon: CalendarDays, label: "Calendar" },
         { href: "/auth", icon: User, label: "Profile" },
         { href: "/settings", icon: Settings, label: "Settings" },
         { href: "/logs", icon: FileClock, label: "Logs" }
@@ -212,6 +210,14 @@
             {/if}
 
             <nav class="flex flex-col gap-1" aria-label="Mobile Navigation">
+                <!--
+                    Also here, not only in the desktop sidebar. That one is
+                    `hidden md:flex`, so on a phone -- which is exactly where
+                    the Jellyfin client runs -- the escape control was never
+                    rendered, which is why it could not be found.
+                -->
+                <ShellExit labelled class="mb-1 w-full justify-start" />
+
                 {#each navItems as item (item.href)}
                     <a
                         href={resolve(item.href)}

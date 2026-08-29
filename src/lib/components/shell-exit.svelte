@@ -34,7 +34,7 @@
     let mode = $state<"none" | "multiplexer" | "server-selection">("none");
 
     onMount(() => {
-        const resolve = () => {
+        const resolve = (): typeof mode => {
             if (document.documentElement.dataset.multiplexer === "1") return "multiplexer";
             if (window.RivenNative?.serverSelectionAvailable?.()) return "server-selection";
             return "none";
@@ -42,10 +42,27 @@
 
         mode = resolve();
 
-        // The bridge script is deferred, so hydration can beat it and latch
-        // this to "none" for the session -- the same race that made the
-        // player's external-player button vanish. One re-check is enough.
-        if (mode === "none") requestAnimationFrame(() => (mode = resolve()));
+        if (mode !== "none") return;
+
+        /*
+            Polled briefly rather than checked once.
+
+            The bridge arrives from a `defer`red script, and there is no
+            guaranteed ordering between that and hydration -- a single check,
+            or a single retry frame, can land first and latch this to "none"
+            for the whole session, which is exactly why the button could not
+            be found. Polling for a couple of seconds costs nothing (a
+            property read) and removes the race entirely rather than betting
+            on winning it.
+        */
+        const started = Date.now();
+        const timer = setInterval(() => {
+            mode = resolve();
+
+            if (mode !== "none" || Date.now() - started > 3000) clearInterval(timer);
+        }, 150);
+
+        return () => clearInterval(timer);
     });
 
     function leave() {
