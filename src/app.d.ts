@@ -39,6 +39,13 @@ declare global {
             externalPlayerSelected: () => boolean;
             /** Hands a raw media URL to the OS chooser, bypassing Jellyfin. */
             openExternal: (url: string) => boolean;
+            /**
+             * Asks the native activity to hide the system UI and lock to
+             * landscape. Returns false outside the shell, where the ordinary
+             * Fullscreen API is the right path instead.
+             */
+            enableFullscreen: () => boolean;
+            disableFullscreen: () => boolean;
             /** Whether this shell can open its own native settings screen. */
             settingsAvailable: () => boolean;
             /** Opens them -- where the player type (web/integrated/external) lives. */

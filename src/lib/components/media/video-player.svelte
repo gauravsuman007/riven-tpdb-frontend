@@ -65,17 +65,29 @@
          * the element's own `duration` whenever it is set.
          */
         duration?: number;
+        /**
+         * The file's real height as "1080p", and its size in bytes, both from
+         * the same playback_info probe as `duration`. Reported so the overlay
+         * can describe a library file exactly the way it already describes a
+         * direct-scrape one -- undefined until that call answers, and for a
+         * direct video, which has no library item to probe.
+         */
+        resolution?: string;
+        fileSize?: number;
     }
 
     interface PlaybackInfo {
         mode: "direct" | "remux" | "transcode";
         mime_type: string | null;
         reason: string;
+        file_size: number | null;
         probe: {
             duration: number;
             video_codec: string | null;
             audio_codec: string | null;
             container: string | null;
+            width: number | null;
+            height: number | null;
         };
     }
 
@@ -87,7 +99,9 @@
         class: className = "",
         element = $bindable(),
         controls = false,
-        duration = $bindable()
+        duration = $bindable(),
+        resolution = $bindable(),
+        fileSize = $bindable()
     }: VideoPlayerProps = $props();
 
     let videoElement: HTMLVideoElement | undefined = $state();
@@ -301,6 +315,13 @@
             // A duration of 0 means the probe failed rather than that the
             // file is instant; only trust a positive value.
             duration = info.probe.duration > 0 ? info.probe.duration : undefined;
+
+            // Reported the same way the direct-scrape player reports them, so
+            // one overlay can show both kinds of source identically. Height
+            // rather than width because that is what "1080p" names, and the
+            // same file is 1920x1080 or 1440x1080 depending on aspect.
+            resolution = info.probe.height ? `${info.probe.height}p` : undefined;
+            fileSize = info.file_size ?? undefined;
 
             // The backend recommends; the browser decides, because only it
             // knows what it can actually decode.

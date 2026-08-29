@@ -100,6 +100,10 @@
     // over `video.duration` whenever set -- see the prop's doc comment for why
     // the element's own value can be badly wrong for a non-faststart file.
     let probedDuration = $state<number | undefined>(undefined);
+    // Library-item equivalents of the direct player's liveResolution/liveSize,
+    // filled in by the same playback_info probe that supplies probedDuration.
+    let probedResolution = $state<string | undefined>(undefined);
+    let probedFileSize = $state<number | undefined>(undefined);
     let buffered = $state(0);
     let scrubbing = $state(false);
 
@@ -526,6 +530,19 @@
     async function toggleFullscreen() {
         if (!container) return;
 
+        const leaving = !!document.fullscreenElement || isFullscreen;
+
+        /*
+            Inside the Jellyfin WebView the status bar is OUTSIDE the page's
+            viewport, so requestFullscreen() cannot touch it -- the video
+            expands to fill the WebView and the system bar stays visible over
+            it. Only the native activity can hide it. Ask it first, then still
+            run the web path below so the page's own layout switches to its
+            fullscreen arrangement either way.
+        */
+        if (leaving) window.RivenNative?.disableFullscreen?.();
+        else window.RivenNative?.enableFullscreen?.();
+
         try {
             if (document.fullscreenElement) {
                 await document.exitFullscreen();
@@ -533,9 +550,11 @@
                 await container.requestFullscreen();
             }
         } catch {
-            // Safari on iPhone refuses fullscreen on non-video elements. The
-            // overlay already covers the viewport, so this is cosmetic.
-            isFullscreen = !isFullscreen;
+            // Safari on iPhone refuses fullscreen on non-video elements, and
+            // the WebView may refuse it too -- in the latter case the native
+            // call above has already done the real work, so track the state
+            // ourselves rather than leaving the UI out of step with it.
+            isFullscreen = !leaving;
         }
     }
 
@@ -564,6 +583,12 @@
 
     function close() {
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        // Unconditional: the native activity may be fullscreen (and locked to
+        // landscape) even when document.fullscreenElement is null, because
+        // the WebView can refuse the web request while the native side still
+        // took effect. Leaving that on would strand the whole app in
+        // landscape with no status bar after the player closes.
+        window.RivenNative?.disableFullscreen?.();
         reset();
         player.close();
     }
@@ -631,6 +656,19 @@
     let metaLoading = $state(false);
 
     const directTarget = $derived(target?.kind === "direct" ? target : null);
+
+    /*
+        One pair of values for the header, whichever kind of source is
+        playing. A direct video prefers the freshly resolved numbers over
+        whatever the search result carried; a library item has only the
+        ffprobe ones.
+    */
+    const shownResolution = $derived(
+        directTarget ? (liveResolution ?? directTarget.resolution) : probedResolution
+    );
+    const shownSize = $derived(
+        directTarget ? (liveSize ?? directTarget.size) : probedFileSize
+    );
     const canBookmark = $derived(!!directTarget?.site && !!directTarget?.videoId);
 
     async function checkBookmarked() {
@@ -837,23 +875,25 @@
             <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-white">{target.title}</p>
                 <!--
-                    Resolution/size for a direct-scrape video only -- a
-                    library item's real probed values live in the player's
-                    own description elsewhere, and duplicating that here
-                    would just be two places disagreeing if they ever drift.
+                    Resolution and size, for both kinds of source.
+
+                    A library file gets them from the ffprobe playback_info
+                    call the player already makes (height, plus the recorded
+                    download size, which the probe itself cannot know -- it
+                    reads stream metadata over the network, never the whole
+                    file). A direct-scrape video gets them from the search
+                    result or the on-demand resolve. Different origins, same
+                    two facts, so they are rendered by one block rather than
+                    two that could drift apart.
                 -->
-                {#if directTarget}
-                    {@const resolution = liveResolution ?? directTarget.resolution}
-                    {@const size = liveSize ?? directTarget.size}
-                    {#if metaLoading && !resolution && !size}
-                        <p class="text-xs text-white/50">Fetching quality&hellip;</p>
-                    {:else if resolution || size}
-                        <p class="font-mono text-xs text-white/60">
-                            {[resolution, size ? formatBytes(size) : null]
-                                .filter(Boolean)
-                                .join(" · ")}
-                        </p>
-                    {/if}
+                {#if directTarget && metaLoading && !shownResolution && !shownSize}
+                    <p class="text-xs text-white/50">Fetching quality&hellip;</p>
+                {:else if shownResolution || shownSize}
+                    <p class="font-mono text-xs text-white/60">
+                        {[shownResolution, shownSize ? formatBytes(shownSize) : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                    </p>
                 {/if}
             </div>
 
@@ -942,6 +982,8 @@
                             itemId={target.itemId}
                             bind:element={video}
                             bind:duration={probedDuration}
+                            bind:resolution={probedResolution}
+                            bind:fileSize={probedFileSize}
                             class="h-full w-full" />
                     {:else}
                         <VideoPlayer

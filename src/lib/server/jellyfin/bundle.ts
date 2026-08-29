@@ -71,6 +71,31 @@ export const BUNDLE_JS = `
     return exoAvailable() || externalAvailable();
   }
 
+  /**
+   * The shell bridge that owns openUrl, fullscreen and client settings.
+   *
+   * "NativeInterface" is the real one: WebViewFragment.kt:188 registers
+   * exactly four JavascriptInterfaces -- NativeInterface, NativePlayer,
+   * ExternalPlayer, MediaSegments -- and NativeShell is NOT among them.
+   * NativeShell is a plain JS object that jellyfin-web itself defines and
+   * layers over NativeInterface, so it exists only when the real jellyfin-web
+   * is being served. We serve this bundle in its place, so it never does.
+   *
+   * That was a real, silent bug: every call guarded on window.NativeShell
+   * returned false forever, which made "open in external player" do nothing
+   * at all and sent direct-site videos to the in-page overlay even with an
+   * external player selected. NativeShell is still preferred when present so
+   * this keeps working if these pages are ever loaded by a shell that does
+   * define it.
+   */
+  function shell() {
+    try {
+      if (window.NativeShell && window.NativeShell.openUrl) return window.NativeShell;
+      if (window.NativeInterface) return window.NativeInterface;
+    } catch (e) {}
+    return null;
+  }
+
   // Failures only: this bridge is invisible from the server side, so a
   // silent abort here is very expensive to diagnose (see AGENTS.md).
   function log() {
@@ -165,7 +190,7 @@ export const BUNDLE_JS = `
      * For direct-site videos there is no library item, so ExternalPlayer's
      * own entry point cannot be used: initPlayer() takes item ids and
      * resolves them through PlaybackInfo, which only exists for things in
-     * the library. NativeShell.openUrl() instead fires a plain
+     * the library. shell().openUrl() instead fires a plain
      * Intent(ACTION_VIEW, uri) (ActivityEventHandler.kt:68-72), so Android
      * offers whatever video players are installed and the chosen one gets
      * nothing but the URL -- no session, no token, no dependency on the
@@ -174,9 +199,11 @@ export const BUNDLE_JS = `
     externalPlayerSelected: externalAvailable,
 
     openExternal: function (url) {
+      var host = shell();
+      if (!host || !host.openUrl) { log("no shell bridge for openUrl"); return false; }
+
       try {
-        if (!window.NativeShell || !window.NativeShell.openUrl) return false;
-        window.NativeShell.openUrl(url);
+        host.openUrl(url);
         return true;
       } catch (e) {
         log("openUrl failed", e);
@@ -184,17 +211,49 @@ export const BUNDLE_JS = `
       }
     },
 
+    /**
+     * Ask the ANDROID ACTIVITY to go fullscreen, which the Fullscreen API
+     * cannot do from inside a WebView.
+     *
+     * requestFullscreen() only ever expands an element within the WebView's
+     * own viewport -- the activity's status bar is outside that viewport
+     * entirely, so it stays on screen no matter what the page does. Only
+     * the native side can hide it, via ChangeFullscreen
+     * (ActivityEventHandler.kt:48-60), which also locks to landscape.
+     *
+     * Returns whether the bridge accepted it, so the caller can still run
+     * the ordinary web fullscreen path in a plain browser.
+     */
+    enableFullscreen: function () {
+      var host = shell();
+      if (!host || !host.enableFullscreen) return false;
+
+      try { host.enableFullscreen(); return true; }
+      catch (e) { log("enableFullscreen failed", e); return false; }
+    },
+
+    disableFullscreen: function () {
+      var host = shell();
+      if (!host || !host.disableFullscreen) return false;
+
+      try { host.disableFullscreen(); return true; }
+      catch (e) { log("disableFullscreen failed", e); return false; }
+    },
+
     // Opens the app's own settings screen, where the player type above is
     // chosen. This is the only way to reach those preferences: they are
     // native, per-device, and have no server-side representation, so a
     // server cannot set them on the client's behalf.
     settingsAvailable: function () {
-      try { return !!(window.NativeShell && window.NativeShell.openClientSettings); }
-      catch (e) { return false; }
+      var host = shell();
+      return !!(host && host.openClientSettings);
     },
 
     openSettings: function () {
-      try { window.NativeShell.openClientSettings(); return true; }
+      var host = shell();
+      if (!host || !host.openClientSettings) return false;
+
+      try { host.openClientSettings(); return true; }
       catch (e) { log("openClientSettings failed", e); return false; }
     }
   };
