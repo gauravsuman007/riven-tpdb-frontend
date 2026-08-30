@@ -37,8 +37,22 @@ declare global {
             play: (itemId: string, startPositionTicks?: number) => boolean;
             /** True when the human chose "external" (VLC/MX Player). */
             externalPlayerSelected: () => boolean;
-            /** Hands a raw media URL to the OS chooser, bypassing Jellyfin. */
+            /**
+             * Hands a raw media URL to the OS, bypassing Jellyfin.
+             *
+             * Cannot produce a media-player chooser: the intent carries no
+             * MIME type, so Android resolves an http URL by scheme and a
+             * browser wins. Prefer `playDirect` and keep this as the fallback
+             * for a shell with no player bridge.
+             */
             openExternal: (url: string) => boolean;
+            /**
+             * Plays a video by Jellyfin item id through whichever native
+             * player is selected. This is the path that produces a chooser,
+             * because ExternalPlayer.initPlayer() sets the "video/*" type.
+             * False when no native player bridge is enabled.
+             */
+            playDirect: (itemId: string) => boolean;
             /**
              * Asks the native activity to hide the system UI and lock to
              * landscape. Returns false outside the shell, where the ordinary

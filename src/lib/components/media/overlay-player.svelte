@@ -27,6 +27,7 @@
      * exactly gone) and stops there. Zooming past cover only discards picture.
      */
     import { onDestroy } from "svelte";
+    import { toGuid } from "$lib/utils/jellyfin-ids";
     import { player } from "$lib/stores/player.svelte";
     import { toast } from "svelte-sonner";
     import VideoPlayer from "./video-player.svelte";
@@ -667,8 +668,12 @@
 
         try {
             let url: string | null = null;
-            // Set only for a direct-scrape video, which is the case that has
-            // an id minted for it rather than one it already had.
+            /*
+                The Jellyfin item id to hand the native player. A library item
+                already has one; a direct-scrape video has one minted for it.
+                Either way this is the path that produces a chooser -- see the
+                note below on why openUrl() cannot.
+            */
             let itemId: string | null = null;
 
             if (target.kind === "direct") {
@@ -694,7 +699,19 @@
                 }
             } else {
                 /*
-                    A library item's own player URL is cookie-authenticated
+                    A library item already HAS a Jellyfin id -- the same one
+                    tapping Play hands to the native player -- so use it. This
+                    branch used to set only `url`, which meant it always fell
+                    through to openUrl() below and the video opened in a
+                    BROWSER instead of a player chooser. Reported exactly that
+                    way, and only for library items: the direct-scrape branch
+                    above has minted an id since it was written.
+                */
+                itemId = toGuid(target.itemId);
+
+                /*
+                    Still fetched, as the fallback for a shell with no player
+                    bridge: the item's own player URL is cookie-authenticated
                     and useless to another app, so ask for one carrying a
                     play-session capability token instead.
                 */
@@ -703,10 +720,6 @@
                 if (response.ok) url = (await response.json()).url ?? null;
             }
 
-            if (!url) {
-                toast.error("Could not build a link for an external player");
-                return;
-            }
 
             /*
                 Deliberately NOT gated on externalPlayerSelected(). That
@@ -732,6 +745,11 @@
                 best available behaviour.
             */
             if (itemId && window.RivenNative?.playDirect?.(itemId)) return;
+
+            if (!url) {
+                toast.error("Could not build a link for an external player");
+                return;
+            }
 
             if (!window.RivenNative?.openExternal(url)) {
                 toast.error("No app available to open this video");

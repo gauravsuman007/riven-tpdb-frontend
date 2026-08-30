@@ -896,13 +896,40 @@ async function dispatch(event: Ctx): Promise<Response> {
 
     const pathname = "/" + (event.params.jellyfin || "");
 
+    /*
+        HEAD is answered by the matching GET route with the body dropped.
+
+        Nothing here registers HEAD explicitly, so every HEAD used to 404 --
+        including on `/Videos/{id}/stream`, which real Jellyfin answers. That
+        matters: ffmpeg (so MX Player, VLC, mpv) probes with HEAD before
+        opening a URL, and a 404 there costs a failed request and a retry on
+        every single playback start, against a debrid link where one round
+        trip is ~0.5s.
+    */
+    const method = event.request.method === "HEAD" ? "GET" : event.request.method;
+
     for (const candidate of ROUTES) {
-        if (candidate.method !== event.request.method) continue;
+        if (candidate.method !== method) continue;
 
         const match = pathname.match(candidate.pattern);
         if (!match) continue;
 
-        return candidate.handler(event, match);
+        const response = await candidate.handler(event, match);
+
+        if (event.request.method !== "HEAD") return response;
+
+        /*
+            Headers are kept -- content-length and accept-ranges are the whole
+            point of the probe -- and the body is cancelled rather than left
+            dangling, so the upstream fetch is not held open.
+        */
+        void response.body?.cancel();
+
+        return new Response(null, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers
+        });
     }
 
     return notFound();
@@ -910,3 +937,4 @@ async function dispatch(event: Ctx): Promise<Response> {
 
 export const GET: RequestHandler = (event) => dispatch(event);
 export const POST: RequestHandler = (event) => dispatch(event);
+export const HEAD: RequestHandler = (event) => dispatch(event);
