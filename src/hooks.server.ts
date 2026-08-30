@@ -3,6 +3,7 @@ import { redirect, error, type Handle, type ServerInit } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 import { sequence } from "@sveltejs/kit/hooks";
+import { isLegacyClient, shouldRedirectToTV } from "$lib/server/legacy-client";
 import { env } from "$env/dynamic/private";
 import providers from "$lib/providers";
 import { dev } from "$app/environment";
@@ -120,6 +121,30 @@ const localAccessSession = async (event: Parameters<Handle>[0]["event"]) => {
     };
 };
 
+/**
+ * Send a browser too old to run this app to the surface that it can run.
+ *
+ * Without this the LG C9 -- Chromium 53, see legacy-client.ts -- lands on the
+ * ordinary home page and gets an unstyled fragment with no working
+ * navigation, which looks like a broken server rather than an unsupported
+ * browser. /tv is server-rendered with no client JavaScript and plain CSS,
+ * so it works there.
+ *
+ * Deliberately not a hard block: this only moves top-level page navigations,
+ * and never the Jellyfin protocol -- the webOS Jellyfin client speaks that
+ * from the same old engine and must keep reaching it untouched.
+ */
+const routeLegacyClientsToTV: Handle = async ({ event, resolve }) => {
+    if (
+        isLegacyClient(event.request.headers.get("user-agent")) &&
+        shouldRedirectToTV(event.url.pathname, event.request.headers.get("accept"))
+    ) {
+        redirect(307, "/tv");
+    }
+
+    return resolve(event);
+};
+
 export const betterAuthHandler: Handle = async ({ event, resolve }) => {
     if (event.route.id?.startsWith("/(protected)")) {
         const session = await auth.api.getSession({
@@ -140,7 +165,16 @@ export const betterAuthHandler: Handle = async ({ event, resolve }) => {
             return svelteKitHandler({ event, resolve, auth, building });
         }
 
-        redirect(307, "/auth/login");
+        /*
+            An old TV cannot use the ordinary login page: it hides its form
+            behind a JavaScript tab component, so a client that never hydrates
+            sees the Register trigger and nothing else. /auth/tv is the same
+            sign-in as a plain server-rendered form.
+        */
+        redirect(
+            307,
+            isLegacyClient(event.request.headers.get("user-agent")) ? "/auth/tv" : "/auth/login"
+        );
     } else {
         return svelteKitHandler({ event, resolve, auth, building });
     }
@@ -270,6 +304,7 @@ const injectAppLockCover: Handle = async ({ event, resolve }) => {
 
 export const handle: Handle = sequence(
     configureLocals,
+    routeLegacyClientsToTV,
     betterAuthHandler,
     injectAppLockCover,
     handleTVDBCookie,
