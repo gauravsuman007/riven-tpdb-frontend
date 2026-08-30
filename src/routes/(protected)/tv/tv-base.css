@@ -1,0 +1,36 @@
+/*
+    Base styles for the TV surface, in a plain stylesheet rather than a
+    `:global()` rule in the layout's own <style> block.
+
+    That is not a preference. Svelte compiles `:global(x)` to
+    `x:where(.svelte-hash)`, and `:where()` is Chromium 88 -- so on this
+    section's target engine (Chromium 53; see +layout.server.ts) those rules
+    parse as garbage and are thrown away. Measured on the built stylesheet
+    before this file existed: four discarded selectors, and they were the page
+    background, the text colour and the focus ring.
+
+    A plain .css file is not scoped, so nothing is rewritten and nothing is
+    lost.
+*/
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: #0b0b0e;
+    color: #f4f4f5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/*
+    A visible focus ring is not decoration here -- a remote has no pointer, so
+    this is the only thing telling the viewer where they are. `:focus`, not
+    `:focus-visible`, which needs Chromium 86.
+*/
+.tv a:focus,
+.tv button:focus,
+.tv input:focus,
+.tv video:focus {
+    outline: 4px solid #818cf8;
+    outline-offset: 3px;
+}
