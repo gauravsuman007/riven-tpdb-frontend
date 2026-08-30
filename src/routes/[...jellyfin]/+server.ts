@@ -73,6 +73,37 @@ function notFound(): Response {
     return new Response("Not found", { status: 404 });
 }
 
+/**
+ * The 404 a BROWSER gets from this catch-all.
+ *
+ * This route matches every unclaimed path in the app, so a person who
+ * mistypes a URL lands here rather than on SvelteKit's error page, and used
+ * to get `text/plain`. That is right for an API client and wrong for a
+ * navigation: inside a Jellyfin client there is no address bar, so a
+ * plain-text 404 is a dead end with no way back -- and the multiplexer's
+ * launcher button is injected into HTML only, so a plain-text body cannot
+ * carry one.
+ *
+ * Chosen on Accept, so nothing an API client sees changes.
+ */
+function notFoundPage(event: Ctx): Response {
+    if (!(event.request.headers.get("accept") ?? "").includes("text/html")) return notFound();
+
+    return new Response(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8" />` +
+            `<meta name="viewport" content="width=device-width,initial-scale=1" />` +
+            `<title>Not found</title></head>` +
+            `<body style="margin:0;min-height:100vh;display:flex;flex-direction:column;` +
+            `align-items:center;justify-content:center;gap:1rem;background:#09090b;color:#fafafa;` +
+            `font:400 15px/1.5 system-ui,-apple-system,sans-serif">` +
+            `<h1 style="margin:0;font-size:1.5rem">Not found</h1>` +
+            `<p style="margin:0;color:#a1a1aa">There is nothing at this address.</p>` +
+            `<a href="/" style="color:#fafafa">Go to the home page</a>` +
+            `</body></html>`,
+        { status: 404, headers: { "content-type": "text/html; charset=utf-8" } }
+    );
+}
+
 function requireEnabled() {
     if (!jellyfinEnabled()) error(404, "Not found");
 }
@@ -967,7 +998,7 @@ async function dispatch(event: Ctx): Promise<Response> {
         });
     }
 
-    return notFound();
+    return notFoundPage(event);
 }
 
 export const GET: RequestHandler = (event) => dispatch(event);
