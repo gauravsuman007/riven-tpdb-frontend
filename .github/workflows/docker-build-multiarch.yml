@@ -64,10 +64,23 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          # Scope per arch; a shared scope makes the runners evict each
-          # other's layers on every build.
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          # NO layer cache, deliberately -- it cost more than it saved.
+          #
+          # Measured per arch on a real build: `cache export` took 24.7s and
+          # produced exactly ONE cache hit on the next run. The only layers
+          # worth reusing are the base image and `pnpm install` (7.9s), while
+          # `mode=max` also exported the post-build layer -- node_modules plus
+          # the Vite output, hundreds of megabytes -- which can never be
+          # reused, because the `COPY . .` above it changes on every commit.
+          #
+          # So it spent ~25s each build to save ~8s on some builds. The rest
+          # of the time is `vite build` (77-82s), which no layer cache can
+          # help with because the source is exactly what changed.
+          #
+          # Reinstate this only alongside a measurement showing a real hit
+          # rate; the tempting `mode=max` is what makes it net-negative here.
+          # riven-tpdb keeps its cache, where `uv sync` is genuinely expensive
+          # and its dependencies rarely change.
 
       - name: Export digest
         shell: bash
