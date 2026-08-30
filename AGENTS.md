@@ -1,5 +1,42 @@
 # riven-tpdb-frontend — agent notes
 
+## App PIN / lockscreen
+
+A per-user 4-digit code that blanks the UI after inactivity. Set on the General
+settings tab; state in `app_lock` (frontend DB), logic in
+`lib/server/app-lock.ts`, enforcement in `hooks.server.ts`.
+
+- **It is a screen lock, NOT an auth factor.** The person it guards against is
+  holding a browser that already has a valid session. Four digits could never
+  be an auth boundary, and the UI says so. Do not "harden" it into one.
+- **Enforcement is a HOOK, not a layout check, and that is the whole design.**
+  `enforceAppLock` redirects to `/lock` before any page load runs, so a locked
+  browser is never *sent* the content. An overlay rendered over `children` has
+  already loaded and shipped them -- the data sits in the DOM and in the
+  `__data.json` flight. Verified: a locked `/settings` answers 303 with 0
+  bytes, and its `__data.json` carries SvelteKit's redirect envelope with none
+  of the settings in it.
+- **The idle clock is NOT request traffic.** These pages poll constantly
+  (dashboard, event stream, progress reporting), so a clock driven by requests
+  never runs down and the lock never engages. Only `POST /api/lock/activity`
+  (throttled, real input) and `setProgress` move it. `setProgress` matters
+  independently: a NATIVE player reports there without ever touching the web
+  UI, so without it a film played through the Jellyfin client would lock the
+  session out from under itself.
+- **The client cover is raw DOM, deliberately.** A tab left open is already
+  painted and no redirect un-paints it. `app-lock-guard.svelte` appends an
+  opaque `<div>` synchronously inside the `visibilitychange` handler, because
+  "before the next paint" is exactly the guarantee needed and a component
+  state change is applied on the framework's schedule. Inline styles, because
+  a restored background tab may not have applied a stylesheet yet and a
+  transparent cover is no cover.
+- **Exemptions are load-bearing**: `/auth/*` (the login page is explicitly
+  never locked), `/lock`, `/api/lock/*`, and the Jellyfin/direct-play routes --
+  a native player mid-stream authenticates with a token rather than this
+  session, and locking it would stop playback on a device nobody is holding.
+- Unlock is throttled (5 attempts, then a cooldown): four digits is 10,000
+  possibilities and the premise is that the attacker already has the device.
+
 ## Jellyfin-compatible surface
 
 Implemented here (`src/routes/[...jellyfin]/+server.ts`, `src/lib/server/jellyfin/`,
