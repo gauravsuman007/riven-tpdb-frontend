@@ -117,6 +117,26 @@ history if it's ever relevant again.
   only thing left to route them by -- and the multiplexer only learns tokens
   by watching AuthenticateByName responses, which this one never produces.
   Without it, routing falls through to "whichever app was last active".
+- **The LG webOS client's handshake has TWO steps, and the second is
+  `/web/manifest.json`.** From jellyfin-webos `frontend/js/index.js`: the
+  success handler for `/System/Info/Public` immediately calls `getManifest()`,
+  and a 404 there lands in `handleFailure` -- "Got HTTP error 404 from server,
+  are you connecting to a Jellyfin Server?" -- with no further request ever
+  made. `start_url` is resolved as `baseurl + "/web/" + start_url`, so
+  `"index.html"` sends the client to `/web/index.html`, which redirects to the
+  app. The Android client never asks for either, which is why only webOS
+  failed and why this went unnoticed for so long.
+- **`openUrl()` can never reach a media player on modern Android.** It fires
+  `ACTION_VIEW` with no MIME type, and an http URI with no type is a WEB
+  intent: only verified link handlers are candidates, so a media player is
+  excluded from the chooser however the path ends -- a `.mp4` extension does
+  not rescue it (tried; logcat showed Android resolving straight to Firefox
+  with no `typ=`). The typed intent is the only route, and it is always
+  available: `WebViewFragment.kt:188-191` registers all four bridges
+  unconditionally and `ExternalPlayer.initPlayer()` has NO `isEnabled()` gate
+  -- only `isEnabled()` reads the player preference. So
+  `RivenNative.openInExternalPlayer()` works even when the client's default is
+  the web player, which is the only time that button is on screen.
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
