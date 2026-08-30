@@ -1,5 +1,7 @@
 <script lang="ts">
     import PageShell from "$lib/components/page-shell.svelte";
+    import { Skeleton } from "$lib/components/ui/skeleton/index.js";
+    import { streamed, type Streamed } from "$lib/streamed.svelte";
     import type { PageData } from "./$types";
     import { cn } from "$lib/utils";
     import * as Card from "$lib/components/ui/card/index.js";
@@ -40,6 +42,24 @@
     } from "./dashboard.remote";
 
     let { data }: { data: PageData } = $props();
+
+    /*
+        Each card's data arrives on its own.
+
+        The load streams four independent queries rather than awaiting them
+        together, so the page paints at once and every section fills in when
+        its own query lands -- most visibly `downloaderInfo`, which calls out
+        to the debrid provider and used to hold the entire dashboard hostage.
+    */
+    const stats = streamed(() => data.statistics);
+    const svcs = streamed(() => data.services);
+    const dlInfo = streamed(() => data.downloaderInfo);
+    const dls = streamed(() => data.downloads);
+
+    const statistics = $derived(stats.value);
+    const services = $derived(svcs.value ?? {});
+    const downloaderInfo = $derived(dlInfo.value);
+    const downloads = $derived(dls.value);
 
     const downloadsStore = new ItemStore();
     let actionInProgress = $state(false);
@@ -112,34 +132,34 @@
         );
     }
 
-    const transformedStates = $derived(transformStatesToArray(data.statistics?.states));
+    const transformedStates = $derived(transformStatesToArray(statistics?.states));
 
     const contentBreakdown = $derived.by(() => {
-        if (!data.statistics) return [];
+        if (!statistics) return [];
         return [
-            { key: "Movies", value: data.statistics.total_movies, c: "#ef4444" },
-            { key: "Shows", value: data.statistics.total_shows, c: "#14b8a6" },
-            { key: "Seasons", value: data.statistics.total_seasons, c: "#60a5fa" },
-            { key: "Episodes", value: data.statistics.total_episodes, c: "#f59e0b" }
+            { key: "Movies", value: statistics.total_movies, c: "#ef4444" },
+            { key: "Shows", value: statistics.total_shows, c: "#14b8a6" },
+            { key: "Seasons", value: statistics.total_seasons, c: "#60a5fa" },
+            { key: "Episodes", value: statistics.total_episodes, c: "#f59e0b" }
         ];
     });
 
     const completionRate = $derived.by(() => {
         if (
-            !data.statistics ||
-            data.statistics.total_items === 0 ||
-            data.statistics.states.Completed === undefined
+            !statistics ||
+            statistics.total_items === 0 ||
+            statistics.states.Completed === undefined
         ) {
             return "0%";
         }
         return (
-            ((data.statistics.states.Completed / data.statistics.total_items) * 100).toFixed(2) +
+            ((statistics.states.Completed / statistics.total_items) * 100).toFixed(2) +
             "%"
         );
     });
 
-    const activeDownloads = $derived(data.downloads?.active ?? []);
-    const recentDownloads = $derived(data.downloads?.recent ?? []);
+    const activeDownloads = $derived(downloads?.active ?? []);
+    const recentDownloads = $derived(downloads?.recent ?? []);
 
     /** "3h ago" style age, so a stalled item is obvious at a glance. */
     function since(iso: string | null | undefined): string {
@@ -191,18 +211,51 @@
             <Card.Title class="text-sm font-medium text-neutral-300">{title}</Card.Title>
         </Card.Header>
         <Card.Content>
-            <div
-                class={cn(
-                    "text-2xl font-semibold tracking-tight",
-                    tone === "warning" ? "text-amber-300" : "text-neutral-50"
-                )}>
-                {value}
-            </div>
+            {#if value === undefined}
+                <!-- Same height as the number it stands in for, so the card
+                     does not resize when the figure arrives. -->
+                <Skeleton class="h-8 w-24" />
+            {:else}
+                <div
+                    class={cn(
+                        "text-2xl font-semibold tracking-tight",
+                        tone === "warning" ? "text-amber-300" : "text-neutral-50"
+                    )}>
+                    {value}
+                </div>
+            {/if}
             {#if sub}
                 <p class="mt-1 text-sm text-neutral-400">{sub}</p>
             {/if}
         </Card.Content>
     </Card.Root>
+{/snippet}
+
+{#snippet rowPlaceholder(rows: number)}
+    <ul class="divide-border divide-y">
+        {#each Array.from({ length: rows }, (_, i) => i) as row (row)}
+            <li class="flex items-center justify-between gap-3 py-2.5">
+                <div class="min-w-0 flex-1 space-y-1.5">
+                    <Skeleton class="h-4 w-2/3" />
+                    <Skeleton class="h-3 w-1/3" />
+                </div>
+                <Skeleton class="h-5 w-16 shrink-0" />
+            </li>
+        {/each}
+    </ul>
+{/snippet}
+
+{#snippet chartPlaceholder(shape: string)}
+    <!--
+        Stands in for a chart while its query is in flight, at the chart's own
+        size: a card that grows when the data lands pushes everything below it
+        down the page, which is worse than waiting.
+    -->
+    <div class={cn("flex items-end gap-2", shape)}>
+        {#each [70, 45, 90, 30, 60, 80, 40] as height, i (i)}
+            <Skeleton class="flex-1" style="height: {height}%" />
+        {/each}
+    </div>
 {/snippet}
 
 <PageShell>
@@ -211,17 +264,17 @@
     <section class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {@render KPICard({
             title: "Total Items",
-            value: data.statistics?.total_items.toLocaleString(),
+            value: statistics?.total_items.toLocaleString(),
             sub: "All indexed items"
         })}
         {@render KPICard({
             title: "Completed",
-            value: data.statistics?.states.Completed?.toLocaleString(),
+            value: statistics?.states.Completed?.toLocaleString(),
             sub: "Fully processed"
         })}
         {@render KPICard({
             title: "Incomplete",
-            value: data.statistics?.incomplete_items.toLocaleString(),
+            value: statistics?.incomplete_items.toLocaleString(),
             sub: "Pending processing",
             tone: "warning"
         })}
@@ -238,15 +291,19 @@
                 <Card.Title class="text-sm font-medium text-neutral-300">Activity Chart</Card.Title>
             </Card.Header>
             <Card.Content>
-                <Heatmap
-                    data={data.statistics?.activity ?? {}}
-                    colors={[
-                        "var(--muted)",
-                        "var(--chart-4)",
-                        "var(--chart-3)",
-                        "var(--chart-2)",
-                        "var(--chart-1)"
-                    ]} />
+                {#if stats.pending}
+                    {@render chartPlaceholder('h-32')}
+                {:else}
+                    <Heatmap
+                        data={statistics?.activity ?? {}}
+                        colors={[
+                            "var(--muted)",
+                            "var(--chart-4)",
+                            "var(--chart-3)",
+                            "var(--chart-2)",
+                            "var(--chart-1)"
+                        ]} />
+                {/if}
 
                 <div class="mt-4 flex flex-wrap items-center justify-center gap-4">
                     {#each heatmapLegend as item (item.label)}
@@ -268,24 +325,36 @@
                 <Card.Title class="text-sm font-medium text-neutral-300">Library States</Card.Title>
             </Card.Header>
             <Card.Content class="flex flex-1 flex-col">
-                <ResponsiveChartContainer config={{}} class="min-h-[300px] w-full flex-1">
-                    <BarChart
-                        data={transformedStates}
-                        x="state"
-                        y="value"
-                        c="state"
-                        labels
-                        padding={{ top: 16, bottom: 32, left: 32, right: 16 }}
-                        props={{
-                            bars: {
-                                class: "fill-primary"
-                            }
-                        }}>
-                        {#snippet tooltip()}
-                            <Chart.Tooltip />
-                        {/snippet}
-                    </BarChart>
-                </ResponsiveChartContainer>
+                {#if stats.pending}
+                    {@render chartPlaceholder('h-[300px] w-full')}
+                {:else}
+                    {#if stats.pending}
+                        {@render chartPlaceholder('h-[300px] w-full')}
+                    {:else}
+                        {#if stats.pending}
+                            {@render chartPlaceholder('h-[300px] w-full')}
+                        {:else}
+                            <ResponsiveChartContainer config={{}} class="min-h-[300px] w-full flex-1">
+                                <BarChart
+                                    data={transformedStates}
+                                    x="state"
+                                    y="value"
+                                    c="state"
+                                    labels
+                                    padding={{ top: 16, bottom: 32, left: 32, right: 16 }}
+                                    props={{
+                                        bars: {
+                                            class: "fill-primary"
+                                        }
+                                    }}>
+                                    {#snippet tooltip()}
+                                        <Chart.Tooltip />
+                                    {/snippet}
+                                </BarChart>
+                            </ResponsiveChartContainer>
+                        {/if}
+                    {/if}
+                {/if}
 
                 <div class="mt-auto pt-4">
                     {#each transformedStates as item (item.state)}
@@ -349,7 +418,7 @@
                     config={{}}
                     class="aspect-3/1 w-full md:aspect-4/1 lg:aspect-5/1 2xl:aspect-6/1">
                     <LineChart
-                        data={data.statistics?.media_year_releases || []}
+                        data={statistics?.media_year_releases || []}
                         x="year"
                         series={[
                             {
@@ -377,8 +446,12 @@
             </Card.Header>
             <Card.Content>
                 <div class="flex flex-wrap gap-4">
-                    {#if data.services && Object.keys(data.services).length > 0}
-                        {#each Object.entries(data.services) as [serviceName, status] (serviceName)}
+                    {#if svcs.pending}
+                        {#each Array.from({ length: 8 }, (_, i) => i) as badge (badge)}
+                            <Skeleton class="h-6 w-24 rounded-xl" />
+                        {/each}
+                    {:else if services && Object.keys(services).length > 0}
+                        {#each Object.entries(services) as [serviceName, status] (serviceName)}
                             {#if status === true}
                                 <Badge
                                     variant="default"
@@ -423,7 +496,7 @@
                             In Progress
                         </Card.Title>
                         <Badge variant="secondary" class="rounded-xl"
-                            >{data.downloads?.total_active ?? activeDownloads.length}</Badge>
+                            >{downloads?.total_active ?? activeDownloads.length}</Badge>
                     </div>
 
                     <div class="flex items-center gap-1">
@@ -516,7 +589,9 @@
                 </div>
             </Card.Header>
             <Card.Content class="flex-1">
-                {#if activeDownloads.length === 0}
+                {#if dls.pending}
+                    {@render rowPlaceholder(5)}
+                {:else if activeDownloads.length === 0}
                     <p class="text-muted-foreground py-8 text-center text-sm">
                         Nothing in the pipeline.
                     </p>
@@ -629,12 +704,12 @@
                         {/each}
                     </ul>
 
-                    {#if (data.downloads?.total_pages ?? 1) > 1}
+                    {#if (downloads?.total_pages ?? 1) > 1}
                         <div class="flex justify-center pt-4">
                             <Pagination.Root
-                                count={data.downloads?.total_active ?? 0}
-                                perPage={data.downloads?.limit ?? 15}
-                                page={data.downloads?.page ?? 1}
+                                count={downloads?.total_active ?? 0}
+                                perPage={downloads?.limit ?? 15}
+                                page={downloads?.page ?? 1}
                                 onPageChange={(p) => {
                                     const url = new URL(page.url);
                                     url.searchParams.set("dl_page", String(p));
@@ -685,7 +760,9 @@
                 </Card.Title>
             </Card.Header>
             <Card.Content class="flex-1">
-                {#if recentDownloads.length === 0}
+                {#if dls.pending}
+                    {@render rowPlaceholder(5)}
+                {:else if recentDownloads.length === 0}
                     <p class="text-muted-foreground py-8 text-center text-sm">
                         Nothing downloaded yet.
                     </p>
@@ -727,7 +804,23 @@
     </section>
 
     <section class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {#each data.downloaderInfo?.services || [] as downloader (downloader.service)}
+        {#if dlInfo.pending}
+            <!-- Two, because that is the common case: one debrid provider and
+                 rarely a second. Guessing high would reflow more than it saves. -->
+            {#each Array.from({ length: 2 }, (_, i) => i) as card (card)}
+                <Card.Root class="bg-card border">
+                    <Card.Header class="pb-3">
+                        <Skeleton class="h-6 w-32" />
+                    </Card.Header>
+                    <Card.Content class="space-y-2">
+                        <Skeleton class="h-4 w-full" />
+                        <Skeleton class="h-4 w-4/5" />
+                        <Skeleton class="h-4 w-2/3" />
+                    </Card.Content>
+                </Card.Root>
+            {/each}
+        {/if}
+        {#each downloaderInfo?.services || [] as downloader (downloader.service)}
             <Card.Root class="bg-card border bg-linear-to-br">
                 <Card.Header class="pb-3">
                     <div class="flex items-center justify-between">
