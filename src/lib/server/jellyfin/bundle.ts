@@ -200,7 +200,14 @@ export const BUNDLE_JS = `
           // No session to exchange. Only now is whatever is already stored
           // worth a try -- it may be a real token from a different shell,
           // and it is certainly better than giving up silently.
-          if (creds()) { log("no session token; falling back to stored credentials"); importIntoNativeSession(done); return; }
+          if (creds()) {
+            log("no session token; falling back to stored credentials");
+            // Claimed here too: a stored token still has to be routable, and
+            // this branch left the multiplexer guessing.
+            claimTokenWithHost(creds().AccessToken);
+            importIntoNativeSession(done);
+            return;
+          }
           done(false);
           return;
         }

@@ -770,19 +770,37 @@
             /* Nothing to pause. */
         }
 
-        const accepted = await new Promise<boolean>((resolve) => {
+        /*
+            Three outcomes, not two.
+
+            "declined" is the bridge saying it is not the right route at all
+            -- playDirect() when no native player is the default -- and the
+            caller should simply try the next one. "failed" is the bridge
+            taking the call and then not being able to complete it, which is
+            the credential exchange going wrong and worth telling someone
+            about. Collapsing the two meant either a silent failure or a
+            spurious error on every ordinary fall-through.
+        */
+        const outcome = await new Promise<"declined" | "failed" | "accepted">((resolve) => {
             let called: boolean;
 
             try {
-                called = !!bridge.call(window.RivenNative, itemId, resolve);
+                called = !!bridge.call(window.RivenNative, itemId, (ok: boolean) =>
+                    resolve(ok ? "accepted" : "failed")
+                );
             } catch {
                 called = false;
             }
 
-            if (!called) resolve(false);
+            if (!called) resolve("declined");
         });
 
-        if (!accepted) return false;
+        if (outcome === "declined") return false;
+
+        if (outcome === "failed") {
+            toast.error("Could not authenticate the hand-off to an external player");
+            return true;
+        }
 
         if (await awaitForeground()) {
             handedOff();
