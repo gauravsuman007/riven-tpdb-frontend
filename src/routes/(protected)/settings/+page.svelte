@@ -101,12 +101,14 @@
                 if (stored) setValue(form, structuredClone(stored));
 
                 settle(true);
+                lastFailed = undefined;
                 // Re-baseline against what the backend actually stored, so
                 // the watcher below does not immediately see the server's own
                 // normalisation as a fresh edit and save in a loop.
                 baseline = snapshot();
             } else {
                 settle(false);
+                lastFailed = inFlight;
                 // Name the fields that blocked the save. A rejected save
                 // restores the form to the submitted value, which on its own
                 // looks indistinguishable from a save that silently undid
@@ -130,6 +132,7 @@
         },
         onFailure: (error: unknown) => {
             settle(false);
+            lastFailed = inFlight;
 
             /*
                 Reached only when the request task itself threw, which now
@@ -143,8 +146,23 @@
                 report of it impossible to diagnose from.
             */
             console.error("[settings] save request failed:", error);
-            toast.error("Could not reach the server to save settings", {
-                description: "Your changes are still in the form -- try again.",
+
+            /*
+                The reason is included, not just logged. This toast used to
+                say only that the server could not be reached, which is one
+                of several things it can actually mean -- an aborted request,
+                an unparseable response, a real network drop -- and the
+                report that came back ("error messages keep popping up")
+                could not be diagnosed from it at all. Whatever the browser
+                knows is worth more on screen than in a console nobody has
+                open on a TV or a phone.
+            */
+            const detail = error instanceof Error ? error.message : String(error ?? "");
+
+            toast.error("Could not save settings", {
+                description:
+                    (detail ? `${detail}\n` : "") +
+                    "Your changes are still in the form. Edit anything to try again.",
                 duration: 8000
             });
         }
@@ -187,6 +205,24 @@
     let baseline: string | undefined;
     let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
+    /*
+        The value currently being saved, and the last value whose save failed.
+
+        A rejected save restores the form to the submitted value, and that
+        restore is itself a change -- so the watcher below saw a new edit,
+        saved again, failed again, restored again, forever. The visible
+        symptom is a stream of identical error toasts that never stops, which
+        is how this was reported: adding one entry to a list produced endless
+        "could not save" messages.
+
+        Remembering the exact snapshot that failed breaks the cycle without
+        giving up on autosave: a value that has already been rejected is not
+        sent again, but the moment the user changes anything the snapshot
+        differs and saving resumes normally.
+    */
+    let inFlight: string | undefined;
+    let lastFailed: string | undefined;
+
     function snapshot(): string | undefined {
         try {
             return JSON.stringify(getValueSnapshot(form));
@@ -210,6 +246,11 @@
 
         if (current === baseline) return;
 
+        // Already tried, already refused. Retrying achieves nothing except
+        // another toast; the user has been told, and any real edit changes
+        // the snapshot and lifts this.
+        if (current === lastFailed) return;
+
         // Let the in-flight save finish and re-baseline; this effect re-runs
         // when it does.
         if (request.isProcessed) return;
@@ -218,7 +259,10 @@
         autosaveTimer = setTimeout(() => {
             const form_ = formHost?.querySelector("form");
 
-            if (form_) form_.requestSubmit();
+            if (!form_) return;
+
+            inFlight = snapshot();
+            form_.requestSubmit();
         }, AUTOSAVE_DEBOUNCE_MS);
 
         return () => clearTimeout(autosaveTimer);
