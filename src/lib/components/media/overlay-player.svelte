@@ -667,6 +667,9 @@
 
         try {
             let url: string | null = null;
+            // Set only for a direct-scrape video, which is the case that has
+            // an id minted for it rather than one it already had.
+            let itemId: string | null = null;
 
             if (target.kind === "direct") {
                 /*
@@ -684,7 +687,11 @@
                 });
                 const response = await fetch(`/api/direct/external_url?${query}`);
 
-                if (response.ok) url = (await response.json()).url ?? null;
+                if (response.ok) {
+                    const payload = await response.json();
+                    url = payload.url ?? null;
+                    itemId = payload.itemId ?? null;
+                }
             } else {
                 /*
                     A library item's own player URL is cookie-authenticated
@@ -709,6 +716,23 @@
                 was the web player -- which is exactly when someone reaches
                 for it.
             */
+            /*
+                By ID first, URL only as a fallback.
+
+                openUrl() cannot produce a media-player chooser at all: it
+                fires Intent(ACTION_VIEW, uri) with no MIME type, so Android
+                resolves the http URL by scheme and hands it to a browser --
+                reported exactly that way, as the video opening in the browser
+                with no chooser. playDirect() goes through
+                ExternalPlayer.initPlayer(), which sets the "video/*" type
+                that makes the chooser appear, and it addresses videos by id.
+
+                The URL path stays for plain browsers and for any shell that
+                exposes openUrl but no player bridge, where it is still the
+                best available behaviour.
+            */
+            if (itemId && window.RivenNative?.playDirect?.(itemId)) return;
+
             if (!window.RivenNative?.openExternal(url)) {
                 toast.error("No app available to open this video");
             }

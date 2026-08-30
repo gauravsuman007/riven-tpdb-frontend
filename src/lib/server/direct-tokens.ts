@@ -15,7 +15,9 @@
  * video, expiring, useless on any other route.
  */
 
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
+
+import { RESERVED_BODY_HEX } from "$lib/utils/jellyfin-ids";
 
 /** Long enough to watch something; short enough that a leaked URL dies. */
 const TTL_MS = 12 * 60 * 60 * 1000;
@@ -27,6 +29,8 @@ interface Grant {
     site: string;
     videoId: string;
     index: string;
+    /** Shown by the external player, which has nothing else to name it by. */
+    title: string;
     expiresAt: number;
 }
 
@@ -45,12 +49,20 @@ function prune(now: number): void {
     }
 }
 
-export function mintDirectToken(site: string, videoId: string, index = "0"): string {
+export function mintDirectToken(site: string, videoId: string, index = "0", title = ""): string {
     const now = Date.now();
     prune(now);
 
-    const token = randomUUID().replace(/-/g, "");
-    grants.set(token, { site, videoId, index, expiresAt: now + TTL_MS });
+    /*
+        Sized to what is left of a Jellyfin item id once its reserved prefix
+        is spent, because the token IS the id: see `toDirectGuid`. 12 bytes is
+        still 96 bits of entropy on a value that expires in twelve hours and
+        unlocks exactly one video, which is a far wider margin than the threat
+        (someone guessing a URL on a LAN) needs.
+    */
+    const token = randomBytes(RESERVED_BODY_HEX / 2).toString("hex");
+
+    grants.set(token, { site, videoId, index, title, expiresAt: now + TTL_MS });
 
     return token;
 }

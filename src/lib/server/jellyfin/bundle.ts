@@ -212,6 +212,37 @@ export const BUNDLE_JS = `
     },
 
     /**
+     * Play a direct-site video through whichever NATIVE player is selected.
+     *
+     * Preferred over openExternal() for anything that is actually a video.
+     * openUrl() reaches Android as Intent(ACTION_VIEW, uri) with no MIME type
+     * (ActivityEventHandler.kt), so an http URL matches browsers by scheme and
+     * the media-player chooser is never offered -- reported exactly that way:
+     * the video opened in the browser instead. ExternalPlayer.initPlayer()
+     * builds the same intent with setDataAndType(uri, "video/*"), which is
+     * what makes the chooser appear, and it takes an ITEM ID -- hence the
+     * server minting one for these videos (see toDirectGuid).
+     *
+     * Going through the id also means the in-app ExoPlayer works for direct
+     * videos for the first time: the same call serves both player types, the
+     * way it already did for library items.
+     */
+    playDirect: function (itemId) {
+      if (!nativeAvailable()) { log("playDirect() called but no native player"); return false; }
+
+      ensureCredentials(function (ok) {
+        if (!ok) { log("playDirect() aborted: no credentials for native player"); return; }
+
+        var options = JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 });
+
+        if (externalAvailable()) window.ExternalPlayer.initPlayer(options);
+        else window.NativePlayer.loadPlayer(options);
+      });
+
+      return true;
+    },
+
+    /**
      * Ask the ANDROID ACTIVITY to go fullscreen, which the Fullscreen API
      * cannot do from inside a WebView.
      *

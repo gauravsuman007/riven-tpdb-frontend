@@ -34,6 +34,8 @@
  * larger, separate project; see the frontend AGENTS.md.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { error, type RequestHandler } from "@sveltejs/kit";
 import { auth } from "$lib/server/auth";
 import { db } from "$lib/server/db";
@@ -41,9 +43,10 @@ import { user } from "$lib/server/schema";
 import { BUNDLE_JS, BUNDLE_PATH } from "$lib/server/jellyfin/bundle";
 import { jellyfinEnabled, jellyfinServerName, jellyfinUsername } from "$lib/server/jellyfin/config";
 import * as identity from "$lib/server/jellyfin/auth";
-import { LIBRARY_ID, SERVER_ID, USER_ID, fromGuid, toGuid } from "$lib/utils/jellyfin-ids";
+import { LIBRARY_ID, SERVER_ID, USER_ID, fromDirectGuid, fromGuid, toGuid } from "$lib/utils/jellyfin-ids";
 import { baseItem, mediaSourceDto } from "$lib/server/jellyfin/mapping";
 import { issuePlaySession, isValidPlaySession } from "$lib/server/jellyfin/play-sessions";
+import { resolveDirectToken } from "$lib/server/direct-tokens";
 import {
     getProgress,
     getProgressMany,
@@ -613,12 +616,18 @@ const ROUTES: Route[] = [
 
     // --- Video delivery -- proxied to this app's own existing stream routes -
     route("GET", "/Videos/{itemId}/stream", async (event, match) => {
+        const direct = directStreamRedirect(match[1]);
+        if (direct) return direct;
+
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
         requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyStream(event, rivenId);
     }),
     route("GET", "/Videos/{itemId}/stream.{container}", async (event, match) => {
+        const direct = directStreamRedirect(match[1]);
+        if (direct) return direct;
+
         const rivenId = fromGuid(match[1]);
         if (rivenId === null) return notFound();
         requireStreamAuth(event, event.locals.apiKey, rivenId);
@@ -723,7 +732,99 @@ function markPlayed(guid: string, played: boolean): Response {
 }
 
 
+/**
+ * The Jellyfin view of a direct-scrape video.
+ *
+ * These have no MediaItem, no container we can know ahead of time and no
+ * duration the server is sure of, so almost every field is a plausible
+ * default. That is enough: the only consumers are the two native players,
+ * which need a name, a playable URL and a media type -- not a catalogue entry.
+ * It is deliberately NOT surfaced in /Items listings, so it never appears as
+ * a library row that would 404 the moment its token expired.
+ */
+function directItemDto(guid: string, title: string): Json {
+    return {
+        Id: guid,
+        ServerId: SERVER_ID,
+        Name: title || "Video",
+        Type: "Movie",
+        MediaType: "Video",
+        IsFolder: false,
+        LocationType: "FileSystem",
+        ParentId: LIBRARY_ID,
+        RunTimeTicks: null,
+        UserData: { PlaybackPositionTicks: 0, Played: false, PlayCount: 0 },
+        MediaSources: [directSourceDto(guid, title)]
+    };
+}
+
+function directSourceDto(guid: string, title: string): Json {
+    const source = mediaSourceDto(guid, title || "Video", "mp4", null);
+
+    /*
+        Direct play only, and never transcoded. We do not have the file -- it
+        is fetched from the origin site on demand -- so there is nothing local
+        to feed a transcoder, and claiming otherwise would have the client ask
+        for an HLS variant this app cannot produce for these.
+    */
+    source.SupportsDirectStream = true;
+    source.SupportsDirectPlay = true;
+    source.SupportsTranscoding = false;
+    source.TranscodingUrl = null;
+
+    return source;
+}
+
+/**
+ * Send a native player asking for a direct video to the route that serves it.
+ *
+ * Needed because the client BUILDS this URL itself: ExternalPlayer and
+ * ExoPlayer both call `videosApi.getVideoStreamUrl()` rather than using any
+ * URL the MediaSource carried, so `/Videos/{id}/stream` is what they request
+ * no matter what PlaybackInfo said. Answering with a redirect keeps a single
+ * implementation of direct playback (range requests, the octet-stream
+ * content-type fix) in `/direct-play` instead of a second copy here.
+ *
+ * The redirect is deliberately relative-rooted: it must stay on whatever
+ * origin the player was already talking to, which behind the multiplexer is
+ * NOT this app's own configured ORIGIN.
+ */
+function directStreamRedirect(guid: string): Response | null {
+    const token = fromDirectGuid(guid);
+    if (token === null) return null;
+
+    const grant = resolveDirectToken(token);
+    if (!grant) return notFound();
+
+    // The token in the path is the whole authorisation, exactly as it is for
+    // a link handed to an external app, so no session check applies here.
+    return new Response(null, {
+        status: 302,
+        headers: { location: directStreamPath(token, grant.title) }
+    });
+}
+
+/** The direct-play URL a native player should fetch for this token. */
+function directStreamPath(token: string, title: string): string {
+    const label =
+        (title || "video")
+            .replace(/[^\w\s-]/g, "")
+            .trim()
+            .replace(/\s+/g, "-")
+            .slice(0, 60) || "video";
+
+    return `/direct-play/${token}/${label}.mp4`;
+}
+
 async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
+    const directToken = fromDirectGuid(guid);
+
+    if (directToken !== null) {
+        const grant = resolveDirectToken(directToken);
+        if (!grant) return notFound();
+        return json(directItemDto(guid, grant.title));
+    }
+
     const rivenId = fromGuid(guid);
     if (rivenId === null) return notFound();
 
@@ -745,6 +846,18 @@ async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
 async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response> {
     requireAuth(event, event.locals.apiKey);
 
+    const directToken = fromDirectGuid(guid);
+
+    if (directToken !== null) {
+        const grant = resolveDirectToken(directToken);
+        if (!grant) return notFound();
+
+        return json({
+            MediaSources: [directSourceDto(guid, grant.title)],
+            PlaySessionId: randomUUID().replace(/-/g, "")
+        });
+    }
+
     const rivenId = fromGuid(guid);
     if (rivenId === null) return notFound();
 
@@ -754,7 +867,7 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
     const playback = await fetchPlaybackInfo(event, rivenId);
     const token = identity.issueToken(event.locals.apiKey);
 
-    const source = mediaSourceDto(rivenId, item.title, playback?.container ?? null, playback?.durationSeconds ?? null);
+    const source = mediaSourceDto(toGuid(rivenId), item.title, playback?.container ?? null, playback?.durationSeconds ?? null);
 
     // Mirrors the backend's former decision: reusing this app's existing
     // playback_info endpoint (browser-capability based, not per-client -- see

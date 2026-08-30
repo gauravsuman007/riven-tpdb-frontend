@@ -26,6 +26,57 @@ export const LIBRARY_ID = "72697665-6e74-7064-6200-000000000003";
 const SYNTHETIC_PREFIX = "ffffffff";
 
 /**
+ * Marks an id that stands for a DIRECT-SCRAPE video rather than a library row.
+ *
+ * A direct-site video has no MediaItem and therefore no integer id, but it
+ * still has to be addressable as a Jellyfin item, because that is the only
+ * currency the native players accept. Reading ExternalPlayer.kt: initPlayer()
+ * takes a PlayOptions carrying `ids` and resolves them through
+ * `mediaSourceResolver` -- there is no entry point anywhere on that bridge
+ * that accepts a raw media URL.
+ *
+ * That is why "open in external player" opened a browser instead of a player
+ * chooser. The fallback path used NativeInterface.openUrl(), which fires a
+ * bare Intent(ACTION_VIEW, uri) with NO MIME type set; Android then resolves
+ * an http(s) URI by scheme alone and a browser always wins, so no chooser is
+ * ever offered. ExternalPlayer builds its intent with
+ * `setDataAndType(uri, "video/*")`, which is precisely what makes the chooser
+ * appear -- so the fix is to give the video an id, not a better URL.
+ *
+ * Distinct from SYNTHETIC_PREFIX because these decode to a capability token
+ * rather than a name hash, and the two must never be confused for each other.
+ */
+const DIRECT_PREFIX = "fffffffe";
+
+/** Every prefix that means "this is not a MediaItem id". */
+const RESERVED_PREFIXES = [SYNTHETIC_PREFIX, DIRECT_PREFIX];
+
+/** The 24 hex chars a reserved id has left once its prefix is spent. */
+export const RESERVED_BODY_HEX = 24;
+
+/** A Jellyfin item id standing for the direct video this token grants. */
+export function toDirectGuid(token: string): string {
+    const cleaned = token.replace(/-/g, "").trim().toLowerCase();
+
+    if (!new RegExp(`^[0-9a-f]{${RESERVED_BODY_HEX}}$`).test(cleaned)) {
+        throw new Error(`toDirectGuid: not a direct-play token: ${JSON.stringify(token)}`);
+    }
+
+    return `${DIRECT_PREFIX}${cleaned}`;
+}
+
+/** Recover the direct-play token, or null if this is not a direct video id. */
+export function fromDirectGuid(guid: string): string | null {
+    const cleaned = guid.replace(/-/g, "").trim().toLowerCase();
+
+    if (!cleaned.startsWith(DIRECT_PREFIX)) return null;
+
+    const body = cleaned.slice(DIRECT_PREFIX.length);
+
+    return new RegExp(`^[0-9a-f]{${RESERVED_BODY_HEX}}$`).test(body) ? body : null;
+}
+
+/**
  * Widen a MediaItem id into the 32-hex shape clients expect.
  *
  * TRAP, cost a long debugging cycle: the backend serialises `MediaItem.id`
@@ -57,7 +108,12 @@ export function toGuid(itemId: number | string): string {
 export function fromGuid(guid: string): number | null {
     const cleaned = guid.replace(/-/g, "").trim().toLowerCase();
 
-    if (!cleaned || cleaned.startsWith(SYNTHETIC_PREFIX)) {
+    // Checked against EVERY reserved prefix. When this tested only
+    // SYNTHETIC_PREFIX, any other reserved namespace would fall through to
+    // parseInt() below and decode as an enormous but perfectly finite
+    // number -- a valid-looking MediaItem id for a row that cannot exist,
+    // which 404s with nothing pointing at the encoding as the cause.
+    if (!cleaned || RESERVED_PREFIXES.some((prefix) => cleaned.startsWith(prefix))) {
         return null;
     }
 

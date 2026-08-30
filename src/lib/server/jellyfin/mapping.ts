@@ -145,7 +145,7 @@ export async function baseItem(
 
     if (mediaSource) {
         dto.MediaSources = [
-            mediaSourceDto(Number(item.id), item.title, mediaSource.container, mediaSource.durationSeconds)
+            mediaSourceDto(toGuid(Number(item.id)), item.title, mediaSource.container, mediaSource.durationSeconds)
         ];
         dto.MediaStreams = [];
     }
@@ -163,14 +163,21 @@ export async function baseItem(
  * which is what `/Videos/{id}/stream` (proxied to the backend's existing
  * `/api/v1/stream/file/{id}`) already does.
  */
+/**
+ * Takes the id ALREADY ENCODED, rather than a MediaItem id to encode here.
+ *
+ * A direct-scrape video is a legitimate media source with no MediaItem row
+ * behind it, so its id comes from `toDirectGuid` instead of `toGuid`. Encoding
+ * inside this function would have made that case unrepresentable.
+ */
 export function mediaSourceDto(
-    itemId: number,
+    guid: string,
     title: string | null,
     container: string | null,
     durationSeconds: number | null
 ): Json {
     return {
-        Id: toGuid(itemId),
+        Id: guid,
         Protocol: "Http",
         Type: "Default",
         Name: title || "Untitled",

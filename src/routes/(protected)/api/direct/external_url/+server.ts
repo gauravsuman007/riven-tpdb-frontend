@@ -1,6 +1,7 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { mintDirectToken } from "$lib/server/direct-tokens";
+import { toDirectGuid } from "$lib/utils/jellyfin-ids";
 
 /**
  * A URL for a direct-scrape video that an external player can actually open.
@@ -17,7 +18,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     if (!site || !videoId) error(400, "site and videoId are required");
 
-    const token = mintDirectToken(site, videoId, url.searchParams.get("index") ?? "0");
+    const title = url.searchParams.get("title") ?? "";
+    const token = mintDirectToken(site, videoId, url.searchParams.get("index") ?? "0", title);
 
     /*
         The filename is cosmetic to us and load-bearing to Android: the
@@ -25,13 +27,27 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         Derived from the title when there is one so the player's own UI shows
         something recognisable rather than an opaque id.
     */
-    const label = (url.searchParams.get("title") ?? "video")
+    const label = (title || "video")
         .replace(/[^\w\s-]/g, "")
         .trim()
         .replace(/\s+/g, "-")
         .slice(0, 60) || "video";
 
+    /*
+        `itemId` is what actually reaches a media player, and `url` is the
+        fallback for everything that is not the Jellyfin shell.
+
+        Handing the raw URL to NativeInterface.openUrl() -- the previous sole
+        behaviour -- cannot produce a player chooser: that bridge fires
+        Intent(ACTION_VIEW, uri) with no MIME type, so Android matches on the
+        http scheme alone and a browser always wins. Reported exactly that
+        way: the video opened in the browser and the chooser never appeared.
+        ExternalPlayer.initPlayer() is the bridge that sets
+        `setDataAndType(uri, "video/*")`, and it addresses videos by ID, so
+        the video needs an id before it can be handed over properly.
+    */
     return json({
+        itemId: toDirectGuid(token),
         url: new URL(`/direct-play/${token}/${label}.mp4`, url.origin).href
     });
 };
