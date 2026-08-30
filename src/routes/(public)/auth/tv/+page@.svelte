@@ -1,4 +1,12 @@
 <script lang="ts">
+    /*
+        `@` resets to the root layout. Without it this page inherits the
+        (public) layout and with it app.css -- a quarter of a megabyte of
+        Tailwind v4 that the browser this page exists for discards unread,
+        because the whole stylesheet is wrapped in `@layer` (Chromium 99).
+        Downloading it over a TV's wifi to throw it away is the only thing
+        that would achieve.
+    */
     import "../../../(protected)/tv/tv-base.css";
 
     let { data, form } = $props();
