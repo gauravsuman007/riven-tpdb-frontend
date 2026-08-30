@@ -21,10 +21,64 @@ import { resolveDirectToken } from "$lib/server/direct-tokens";
  *    the only handler left is the browser -- which is why this previously
  *    opened a download instead of a player chooser.
  */
+/**
+ * The upstream URL, when the caller may fetch it themselves.
+ *
+ * Returns null whenever it must be proxied instead -- the backend decides,
+ * because only it knows what the resolved source requires (see
+ * `/api/v1/direct/handoff`). Never throws: an unreachable or unhappy backend
+ * means "proxy it", which is the behaviour that always works.
+ */
+async function upstreamUrl(
+    fetcher: typeof fetch,
+    grant: { site: string; videoId: string; index: string }
+): Promise<string | null> {
+    try {
+        const target =
+            `${env.BACKEND_URL}/api/v1/direct/handoff` +
+            `?site=${encodeURIComponent(grant.site)}` +
+            `&video_id=${encodeURIComponent(grant.videoId)}` +
+            `&index=${encodeURIComponent(grant.index)}`;
+
+        const response = await fetcher(target, {
+            headers: { "x-api-key": env.BACKEND_API_KEY ?? "" }
+        });
+
+        if (!response.ok) return null;
+
+        return ((await response.json()) as { url?: string | null }).url ?? null;
+    } catch {
+        return null;
+    }
+}
+
 export const GET: RequestHandler = async ({ params, request, fetch }) => {
     const grant = resolveDirectToken(params.token);
 
     if (!grant) error(404, "This link has expired");
+
+    /*
+        Send the player to the CDN when it can go there itself.
+
+        Proxying costs two extra hops -- player to here, here to the backend,
+        backend to the CDN -- and a seek pays all of them again on every range
+        request. That is the whole of why an external player felt slow next to
+        the in-page one, which is watching a stream that is already warm.
+
+        A 302 keeps the parts that are load-bearing: the chooser still comes
+        from ExternalPlayer.initPlayer() by id, which redirects here, and the
+        extension is still in this path. Only the bytes change route.
+
+        `null` means the source needs something we cannot expect a foreign
+        player to send (a Referer, usually) or that playback is routed through
+        the VPN -- in which case nothing is handed out and the proxy below
+        does its original job.
+    */
+    const direct = await upstreamUrl(fetch, grant);
+
+    if (direct) {
+        return new Response(null, { status: 302, headers: { location: direct } });
+    }
 
     const target =
         `${env.BACKEND_URL}/api/v1/direct/stream` +

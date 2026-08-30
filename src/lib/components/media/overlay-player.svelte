@@ -659,6 +659,26 @@
         canOpenExternal = !!window.RivenNative?.openExternal;
     });
 
+    /**
+     * Hand-off succeeded: stop here and get out of the way.
+     *
+     * The video keeps playing otherwise -- two players running the same
+     * scene, one of them behind an overlay the viewer has to dismiss by
+     * hand, both pulling the same stream. The pause is explicit rather than
+     * left to the element being torn down, because it has to take effect
+     * before the external app starts its own buffering, not whenever Svelte
+     * gets around to unmounting.
+     */
+    function handedOff() {
+        try {
+            video?.pause();
+        } catch {
+            /* Already gone; closing is what matters. */
+        }
+
+        close();
+    }
+
     let openingExternal = $state(false);
 
     async function openInExternal() {
@@ -750,11 +770,11 @@
                 check, so it works even when the web player is selected --
                 which is the only time this button is on screen at all.
             */
-            if (itemId && window.RivenNative?.openInExternalPlayer?.(itemId)) return;
+            if (itemId && window.RivenNative?.openInExternalPlayer?.(itemId)) return handedOff();
 
             // Then whichever native player is the default, for a shell that
             // has a player bridge but no external one.
-            if (itemId && window.RivenNative?.playDirect?.(itemId)) return;
+            if (itemId && window.RivenNative?.playDirect?.(itemId)) return handedOff();
 
             if (!url) {
                 toast.error("Could not build a link for an external player");
@@ -763,7 +783,10 @@
 
             if (!window.RivenNative?.openExternal(url)) {
                 toast.error("No app available to open this video");
+                return;
             }
+
+            handedOff();
         } finally {
             openingExternal = false;
         }
