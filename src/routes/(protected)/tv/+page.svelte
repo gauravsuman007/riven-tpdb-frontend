@@ -16,8 +16,8 @@
 <header class="head">
     <h1>Library</h1>
     <form class="search" method="GET" action="/tv">
-        <input type="search" name="q" value={data.search} placeholder="Search" aria-label="Search the library" />
-        <button type="submit">Search</button>
+        <input class="field" type="search" name="q" value={data.search} placeholder="Search" aria-label="Search the library" />
+        <button class="go" type="submit">Search</button>
     </form>
 </header>
 
@@ -31,7 +31,7 @@
             <a class="card" href="/tv/play/{item.id}?t={encodeURIComponent(item.title)}">
                 <span class="poster">
                     {#if item.poster}
-                        <img src={item.poster} alt="" loading="lazy" />
+                        <img class="pimg" src={item.poster} alt="" loading="lazy" />
                     {:else}
                         <span class="noposter">{item.title.slice(0, 1)}</span>
                     {/if}
@@ -46,9 +46,9 @@
 
     {#if data.totalPages > 1}
         <nav class="pager">
-            {#if data.page > 1}<a href={pageHref(data.page - 1)}>&lsaquo; Previous</a>{/if}
+            {#if data.page > 1}<a class="step" href={pageHref(data.page - 1)}>&lsaquo; Previous</a>{/if}
             <span class="of">Page {data.page} of {data.totalPages}</span>
-            {#if data.page < data.totalPages}<a href={pageHref(data.page + 1)}>Next &rsaquo;</a>{/if}
+            {#if data.page < data.totalPages}<a class="step" href={pageHref(data.page + 1)}>Next &rsaquo;</a>{/if}
         </nav>
     {/if}
 {/if}
@@ -57,12 +57,20 @@
     .head { margin-bottom: 2.5vh; }
     h1 { margin: 0 0 1.5vh; font-size: 2em; font-weight: 600; }
 
-    .search input {
+    /*
+        Every rule in this section targets a CLASS, never a descendant
+        element. Svelte scopes `.search input` as
+        `.search.svelte-x input:where(.svelte-x)`, and `:where()` is Chromium
+        88 -- so on the target engine those rules are discarded exactly like
+        the `:global()` ones were. Measured: it cost the search box, the
+        search button, the poster image sizing and the pager links.
+    */
+    .field {
         width: 22em; max-width: 60vw; padding: .5em .7em;
         border: 2px solid #3f3f46; border-radius: 8px;
         background: #17171b; color: #f4f4f5; font: inherit;
     }
-    .search button {
+    .go {
         padding: .5em 1.2em; margin-left: .6em;
         border: 0; border-radius: 8px; background: #4f46e5;
         color: #fff; font: inherit; cursor: pointer;
@@ -87,7 +95,7 @@
         overflow: hidden; border-radius: 10px; background: #17171b;
         border: 1px solid #27272a;
     }
-    .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .pimg { width: 100%; height: 100%; object-fit: cover; display: block; }
 
     .noposter {
         display: block; width: 100%; height: 100%; line-height: 22vw;
@@ -104,6 +112,6 @@
     .empty { color: #a1a1aa; }
 
     .pager { margin-top: 2vh; }
-    .pager a { color: #a5b4fc; text-decoration: none; margin-right: 1.5em; }
+    .step { color: #a5b4fc; text-decoration: none; margin-right: 1.5em; }
     .of { color: #71717a; font-size: .85em; margin-right: 1.5em; }
 </style>

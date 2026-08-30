@@ -4,7 +4,7 @@
 
 <svelte:head><title>{data.title || "Play"}</title></svelte:head>
 
-<p class="back"><a href="/tv">&lsaquo; Back to the library</a></p>
+<p class="back"><a class="step" href="/tv">&lsaquo; Back to the library</a></p>
 
 {#if data.ready}
     <h1>{data.title}</h1>
@@ -27,7 +27,8 @@
 
 <style>
     .back { margin: 0 0 2vh; }
-    .back a { color: #a5b4fc; text-decoration: none; }
+    /* A class, not `.back a`: see the note in the browse page. */
+    .step { color: #a5b4fc; text-decoration: none; }
 
     h1 { margin: 0 0 2vh; font-size: 1.6em; font-weight: 600; }
 
