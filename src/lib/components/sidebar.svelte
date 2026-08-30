@@ -52,8 +52,8 @@
     </div>
     <nav class="mt-4 flex flex-col items-center gap-3.5" aria-label="Main Navigation">
         <!--
-            Covers both "behind the multiplexer" and "pointed straight at this
-            app from the Jellyfin client" -- see shell-exit.svelte. Renders
+            For a client pointed straight at this app -- the multiplexer
+            injects its own way back. See shell-exit.svelte. Renders
             nothing in an ordinary browser.
         -->
         <ShellExit />

@@ -168,23 +168,17 @@ const injectJellyfinBundle: Handle = async ({ event, resolve }) => {
     if (!jellyfinEnabled()) return resolve(event);
 
     /*
-        `x-multiplexer-app` is set by jellyfin-client-multiplexer on every
-        request it proxies. Marked on <html> so the UI can offer a way back to
-        the app picker -- inside the Jellyfin client there is no address bar
-        and no other way out.
+        No longer marks the document when it is behind the multiplexer. It
+        used to, so the UI could offer a way back to the app picker; the
+        multiplexer injects that button itself now (see its inject.ts), which
+        is one implementation instead of one per app and, unlike a control
+        rendered by this app, is still there on an error page.
     */
-    const viaMultiplexer = event.request.headers.has("x-multiplexer-app");
-
     return resolve(event, {
-        transformPageChunk: ({ html }) => {
-            const withBundle = html.includes(BUNDLE_PATH)
+        transformPageChunk: ({ html }) =>
+            html.includes(BUNDLE_PATH)
                 ? html
-                : html.replace("</head>", `<script src="${BUNDLE_PATH}" defer></script></head>`);
-
-            return viaMultiplexer
-                ? withBundle.replace("<html", '<html data-multiplexer="1"')
-                : withBundle;
-        }
+                : html.replace("</head>", `<script src="${BUNDLE_PATH}" defer></script></head>`)
     });
 };
 

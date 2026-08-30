@@ -53,6 +53,7 @@
         "layerchart": "2.0.0-next.27",
         "mdsvex": "^0.12.6",
         "openapi-typescript": "^7.10.1",
+        "postcss-preset-env": "^11.5.0",
         "prettier": "^3.8.0",
         "prettier-plugin-svelte": "^3.4.1",
         "prettier-plugin-tailwindcss": "^0.7.2",
