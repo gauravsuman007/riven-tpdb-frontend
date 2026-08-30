@@ -159,7 +159,6 @@ export const BUNDLE_JS = `
    */
   function ensureCredentials(done) {
     if (nativeSessionImported) { done(true); return; }
-    if (!nativeAvailable()) { log("NativePlayer not available, cannot ensure credentials"); done(false); return; }
 
     fetch("/web/session-token", { credentials: "same-origin" })
       .then(function (r) {
@@ -280,6 +279,46 @@ export const BUNDLE_JS = `
      * videos for the first time: the same call serves both player types, the
      * way it already did for library items.
      */
+    /**
+     * Open one video in an EXTERNAL app, whatever the client's default is.
+     *
+     * ExternalPlayer.initPlayer() has no isEnabled() gate -- checked in
+     * WebViewFragment.kt, which registers all four bridges unconditionally,
+     * and in ExternalPlayer.kt, where only isEnabled() reads the preference.
+     * So the external hand-off can be invoked even when the human has chosen
+     * the web player, which is exactly when this is wanted: the in-page
+     * player is on screen and they are asking to send THIS video elsewhere.
+     *
+     * The alternative, openUrl(), cannot do it. It fires ACTION_VIEW with no
+     * MIME type, and on modern Android an http URI with no type is a WEB
+     * intent: only verified link handlers are candidates, so media players
+     * are excluded from the chooser no matter what the path ends in.
+     * Reported twice as "it opens in the browser", and logcat showed
+     * Android resolving straight to Firefox with no typ= on the intent.
+     * initPlayer() builds setDataAndType(uri, "video/*") instead, which is
+     * not a web intent and does offer the players.
+     */
+    openInExternalPlayer: function (itemId) {
+      var bridge = null;
+
+      try { bridge = window.ExternalPlayer && window.ExternalPlayer.initPlayer ? window.ExternalPlayer : null; }
+      catch (e) {}
+
+      if (!bridge) { log("no ExternalPlayer bridge"); return false; }
+
+      ensureCredentials(function (ok) {
+        if (!ok) { log("openInExternalPlayer aborted: no credentials"); return; }
+
+        try {
+          bridge.initPlayer(JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 }));
+        } catch (e) {
+          log("initPlayer failed", e);
+        }
+      });
+
+      return true;
+    },
+
     playDirect: function (itemId) {
       if (!nativeAvailable()) { log("playDirect() called but no native player"); return false; }
 

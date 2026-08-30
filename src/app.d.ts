@@ -54,6 +54,12 @@ declare global {
              */
             playDirect: (itemId: string) => boolean;
             /**
+             * Sends one video to an external app regardless of the client's
+             * default player. False only when the shell exposes no
+             * ExternalPlayer bridge.
+             */
+            openInExternalPlayer: (itemId: string) => boolean;
+            /**
              * Asks the native activity to hide the system UI and lock to
              * landscape. Returns false outside the shell, where the ordinary
              * Fullscreen API is the right path instead.

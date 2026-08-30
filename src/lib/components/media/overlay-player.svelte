@@ -744,6 +744,16 @@
                 exposes openUrl but no player bridge, where it is still the
                 best available behaviour.
             */
+            /*
+                The external hand-off first, and NOT gated on the client's
+                default player: ExternalPlayer.initPlayer() has no isEnabled()
+                check, so it works even when the web player is selected --
+                which is the only time this button is on screen at all.
+            */
+            if (itemId && window.RivenNative?.openInExternalPlayer?.(itemId)) return;
+
+            // Then whichever native player is the default, for a shell that
+            // has a player bridge but no external one.
             if (itemId && window.RivenNative?.playDirect?.(itemId)) return;
 
             if (!url) {
