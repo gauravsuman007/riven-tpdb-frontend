@@ -23,6 +23,7 @@
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
     import PluginControl from "$lib/components/settings/plugin-control.svelte";
+    import AppLockSettings from "$lib/components/app-lock-settings.svelte";
     import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
 
     setShadcnContext();
@@ -372,6 +373,9 @@
                         <!-- Renders only inside the Jellyfin WebView shell. -->
                         {#if tab.id === "general"}
                             <NativeClientControl />
+                            <!-- A per-user FRONTEND setting, so it is not part
+                                 of the backend-schema form above. -->
+                            <AppLockSettings />
                         {/if}
 
                         {#if tab.id === "scraping"}

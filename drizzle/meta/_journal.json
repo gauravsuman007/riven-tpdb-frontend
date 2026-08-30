@@ -29,6 +29,13 @@
       "when": 1787992979770,
       "tag": "0003_faulty_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788081584110,
+      "tag": "0004_app_lock",
+      "breakpoints": true
     }
   ]
 }

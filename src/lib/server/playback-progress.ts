@@ -11,6 +11,7 @@
  */
 
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { recordActivity } from "./app-lock";
 import { db } from "$lib/server/db";
 import { playbackProgress } from "$lib/server/schema";
 import { decideProgress } from "$lib/utils/playback";
@@ -87,6 +88,17 @@ export function setProgress(
     runtimeTicks?: number | null
 ): void {
     if (!userId || !Number.isInteger(itemId) || itemId <= 0) return;
+
+    /*
+        Playback is activity, and this is the path that proves it.
+
+        The requirement is explicit that watching counts, and a NATIVE player
+        -- ExoPlayer, or an external app -- reports here without ever touching
+        the web UI, so the browser-side activity beacon never fires for it.
+        Without this, a two-hour film played through the Jellyfin client would
+        lock the web session out from under it.
+    */
+    recordActivity(userId);
 
     const decision = decideProgress(positionTicks, runtimeTicks ?? null);
     const runtime = runtimeTicks && runtimeTicks > 0 ? Math.floor(runtimeTicks) : null;

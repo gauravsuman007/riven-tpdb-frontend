@@ -1,5 +1,6 @@
 <script lang="ts">
     import OverlayPlayer from "$lib/components/media/overlay-player.svelte";
+    import AppLockGuard from "$lib/components/app-lock-guard.svelte";
     import "@fontsource/oxanium/300.css";
     import "@fontsource/oxanium/400.css";
     import "@fontsource/oxanium/500.css";
@@ -55,6 +56,9 @@
         href={oxanium400Woff2}
         crossorigin="anonymous" />
 </svelte:head>
+
+
+<AppLockGuard enabled={data.appLock.enabled} timeoutMinutes={data.appLock.timeoutMinutes} />
 
 <ModeWatcher defaultMode="dark" defaultTheme="darkmatter" />
 <Toaster richColors closeButton />

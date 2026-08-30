@@ -3,6 +3,7 @@ import { redirect, error, type Handle, type ServerInit } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 import { sequence } from "@sveltejs/kit/hooks";
+import { isLocked } from "$lib/server/app-lock";
 import { env } from "$env/dynamic/private";
 import providers from "$lib/providers";
 import { dev } from "$app/environment";
@@ -217,9 +218,58 @@ const handleTVDBCookie: Handle = async ({ event, resolve }) => {
     return resolve(event);
 };
 
+
+/**
+ * Send a locked session to the lock screen BEFORE any page load runs.
+ *
+ * This is what makes the lock leak-proof, and why it is a hook rather than a
+ * check inside a layout. A layout that renders a lock over its children has
+ * still loaded and shipped those children: the data sits in the DOM and in
+ * the flight of `__data.json`, one devtools panel -- or one slow paint --
+ * away from being read. Redirecting here means a locked browser is never
+ * sent the content at all.
+ *
+ * The exemptions are the paths that have to keep working while locked:
+ * `/lock` itself and the unlock endpoint, the auth pages (the login screen is
+ * explicitly never locked), sign-out, and the Jellyfin surface -- a native
+ * player mid-stream authenticates with a token, not this session, and
+ * interrupting it would stop playback on a device nobody is holding.
+ */
+const enforceAppLock: Handle = async ({ event, resolve }) => {
+    const path = event.url.pathname;
+
+    const exempt =
+        path === "/lock" ||
+        path.startsWith("/api/lock/") ||
+        path.startsWith("/auth/") ||
+        path.startsWith("/direct-play/") ||
+        path.startsWith("/web/") ||
+        path.startsWith("/Items") ||
+        path.startsWith("/Videos") ||
+        path.startsWith("/Sessions") ||
+        path.startsWith("/Users") ||
+        path.startsWith("/System");
+
+    if (exempt || !event.locals.user || !isLocked(event.locals.user.id)) {
+        return resolve(event);
+    }
+
+    /*
+        A data request is answered with a redirect too, not just a page one.
+        SvelteKit fetches `__data.json` for client-side navigations, and
+        letting those through would hand the content to a locked tab while
+        the visible page showed the lock.
+    */
+    const next = event.url.pathname + event.url.search;
+
+    redirect(303, `/lock?next=${encodeURIComponent(next)}`);
+};
+
 export const handle: Handle = sequence(
     configureLocals,
     betterAuthHandler,
+    // After auth (it needs locals.user) and before anything that renders.
+    enforceAppLock,
     handleTVDBCookie,
     injectJellyfinBundle
 );
