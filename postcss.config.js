@@ -19,7 +19,18 @@
     lands, and Tailwind v4 writes every dark-mode rule as `:is(.dark *)` --
     below that target those selectors are dropped instead of downleveled,
     which trades an unstyled page for a light-themed one on a dark-themed
-    app. Going lower is a one-line change here if an older TV turns up.
+    app.
+
+    Lowering it further does NOT buy an older TV, and the LG C9 is the
+    proof: it is a 2019 set, so webOS 4.5, so Chromium 53 (confirmed
+    against LG's own web-engine table -- 4.x is 53, and LG never moves a
+    shipped set to a newer major). At 53 the stylesheet is the smaller
+    half of the problem. There is no CSS Grid (57), no flex `gap` (84),
+    and no dynamic `import()` (63) -- and SvelteKit boots by calling
+    `import()`, so the client never hydrates at all and the page is
+    whatever the server rendered, unstyled. No PostCSS target fixes that;
+    it needs a separate, deliberately-old build target, or that TV uses
+    Jellyfin instead.
 
     Known and accepted: `color-mix()` survives. It is Tailwind's opacity
     modifier (`bg-background/10`) and resolves to
