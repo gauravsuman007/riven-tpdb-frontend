@@ -2,50 +2,45 @@
 
 ## App PIN / lockscreen
 
-A per-user 4-digit code that blanks the UI after inactivity. Set on the General
-settings tab; state in `app_lock` (frontend DB), logic in
-`lib/server/app-lock.ts`, enforcement in `hooks.server.ts`.
+A per-user 4-digit code that covers the UI after inactivity. Set on the General
+settings tab; PIN and timeout in `app_lock` (frontend DB), verification in
+`lib/server/app-lock.ts`, and everything else in
+`lib/components/app-lock-guard.svelte`.
 
-- **Two independent scopes, `lockFrontend` and `lockBackend`.** The frontend
-  scope covers this app's pages and its own routes; the backend scope covers
-  the browser's proxied calls to Riven (`/api/v1/...`, the `[...backendProxy]`
-  route). Defaults are frontend on, backend off, which is the ordinary intent:
-  hide what is on screen without cutting off the API. A scope that is not
-  selected never locks, even once the idle clock has run out.
-- **A locked backend answers 403 JSON, not a redirect.** Its caller is
-  `fetch()`, not a navigating browser -- a 303 to an HTML lock page would be
-  followed and then fail to parse as JSON, surfacing as a confusing parse error
-  instead of "you are locked". Only the frontend scope puts a lock SCREEN in
-  front of a person, and the client guard is gated on it for the same reason:
-  covering the screen is meaningless when only the API is locked.
+- **It is an in-page OVERLAY, not a redirect, and this is not negotiable.** It
+  used to be a hook that answered 303 to a standalone `/lock` page, which is
+  stricter -- a locked browser was never *sent* the content. It also broke the
+  Jellyfin clients outright: `JellyfinWebViewClient` only counts itself
+  connected when it sees a request for `main.*.bundle.js`, the lock page is
+  outside the layout that emits that tag, and so locking dropped the client
+  back to "Connect to Server -- connection cannot be established", losing the
+  session. Do not reintroduce a lock page or any navigation on lock/unlock.
 - **It is a screen lock, NOT an auth factor.** The person it guards against is
-  holding a browser that already has a valid session. Four digits could never
-  be an auth boundary, and the UI says so. Do not "harden" it into one.
-- **Enforcement is a HOOK, not a layout check, and that is the whole design.**
-  `enforceAppLock` redirects to `/lock` before any page load runs, so a locked
-  browser is never *sent* the content. An overlay rendered over `children` has
-  already loaded and shipped them -- the data sits in the DOM and in the
-  `__data.json` flight. Verified: a locked `/settings` answers 303 with 0
-  bytes, and its `__data.json` carries SvelteKit's redirect envelope with none
-  of the settings in it.
-- **The idle clock is NOT request traffic.** These pages poll constantly
-  (dashboard, event stream, progress reporting), so a clock driven by requests
-  never runs down and the lock never engages. Only `POST /api/lock/activity`
-  (throttled, real input) and `setProgress` move it. `setProgress` matters
-  independently: a NATIVE player reports there without ever touching the web
-  UI, so without it a film played through the Jellyfin client would lock the
-  session out from under itself.
-- **The client cover is raw DOM, deliberately.** A tab left open is already
-  painted and no redirect un-paints it. `app-lock-guard.svelte` appends an
-  opaque `<div>` synchronously inside the `visibilitychange` handler, because
-  "before the next paint" is exactly the guarantee needed and a component
-  state change is applied on the framework's schedule. Inline styles, because
-  a restored background tab may not have applied a stylesheet yet and a
-  transparent cover is no cover.
-- **Exemptions are load-bearing**: `/auth/*` (the login page is explicitly
-  never locked), `/lock`, `/api/lock/*`, and the Jellyfin/direct-play routes --
-  a native player mid-stream authenticates with a token rather than this
-  session, and locking it would stop playback on a device nobody is holding.
+  holding a browser that already has a valid session, and the overlay hides
+  content that has already been sent. Four digits could never be an auth
+  boundary, and the UI says so. Do not "harden" it into one.
+- **The backend is not involved.** No scopes, no `/api/v1` gating, no
+  server-side enforcement. The one server call left is `POST /api/lock/unlock`,
+  which needs the hash.
+- **The idle clock is a localStorage stamp compared against `Date.now()`** --
+  never a running timer and never the server's clock. That is what makes it
+  survive the WebView being frozen or the process being killed: on the way
+  back the elapsed time is simply read. Key `riven.applock`, shared with the
+  inline head script below.
+- **The cover is painted by an inline `<head>` script** (`injectAppLockCover`
+  in `hooks.server.ts`), not by the component. A page restored from a killed
+  background process paints its content and *then* hydrates, so a component
+  overlay arrives a frame or two after the thing it is meant to hide. A
+  synchronous head script sets `data-app-locked` on `<html>` before `<body>`
+  is parsed. The component adopts that decision rather than re-deriving it.
+- **The head script must never run on `/auth/*`.** The guard only mounts inside
+  the protected layout, so an auth page carrying the attribute would hide its
+  own body with nothing to unhide it -- a blank, unusable login screen.
+- **The overlay is moved to be a direct child of `<body>` on mount**, because
+  the cover stylesheet hides `body > *` and the component renders deep inside
+  the layout.
+- **Playback counts as activity**, captured on the document (media events do
+  not bubble): a two-hour film with nobody touching the screen must not lock.
 - Unlock is throttled (5 attempts, then a cooldown): four digits is 10,000
   possibilities and the premise is that the attacker already has the device.
 
@@ -99,6 +94,29 @@ history if it's ever relevant again.
   `MediaBrowser Client="...", Version="..."` header and NO `Token=` — a
   silent 401 storm with no visible error. `bundle.ts` therefore POSTs to
   that path itself once credentials exist. Do not remove that call.
+- **TRAP, and it broke BOTH native players at once: never trust an existing
+  `jellyfin_credentials`.** Behind jellyfin-client-multiplexer -- which is how
+  the Jellyfin clients actually reach this app -- that key is ALREADY populated
+  at this origin, with the multiplexer's own random per-boot `ACCESS_TOKEN`:
+  it answers `/Users/AuthenticateByName` itself and its picker page seeds the
+  result (`picker.ts`, `mux-token`). `ensureCredentials` preferred it, so the
+  multiplexer's token went into the native session and every native call
+  carried a token this app has never heard of. On-device (Jellyfin Android
+  2.7.1, adb logcat):
+
+      E/MediaSourceResolver: Failed to load media source 0000...035e
+      InvalidStatusException: Invalid HTTP status in response: 401
+
+  ExoPlayer and the external player failed identically because both resolve
+  the media source through the same `ApiClient` before they diverge. The
+  `/web/session-token` exchange is therefore UNCONDITIONAL; a stored
+  credential is only a fallback for when there is no session to exchange.
+- **The minted token is claimed with the multiplexer** (`POST
+  /__mux/claim-token`). The native player is a separate HTTP stack from the
+  WebView, so its requests carry no `mux_device` cookie and the token is the
+  only thing left to route them by -- and the multiplexer only learns tokens
+  by watching AuthenticateByName responses, which this one never produces.
+  Without it, routing falls through to "whichever app was last active".
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
