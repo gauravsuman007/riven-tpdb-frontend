@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { PIN_PATTERN, clearPin, getLockState, lockNow, setPin, setScopes } from "$lib/server/app-lock";
+import { PIN_PATTERN, clearPin, getLockState, setPin } from "$lib/server/app-lock";
 
 function view(userId: string) {
     const state = getLockState(userId);
@@ -9,9 +9,7 @@ function view(userId: string) {
     return {
         enabled: state.enabled,
         hasPin: state.hasPin,
-        timeoutMinutes: state.timeoutMinutes,
-        lockFrontend: state.lockFrontend,
-        lockBackend: state.lockBackend
+        timeoutMinutes: state.timeoutMinutes
     };
 }
 
@@ -33,36 +31,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         return json({ ok: true, ...view(userId) });
     }
 
-    if (action === "lock") {
-        lockNow(userId);
-        return json({ ok: true });
-    }
-
-    /*
-        Changing which surfaces are covered must not require retyping the PIN.
-        Toggling a checkbox and being asked for the code again would be
-        friction with no security value -- the session is already
-        authenticated and unlocked to have reached here.
-    */
-    if (action === "scopes") {
-        const changed = setScopes(userId, {
-            lockFrontend: typeof body?.lockFrontend === "boolean" ? body.lockFrontend : undefined,
-            lockBackend: typeof body?.lockBackend === "boolean" ? body.lockBackend : undefined
-        });
-
-        if (!changed) error(400, "Set a PIN before choosing what it locks");
-
-        return json({ ok: true, ...view(userId) });
-    }
-
     const pin = String(body?.pin ?? "");
 
     if (!PIN_PATTERN.test(pin)) error(400, "PIN must be exactly four digits");
 
-    setPin(userId, pin, Number(body?.timeoutMinutes ?? 10), {
-        lockFrontend: typeof body?.lockFrontend === "boolean" ? body.lockFrontend : undefined,
-        lockBackend: typeof body?.lockBackend === "boolean" ? body.lockBackend : undefined
-    });
+    setPin(userId, pin, Number(body?.timeoutMinutes ?? 10));
 
     return json({ ok: true, ...view(userId) });
 };

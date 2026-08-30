@@ -129,33 +129,86 @@ export const BUNDLE_JS = `
       .catch(function (e) { log("sessions/capabilities/full failed", e); done(false); });
   }
 
-  // Exchanges the browser's own session cookie (the human already signed in
-  // through the real login page) for the native player's token, so there is
-  // no separate credential prompt inside the WebView.
+  /**
+   * Put OUR token in localStorage and hand it to the native session.
+   *
+   * The exchange is unconditional, and that is the whole point. When these
+   * pages are reached through the multiplexer -- which is how the Jellyfin
+   * clients reach them -- 'jellyfin_credentials' is ALREADY populated at
+   * this origin, and populated with the wrong token: the multiplexer answers
+   * '/Users/AuthenticateByName' itself and hands the client a random
+   * per-boot 'ACCESS_TOKEN' of its own, then its picker page seeds that into
+   * localStorage (picker.ts, 'mux-token'). Same origin, so it is the very
+   * value 'creds()' reads.
+   *
+   * Trusting it meant importing the multiplexer's token into the native
+   * session, after which every native call -- PlaybackInfo, /Videos/stream
+   * -- carried a token this app has never heard of. Confirmed on-device:
+   *
+   *   E/MediaSourceResolver: Failed to load media source 0000...035e
+   *   InvalidStatusException: Invalid HTTP status in response: 401
+   *
+   * and then the toast from ExternalPlayer.initPlayer. It broke ExoPlayer and
+   * the external player identically, because both resolve the media source
+   * through the same ApiClient before they diverge.
+   *
+   * A pre-existing credential is therefore never preferred, only used as a
+   * fallback for the case this was originally written for: a shell that
+   * seeded a REAL token for this server before loading the page, with our
+   * own session cookie unavailable.
+   */
   function ensureCredentials(done) {
-    if (creds()) { importIntoNativeSession(done); return; }
+    if (nativeSessionImported) { done(true); return; }
     if (!nativeAvailable()) { log("NativePlayer not available, cannot ensure credentials"); done(false); return; }
 
-    // The native client authenticates itself natively (AuthenticateByName is
-    // never called from inside this WebView) and, per real Jellyfin, is
-    // expected to seed jellyfin_credentials into this WebView's localStorage
-    // before it ever loads a page. If that did not happen -- e.g. this
-    // client wires its bridge differently -- fall back to exchanging our own
-    // better-auth session cookie, which only exists if the human happened to
-    // load a real login page in this same WebView.
     fetch("/web/session-token", { credentials: "same-origin" })
       .then(function (r) {
         if (!r.ok) log("/web/session-token returned", r.status);
         return r.ok ? r.json() : null;
       })
       .then(function (d) {
-        if (!d) { done(false); return; }
+        if (!d) {
+          // No session to exchange. Only now is whatever is already stored
+          // worth a try -- it may be a real token from a different shell,
+          // and it is certainly better than giving up silently.
+          if (creds()) { log("no session token; falling back to stored credentials"); importIntoNativeSession(done); return; }
+          done(false);
+          return;
+        }
+
         window.localStorage.setItem(CRED_KEY, JSON.stringify({
           Servers: [{ Id: d.ServerId, UserId: d.UserId, AccessToken: d.AccessToken }]
         }));
+
+        claimTokenWithHost(d.AccessToken);
         importIntoNativeSession(done);
       })
       .catch(function (e) { log("session-token fetch failed", e); done(false); });
+  }
+
+  /**
+   * Tell the multiplexer, if we are behind one, which app this token belongs
+   * to.
+   *
+   * The native player is a separate HTTP stack from the WebView, so its
+   * requests carry no 'mux_device' cookie and the multiplexer can only route
+   * them by access token (index.ts, 'appForToken'). It learns tokens by
+   * watching AuthenticateByName responses go past, which never happens for
+   * this token -- we mint it over a session cookie instead. Without this the
+   * routing falls through to "whichever app was last active", which is
+   * usually right and quietly wrong the moment it is not.
+   *
+   * Best-effort by design: a plain browser, or a multiplexer without this
+   * endpoint, just 404s and nothing here depends on the result.
+   */
+  function claimTokenWithHost(token) {
+    try {
+      fetch("/__mux/claim-token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: token })
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   // What the player component calls. \`itemId\` is the Jellyfin item id (32

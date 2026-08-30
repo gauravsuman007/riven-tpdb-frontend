@@ -3,7 +3,6 @@ import { redirect, error, type Handle, type ServerInit } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 import { sequence } from "@sveltejs/kit/hooks";
-import { isLocked, type LockScope } from "$lib/server/app-lock";
 import { env } from "$env/dynamic/private";
 import providers from "$lib/providers";
 import { dev } from "$app/environment";
@@ -220,91 +219,53 @@ const handleTVDBCookie: Handle = async ({ event, resolve }) => {
 
 
 /**
- * Send a locked session to the lock screen BEFORE any page load runs.
+ * A tiny script that paints the lock cover during HTML parsing.
  *
- * This is what makes the lock leak-proof, and why it is a hook rather than a
- * check inside a layout. A layout that renders a lock over its children has
- * still loaded and shipped those children: the data sits in the DOM and in
- * the flight of `__data.json`, one devtools panel -- or one slow paint --
- * away from being read. Redirecting here means a locked browser is never
- * sent the content at all.
+ * The lock is entirely client-side now (see `app-lock-guard.svelte`), and a
+ * Svelte component cannot meet the one hard requirement on its own: a page
+ * restored from a killed background process paints its content, THEN
+ * hydrates, so the overlay would arrive a frame or two after the thing it is
+ * meant to hide. Reported exactly that way -- reopen the app after a while
+ * and see the library before the lock appears.
  *
- * The exemptions are the paths that have to keep working while locked:
- * `/lock` itself and the unlock endpoint, the auth pages (the login screen is
- * explicitly never locked), sign-out, and the Jellyfin surface -- a native
- * player mid-stream authenticates with a token, not this session, and
- * interrupting it would stop playback on a device nobody is holding.
+ * A synchronous script in <head> runs before <body> is parsed, so the
+ * attribute is on <html> before anything is laid out. Nothing here talks to
+ * the server: the timeout and last-activity stamp live in localStorage, which
+ * is what makes this survive the process dying.
+ *
+ * WHY THE LOCK IS NOT ENFORCED SERVER-SIDE ANY MORE. It used to be, with a
+ * 303 to a /lock page. That is stricter, and it broke the Jellyfin clients:
+ * the shell only counts itself connected when it sees a request for
+ * `main.*.bundle.js` (JellyfinWebViewClient), and the standalone lock page is
+ * outside the layout that emits that script tag. Redirecting to it dropped
+ * the client back to "Connect to Server -- connection cannot be established",
+ * losing the session. An overlay never navigates, so the page -- and the
+ * client's connection to it -- stays exactly where it was.
  */
-const enforceAppLock: Handle = async ({ event, resolve }) => {
-    const path = event.url.pathname;
+const APP_LOCK_HEAD = `<style id="app-lock-style">html[data-app-locked] body>*:not(#app-lock-overlay){visibility:hidden!important}html[data-app-locked]{background:#0b0b0f!important}</style><script>(function(){try{var s=JSON.parse(localStorage.getItem("riven.applock")||"null");if(!s||!s.enabled)return;var idle=Date.now()-(s.lastActive||0);if(idle<Math.max(1,s.timeoutMinutes||10)*60000)return;document.documentElement.setAttribute("data-app-locked","1")}catch(e){}})()<\/script>`;
 
+const injectAppLockCover: Handle = async ({ event, resolve }) => {
     /*
-        Always exempt, whatever is locked.
-
-        `/auth/*` because the sign-in page is explicitly never locked; `/lock`
-        and `/api/lock/*` because they are how you get back in; and the
-        Jellyfin surface and direct-play routes because a native player
-        mid-stream authenticates with a token rather than this session --
-        locking it would stop playback on a device nobody is holding.
+        Never on the sign-in pages. The lock guard only mounts inside the
+        protected layout, so an /auth page that got the attribute would hide
+        its own body with nothing to unhide it -- a blank, unusable login
+        screen and no way back. The sign-in page is explicitly never locked
+        anyway.
     */
-    const alwaysExempt =
-        path === "/lock" ||
-        path.startsWith("/api/lock/") ||
-        path.startsWith("/auth/") ||
-        path.startsWith("/direct-play/") ||
-        path.startsWith("/web/") ||
-        path.startsWith("/Items") ||
-        path.startsWith("/Videos") ||
-        path.startsWith("/Sessions") ||
-        path.startsWith("/Users") ||
-        path.startsWith("/System");
+    if (event.url.pathname.startsWith("/auth/")) return resolve(event);
 
-    if (alwaysExempt || !event.locals.user) return resolve(event);
-
-    /*
-        Which surface is this?
-
-        `/api/v1/...` is the proxy to the Riven BACKEND -- it forwards to the
-        backend with the API key. Everything else is this app: its pages and
-        its own endpoints. The two lock independently, because hiding what is
-        on screen and cutting off the API are different decisions, and the
-        ordinary want is only the first.
-    */
-    const scope: LockScope = path.startsWith("/api/v1/") ? "backend" : "frontend";
-
-    if (!isLocked(event.locals.user.id, scope)) return resolve(event);
-
-    /*
-        A backend call is answered with 403, not a redirect.
-
-        Its caller is fetch(), not a navigating browser: a 303 to an HTML lock
-        page would be followed and then fail to parse as JSON, surfacing as a
-        confusing parse error instead of "you are locked". The frontend lock is
-        what puts a lock SCREEN in front of a person.
-    */
-    if (scope === "backend") {
-        return new Response(JSON.stringify({ error: "locked", message: "The app is locked." }), {
-            status: 403,
-            headers: { "content-type": "application/json" }
-        });
-    }
-
-    /*
-        A data request is redirected too, not just a page one. SvelteKit
-        fetches `__data.json` for client-side navigations, and letting those
-        through would hand the content to a locked tab while the visible page
-        showed the lock.
-    */
-    const next = event.url.pathname + event.url.search;
-
-    redirect(303, `/lock?next=${encodeURIComponent(next)}`);
+    return resolve(event, {
+        transformPageChunk: ({ html }) =>
+            html.includes('id="app-lock-style"')
+                ? html
+                : html.replace("</head>", `${APP_LOCK_HEAD}</head>`)
+    });
 };
 
 export const handle: Handle = sequence(
     configureLocals,
     betterAuthHandler,
-    // After auth (it needs locals.user) and before anything that renders.
-    enforceAppLock,
+    injectAppLockCover,
     handleTVDBCookie,
     injectJellyfinBundle
 );

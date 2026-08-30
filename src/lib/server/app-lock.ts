@@ -22,16 +22,6 @@ export const PIN_PATTERN = /^\d{4}$/;
 
 const DEFAULT_TIMEOUT_MINUTES = 10;
 
-/**
- * Which surface a request belongs to.
- *
- * "frontend" is the UI and this app's own routes; "backend" is the proxied
- * Riven API. They lock independently because they protect different things:
- * hiding what is on screen is the usual want, and cutting off the API as well
- * is a separate, stricter decision.
- */
-export type LockScope = "frontend" | "backend";
-
 export interface LockState {
     enabled: boolean;
     hasPin: boolean;
@@ -99,47 +89,12 @@ export function getLockState(userId: string): LockState {
 }
 
 /**
- * Whether this user's session should be showing the lock screen.
- *
- * Returns false when no PIN is set, which is what makes the whole feature
- * inert until someone opts in -- there is no state in which this can lock a
- * user out of an app they never configured.
- */
-export function isLocked(userId: string | undefined, scope: LockScope = "frontend"): boolean {
-    if (!userId) return false;
-
-    const state = getLockState(userId);
-
-    if (!state.enabled) return false;
-
-    // A scope that was not selected is never locked, even once the idle clock
-    // has run out. This is what makes "lock the screen but leave the API
-    // alone" -- the common case -- a real configuration rather than a
-    // half-applied one.
-    if (scope === "frontend" && !state.lockFrontend) return false;
-    if (scope === "backend" && !state.lockBackend) return false;
-
-    const idleMs = Date.now() - state.lastActiveAt.getTime();
-
-    return idleMs >= state.timeoutMinutes * 60_000;
-}
-
-/** Whether anything at all would lock, used to decide if the client guard runs. */
-export function anyScopeLocks(userId: string | undefined): boolean {
-    if (!userId) return false;
-
-    const state = getLockState(userId);
-
-    return state.enabled && (state.lockFrontend || state.lockBackend);
-}
-
-/**
  * Record that a person did something, or that playback advanced.
  *
- * NOT called from ordinary request handling. Riven's pages poll constantly --
- * the dashboard, the event stream, progress reporting -- so a clock driven by
- * requests would never run down and the lock would never engage. Only the
- * explicit beacon and playback progress call this.
+ * The lock's own clock is client-side now (localStorage, see
+ * `app-lock-guard.svelte`) -- nothing reads this to decide whether to lock.
+ * It is kept because `lastActiveAt` is still the row's record of when the
+ * lock was last satisfied, and because unlocking should stamp it.
  */
 export function recordActivity(userId: string | undefined): void {
     if (!userId) return;
@@ -152,34 +107,11 @@ export function recordActivity(userId: string | undefined): void {
         .run();
 }
 
-/** Locks immediately, without waiting for the timeout. */
-export function lockNow(userId: string): void {
-    const past = new Date(0);
-
-    db.insert(appLock)
-        .values({ userId, lastActiveAt: past })
-        .onConflictDoUpdate({ target: appLock.userId, set: { lastActiveAt: past } })
-        .run();
-}
-
-export function setPin(
-    userId: string,
-    pin: string,
-    timeoutMinutes: number,
-    scopes?: { lockFrontend?: boolean; lockBackend?: boolean }
-): void {
+export function setPin(userId: string, pin: string, timeoutMinutes: number): void {
     if (!PIN_PATTERN.test(pin)) throw new Error("PIN must be exactly four digits");
 
     const minutes = Math.max(1, Math.min(240, Math.floor(timeoutMinutes) || DEFAULT_TIMEOUT_MINUTES));
     const now = new Date();
-
-    // Undefined means "leave as it is" on an update, so a caller changing only
-    // the PIN cannot silently reset which surfaces are covered. On insert the
-    // column defaults apply.
-    const scopeFields = {
-        ...(scopes?.lockFrontend === undefined ? {} : { lockFrontend: scopes.lockFrontend }),
-        ...(scopes?.lockBackend === undefined ? {} : { lockBackend: scopes.lockBackend })
-    };
 
     db.insert(appLock)
         .values({
@@ -187,9 +119,7 @@ export function setPin(
             pinHash: encode(pin),
             enabled: true,
             timeoutMinutes: minutes,
-            lastActiveAt: now,
-            lockFrontend: scopes?.lockFrontend ?? true,
-            lockBackend: scopes?.lockBackend ?? false
+            lastActiveAt: now
         })
         .onConflictDoUpdate({
             target: appLock.userId,
@@ -199,37 +129,10 @@ export function setPin(
                 pinHash: encode(pin),
                 enabled: true,
                 timeoutMinutes: minutes,
-                lastActiveAt: now,
-                ...scopeFields
+                lastActiveAt: now
             }
         })
         .run();
-}
-
-/**
- * Change which surfaces are covered, without retyping the PIN.
- *
- * A no-op when no PIN exists: the scopes are meaningless on their own, and
- * writing a row for a user who never configured a lock would make
- * `getLockState` report a configuration that does not exist.
- */
-export function setScopes(
-    userId: string,
-    scopes: { lockFrontend?: boolean; lockBackend?: boolean }
-): boolean {
-    const record = row(userId);
-
-    if (!record?.pinHash) return false;
-
-    db.update(appLock)
-        .set({
-            ...(scopes.lockFrontend === undefined ? {} : { lockFrontend: scopes.lockFrontend }),
-            ...(scopes.lockBackend === undefined ? {} : { lockBackend: scopes.lockBackend })
-        })
-        .where(eq(appLock.userId, userId))
-        .run();
-
-    return true;
 }
 
 export function clearPin(userId: string): void {
