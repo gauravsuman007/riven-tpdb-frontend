@@ -4,7 +4,7 @@ import { getLockState } from "$lib/server/app-lock";
 export const load = (async ({ locals }) => {
     const lock = locals.user
         ? getLockState(locals.user.id)
-        : { enabled: false, timeoutMinutes: 10 };
+        : { enabled: false, timeoutMinutes: 10, lockFrontend: false };
 
     return {
         user: locals.user,
@@ -14,7 +14,14 @@ export const load = (async ({ locals }) => {
             screen and navigate, and the server does the deciding.
         */
         appLock: {
-            enabled: lock.enabled,
+            /*
+                Gated on the FRONTEND scope specifically. The client guard
+                exists to cover the screen and navigate to the lock page, and
+                neither is meaningful when only the backend API is locked --
+                it would blank a UI that the server is perfectly willing to
+                keep serving.
+            */
+            enabled: lock.enabled && lock.lockFrontend,
             timeoutMinutes: lock.timeoutMinutes
         }
     };

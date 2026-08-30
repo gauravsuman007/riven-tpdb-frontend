@@ -6,6 +6,18 @@ A per-user 4-digit code that blanks the UI after inactivity. Set on the General
 settings tab; state in `app_lock` (frontend DB), logic in
 `lib/server/app-lock.ts`, enforcement in `hooks.server.ts`.
 
+- **Two independent scopes, `lockFrontend` and `lockBackend`.** The frontend
+  scope covers this app's pages and its own routes; the backend scope covers
+  the browser's proxied calls to Riven (`/api/v1/...`, the `[...backendProxy]`
+  route). Defaults are frontend on, backend off, which is the ordinary intent:
+  hide what is on screen without cutting off the API. A scope that is not
+  selected never locks, even once the idle clock has run out.
+- **A locked backend answers 403 JSON, not a redirect.** Its caller is
+  `fetch()`, not a navigating browser -- a 303 to an HTML lock page would be
+  followed and then fail to parse as JSON, surfacing as a confusing parse error
+  instead of "you are locked". Only the frontend scope puts a lock SCREEN in
+  front of a person, and the client guard is gated on it for the same reason:
+  covering the screen is meaningless when only the API is locked.
 - **It is a screen lock, NOT an auth factor.** The person it guards against is
   holding a browser that already has a valid session. Four digits could never
   be an auth boundary, and the UI says so. Do not "harden" it into one.

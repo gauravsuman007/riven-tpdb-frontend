@@ -22,11 +22,23 @@ export const PIN_PATTERN = /^\d{4}$/;
 
 const DEFAULT_TIMEOUT_MINUTES = 10;
 
+/**
+ * Which surface a request belongs to.
+ *
+ * "frontend" is the UI and this app's own routes; "backend" is the proxied
+ * Riven API. They lock independently because they protect different things:
+ * hiding what is on screen is the usual want, and cutting off the API as well
+ * is a separate, stricter decision.
+ */
+export type LockScope = "frontend" | "backend";
+
 export interface LockState {
     enabled: boolean;
     hasPin: boolean;
     timeoutMinutes: number;
     lastActiveAt: Date;
+    lockFrontend: boolean;
+    lockBackend: boolean;
 }
 
 function hashPin(pin: string, salt: string): string {
@@ -70,7 +82,9 @@ export function getLockState(userId: string): LockState {
             enabled: false,
             hasPin: false,
             timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
-            lastActiveAt: new Date()
+            lastActiveAt: new Date(),
+            lockFrontend: true,
+            lockBackend: false
         };
     }
 
@@ -78,7 +92,9 @@ export function getLockState(userId: string): LockState {
         enabled: record.enabled && !!record.pinHash,
         hasPin: !!record.pinHash,
         timeoutMinutes: record.timeoutMinutes || DEFAULT_TIMEOUT_MINUTES,
-        lastActiveAt: record.lastActiveAt
+        lastActiveAt: record.lastActiveAt,
+        lockFrontend: record.lockFrontend,
+        lockBackend: record.lockBackend
     };
 }
 
@@ -89,16 +105,32 @@ export function getLockState(userId: string): LockState {
  * inert until someone opts in -- there is no state in which this can lock a
  * user out of an app they never configured.
  */
-export function isLocked(userId: string | undefined): boolean {
+export function isLocked(userId: string | undefined, scope: LockScope = "frontend"): boolean {
     if (!userId) return false;
 
     const state = getLockState(userId);
 
     if (!state.enabled) return false;
 
+    // A scope that was not selected is never locked, even once the idle clock
+    // has run out. This is what makes "lock the screen but leave the API
+    // alone" -- the common case -- a real configuration rather than a
+    // half-applied one.
+    if (scope === "frontend" && !state.lockFrontend) return false;
+    if (scope === "backend" && !state.lockBackend) return false;
+
     const idleMs = Date.now() - state.lastActiveAt.getTime();
 
     return idleMs >= state.timeoutMinutes * 60_000;
+}
+
+/** Whether anything at all would lock, used to decide if the client guard runs. */
+export function anyScopeLocks(userId: string | undefined): boolean {
+    if (!userId) return false;
+
+    const state = getLockState(userId);
+
+    return state.enabled && (state.lockFrontend || state.lockBackend);
 }
 
 /**
@@ -130,21 +162,74 @@ export function lockNow(userId: string): void {
         .run();
 }
 
-export function setPin(userId: string, pin: string, timeoutMinutes: number): void {
+export function setPin(
+    userId: string,
+    pin: string,
+    timeoutMinutes: number,
+    scopes?: { lockFrontend?: boolean; lockBackend?: boolean }
+): void {
     if (!PIN_PATTERN.test(pin)) throw new Error("PIN must be exactly four digits");
 
     const minutes = Math.max(1, Math.min(240, Math.floor(timeoutMinutes) || DEFAULT_TIMEOUT_MINUTES));
     const now = new Date();
 
+    // Undefined means "leave as it is" on an update, so a caller changing only
+    // the PIN cannot silently reset which surfaces are covered. On insert the
+    // column defaults apply.
+    const scopeFields = {
+        ...(scopes?.lockFrontend === undefined ? {} : { lockFrontend: scopes.lockFrontend }),
+        ...(scopes?.lockBackend === undefined ? {} : { lockBackend: scopes.lockBackend })
+    };
+
     db.insert(appLock)
-        .values({ userId, pinHash: encode(pin), enabled: true, timeoutMinutes: minutes, lastActiveAt: now })
+        .values({
+            userId,
+            pinHash: encode(pin),
+            enabled: true,
+            timeoutMinutes: minutes,
+            lastActiveAt: now,
+            lockFrontend: scopes?.lockFrontend ?? true,
+            lockBackend: scopes?.lockBackend ?? false
+        })
         .onConflictDoUpdate({
             target: appLock.userId,
             // lastActiveAt is reset too: setting a PIN should not leave you
             // instantly locked out by an idle clock from before it existed.
-            set: { pinHash: encode(pin), enabled: true, timeoutMinutes: minutes, lastActiveAt: now }
+            set: {
+                pinHash: encode(pin),
+                enabled: true,
+                timeoutMinutes: minutes,
+                lastActiveAt: now,
+                ...scopeFields
+            }
         })
         .run();
+}
+
+/**
+ * Change which surfaces are covered, without retyping the PIN.
+ *
+ * A no-op when no PIN exists: the scopes are meaningless on their own, and
+ * writing a row for a user who never configured a lock would make
+ * `getLockState` report a configuration that does not exist.
+ */
+export function setScopes(
+    userId: string,
+    scopes: { lockFrontend?: boolean; lockBackend?: boolean }
+): boolean {
+    const record = row(userId);
+
+    if (!record?.pinHash) return false;
+
+    db.update(appLock)
+        .set({
+            ...(scopes.lockFrontend === undefined ? {} : { lockFrontend: scopes.lockFrontend }),
+            ...(scopes.lockBackend === undefined ? {} : { lockBackend: scopes.lockBackend })
+        })
+        .where(eq(appLock.userId, userId))
+        .run();
+
+    return true;
 }
 
 export function clearPin(userId: string): void {

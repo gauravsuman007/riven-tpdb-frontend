@@ -16,6 +16,8 @@
     let enabled = $state(false);
     let hasPin = $state(false);
     let timeoutMinutes = $state(10);
+    let lockFrontend = $state(true);
+    let lockBackend = $state(false);
     let pin = $state("");
     let confirmPin = $state("");
     let busy = $state(false);
@@ -30,6 +32,8 @@
             enabled = state.enabled;
             hasPin = state.hasPin;
             timeoutMinutes = state.timeoutMinutes ?? 10;
+            lockFrontend = state.lockFrontend ?? true;
+            lockBackend = state.lockBackend ?? false;
         } finally {
             loaded = true;
         }
@@ -56,7 +60,7 @@
             const response = await fetch("/api/lock/settings", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ pin, timeoutMinutes })
+                body: JSON.stringify({ pin, timeoutMinutes, lockFrontend, lockBackend })
             });
 
             if (!response.ok) {
@@ -72,6 +76,39 @@
             // a newly-set timeout to take effect without a refresh.
             await invalidateAll();
             toast.success("App PIN set");
+        } finally {
+            busy = false;
+        }
+    }
+
+    /**
+     * Toggling a scope saves immediately and does NOT ask for the PIN again.
+     * The session is already authenticated and unlocked to be on this page, so
+     * demanding the code to tick a checkbox would be friction with no value.
+     */
+    async function saveScopes() {
+        if (!hasPin) return;
+
+        busy = true;
+
+        try {
+            const response = await fetch("/api/lock/settings", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "scopes", lockFrontend, lockBackend })
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                toast.error(payload?.message ?? "Could not save");
+                await refresh();
+                return;
+            }
+
+            await refresh();
+            // The layout hands the guard its settings, so it must reload for a
+            // scope change to take effect without a manual refresh.
+            await invalidateAll();
         } finally {
             busy = false;
         }
@@ -142,6 +179,49 @@
             replaces it.
         </p>
     {/if}
+
+    <div class="border-border/50 flex flex-col gap-2 rounded-md border border-dashed p-3">
+        <p class="text-xs font-medium">What the PIN locks</p>
+
+        <label class="flex items-start gap-2 text-xs">
+            <input
+                type="checkbox"
+                bind:checked={lockFrontend}
+                disabled={busy || !hasPin}
+                onchange={saveScopes}
+                class="mt-0.5" />
+            <span>
+                <span class="font-medium">This app</span>
+                <span class="text-muted-foreground">
+                    — pages and its own data. This is the screen lock: a locked page is
+                    never sent the content it hides.
+                </span>
+            </span>
+        </label>
+
+        <label class="flex items-start gap-2 text-xs">
+            <input
+                type="checkbox"
+                bind:checked={lockBackend}
+                disabled={busy || !hasPin}
+                onchange={saveScopes}
+                class="mt-0.5" />
+            <span>
+                <span class="font-medium">Riven API</span>
+                <span class="text-muted-foreground">
+                    — also refuse this browser's calls to the backend
+                    (<code>/api/v1/…</code>). Stricter, and off by default: it breaks
+                    anything else driving Riven from the same browser.
+                </span>
+            </span>
+        </label>
+
+        {#if hasPin && !lockFrontend && !lockBackend}
+            <p class="text-destructive text-xs">
+                Nothing is selected, so the PIN currently locks nothing.
+            </p>
+        {/if}
+    </div>
 
     <div class="flex flex-wrap items-end gap-3">
         <label class="flex flex-col gap-1">

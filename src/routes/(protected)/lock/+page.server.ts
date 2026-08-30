@@ -13,7 +13,7 @@ export const load = (async ({ locals, url }) => {
         This handles the second tab: unlocking in one tab must let every other
         tab back in, and they all land here first.
     */
-    if (!isLocked(locals.user.id)) {
+    if (!isLocked(locals.user.id, "frontend")) {
         const next = url.searchParams.get("next");
         redirect(303, next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     }

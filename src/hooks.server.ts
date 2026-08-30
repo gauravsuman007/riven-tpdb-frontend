@@ -3,7 +3,7 @@ import { redirect, error, type Handle, type ServerInit } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 import { sequence } from "@sveltejs/kit/hooks";
-import { isLocked } from "$lib/server/app-lock";
+import { isLocked, type LockScope } from "$lib/server/app-lock";
 import { env } from "$env/dynamic/private";
 import providers from "$lib/providers";
 import { dev } from "$app/environment";
@@ -238,7 +238,16 @@ const handleTVDBCookie: Handle = async ({ event, resolve }) => {
 const enforceAppLock: Handle = async ({ event, resolve }) => {
     const path = event.url.pathname;
 
-    const exempt =
+    /*
+        Always exempt, whatever is locked.
+
+        `/auth/*` because the sign-in page is explicitly never locked; `/lock`
+        and `/api/lock/*` because they are how you get back in; and the
+        Jellyfin surface and direct-play routes because a native player
+        mid-stream authenticates with a token rather than this session --
+        locking it would stop playback on a device nobody is holding.
+    */
+    const alwaysExempt =
         path === "/lock" ||
         path.startsWith("/api/lock/") ||
         path.startsWith("/auth/") ||
@@ -250,15 +259,41 @@ const enforceAppLock: Handle = async ({ event, resolve }) => {
         path.startsWith("/Users") ||
         path.startsWith("/System");
 
-    if (exempt || !event.locals.user || !isLocked(event.locals.user.id)) {
-        return resolve(event);
+    if (alwaysExempt || !event.locals.user) return resolve(event);
+
+    /*
+        Which surface is this?
+
+        `/api/v1/...` is the proxy to the Riven BACKEND -- it forwards to the
+        backend with the API key. Everything else is this app: its pages and
+        its own endpoints. The two lock independently, because hiding what is
+        on screen and cutting off the API are different decisions, and the
+        ordinary want is only the first.
+    */
+    const scope: LockScope = path.startsWith("/api/v1/") ? "backend" : "frontend";
+
+    if (!isLocked(event.locals.user.id, scope)) return resolve(event);
+
+    /*
+        A backend call is answered with 403, not a redirect.
+
+        Its caller is fetch(), not a navigating browser: a 303 to an HTML lock
+        page would be followed and then fail to parse as JSON, surfacing as a
+        confusing parse error instead of "you are locked". The frontend lock is
+        what puts a lock SCREEN in front of a person.
+    */
+    if (scope === "backend") {
+        return new Response(JSON.stringify({ error: "locked", message: "The app is locked." }), {
+            status: 403,
+            headers: { "content-type": "application/json" }
+        });
     }
 
     /*
-        A data request is answered with a redirect too, not just a page one.
-        SvelteKit fetches `__data.json` for client-side navigations, and
-        letting those through would hand the content to a locked tab while
-        the visible page showed the lock.
+        A data request is redirected too, not just a page one. SvelteKit
+        fetches `__data.json` for client-side navigations, and letting those
+        through would hand the content to a locked tab while the visible page
+        showed the lock.
     */
     const next = event.url.pathname + event.url.search;
 

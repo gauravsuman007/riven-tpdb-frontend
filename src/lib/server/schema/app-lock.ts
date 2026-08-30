@@ -38,6 +38,21 @@ export const appLock = sqliteTable("app_lock", {
      */
     pinHash: text("pin_hash"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    /*
+        Which surfaces the lock covers. Separate, because they protect
+        different things and the common case wants only the first.
+
+        `lockFrontend` is the screen lock: the UI and this app's own routes.
+        `lockBackend` additionally refuses the browser's proxied calls to the
+        Riven backend API (`/api/v1/...` via the backendProxy route).
+
+        Defaults match the ordinary intent -- hide what is on screen, without
+        cutting off the API. Turning the backend one on is the stricter
+        choice, and it is off by default because a locked API breaks anything
+        else driving this frontend from the same browser.
+    */
+    lockFrontend: integer("lock_frontend", { mode: "boolean" }).notNull().default(true),
+    lockBackend: integer("lock_backend", { mode: "boolean" }).notNull().default(false),
     /** Minutes of inactivity before locking. */
     timeoutMinutes: integer("timeout_minutes").notNull().default(10),
     /**
