@@ -393,6 +393,41 @@ function route(method: string, path: string, handler: Handler): Route {
 const ROUTES: Route[] = [
     // --- The web app bootstrap ---------------------------------------------
     route("GET", BUNDLE_PATH, () => new Response(BUNDLE_JS, { headers: { "content-type": "application/javascript; charset=utf-8" } })),
+    /*
+        Step two of the LG webOS client's connection handshake.
+
+        From jellyfin-webos `frontend/js/index.js`: the success handler for
+        /System/Info/Public immediately calls `getManifest()` for
+        /web/manifest.json, and a 404 there lands in `handleFailure` --
+        "Got HTTP error 404 from server, are you connecting to a Jellyfin
+        Server?" -- with no further requests. The Android client never asks
+        for it, which is why only webOS failed.
+
+        `start_url` is resolved as `baseurl + "/web/" + start_url` unless it
+        already contains "/web", so this sends the client to /web/index.html,
+        which is redirected to the app below.
+    */
+    route("GET", "/web/manifest.json", () => {
+        requireEnabled();
+
+        return json({
+            name: jellyfinServerName(),
+            short_name: jellyfinServerName(),
+            start_url: "index.html",
+            display: "standalone",
+            background_color: "#09090b",
+            theme_color: "#09090b",
+            icons: []
+        });
+    }),
+
+    // Where that manifest points. The app itself lives at the root.
+    route("GET", "/web/index.html", () => {
+        requireEnabled();
+
+        return new Response(null, { status: 302, headers: { location: "/" } });
+    }),
+
     route("GET", "/web/session-token", async (event) => {
         requireEnabled();
 

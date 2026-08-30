@@ -83,6 +83,19 @@
         persist(Date.now());
     }
 
+    /**
+     * Any media element actually playing right now.
+     *
+     * `paused` is the honest signal: it stays false while a backgrounded
+     * WebView keeps the audio going, which is exactly the case this exists
+     * for.
+     */
+    function playingMedia(): HTMLMediaElement[] {
+        return Array.from(
+            document.querySelectorAll<HTMLMediaElement>("video, audio")
+        ).filter((element) => !element.paused && !element.ended);
+    }
+
     function lock(): void {
         if (locked) return;
 
@@ -97,6 +110,18 @@
         locked = true;
         digits = "";
         message = "";
+
+        /*
+            Stop anything still playing. The overlay hides the picture but a
+            <video> keeps its audio going behind it, which makes a "locked"
+            app that is still audibly playing a film -- and on a phone, still
+            showing it in the media notification.
+
+            Only the in-page player is reachable from here. A native player
+            (ExoPlayer, MX) is a different process with its own lifecycle and
+            is deliberately left alone.
+        */
+        for (const element of playingMedia()) element.pause();
     }
 
     function unlocked(): void {
@@ -109,7 +134,24 @@
 
     function lockIfStale(): void {
         if (!enabled) return;
-        if (Date.now() - lastActive() >= timeoutMs()) lock();
+        if (Date.now() - lastActive() < timeoutMs()) return;
+
+        /*
+            Playback still running means the time that just elapsed was spent
+            watching, so it counts as activity and the clock restarts.
+
+            This is the case the stamp alone cannot see: a backgrounded
+            WebView has its timers and events frozen, so `timeupdate` stops
+            arriving and the stamp goes stale even though the film never
+            stopped. Reported exactly that way -- come back after a while to
+            a lock screen with the audio still playing underneath it.
+        */
+        if (playingMedia().length > 0) {
+            persist(Date.now());
+            return;
+        }
+
+        lock();
     }
 
     async function submit(): Promise<void> {
@@ -208,6 +250,7 @@
         */
         if (document.documentElement.hasAttribute(LOCKED_ATTR)) {
             locked = true;
+            for (const element of playingMedia()) element.pause();
         } else {
             persist(lastActive());
             lockIfStale();
