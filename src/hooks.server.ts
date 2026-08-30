@@ -248,6 +248,18 @@ const injectAppLockCover: Handle = async ({ event, resolve }) => {
     */
     if (event.url.pathname.startsWith("/auth/")) return resolve(event);
 
+    /*
+        Nor on /tv, for the same reason and then some. That section runs with
+        `csr = false` and ships no client JavaScript at all, so the guard that
+        is supposed to REMOVE this cover never mounts -- the attribute would
+        hide the body permanently, with no PIN prompt and no way back. The TV
+        surface exists for a living-room screen anyway, which is not the
+        threat the lock is for.
+    */
+    if (event.url.pathname === "/tv" || event.url.pathname.startsWith("/tv/")) {
+        return resolve(event);
+    }
+
     return resolve(event, {
         transformPageChunk: ({ html }) =>
             html.includes('id="app-lock-style"')
