@@ -240,6 +240,32 @@ export const BUNDLE_JS = `
 
   // What the player component calls. \`itemId\` is the Jellyfin item id (32
   // hex), derived from the Riven item id the same way the API routes do.
+  /*
+      The callback surface the external player reports back through.
+
+      ExternalPlayer.notifyEvent() evaluates
+      "window.ExtPlayer.notifyEnded()" and friends in this page when the
+      chosen app exits (ExternalPlayer.kt). jellyfin-web defines ExtPlayer;
+      we do not, so every one of those calls threw -- harmless in itself, but
+      it also meant nothing here could ever learn that playback had finished.
+
+      Dispatched as DOM events so any component can listen without this
+      script knowing about it.
+  */
+  window.ExtPlayer = {
+    notifyCanceled: function () { emit("canceled", 0); },
+    notifyEnded: function () { emit("ended", 0); },
+    notifyTimeUpdate: function (positionMs) { emit("timeupdate", positionMs || 0); }
+  };
+
+  function emit(kind, positionMs) {
+    try {
+      window.dispatchEvent(new CustomEvent("riven:external-player", {
+        detail: { kind: kind, positionMs: Number(positionMs) || 0 }
+      }));
+    } catch (e) { log("could not dispatch external-player event", e); }
+  }
+
   window.RivenNative = {
     available: nativeAvailable,
     play: function (itemId, startPositionTicks) {
@@ -326,7 +352,25 @@ export const BUNDLE_JS = `
      * initPlayer() builds setDataAndType(uri, "video/*") instead, which is
      * not a web intent and does offer the players.
      */
-    openInExternalPlayer: function (itemId) {
+    /*
+        The 'done' callback reports what the return value CANNOT.
+
+        This used to return true the moment it found the bridge, before
+        ensureCredentials had even run -- so the caller closed the player and
+        the hand-off then failed in silence, which is precisely how it was
+        reported: "clicking it just closed the player without doing
+        anything". Everything interesting here happens after this function
+        has returned, so the caller is told afterwards instead.
+
+        Even done(true) means only "initPlayer was called with credentials":
+        it resolves the item through PlaybackInfo on a coroutine and reports
+        its own failures with a Toast and no callback of any kind
+        (ExternalPlayer.kt). Callers that need to know an app really opened
+        must watch for the page going hidden.
+    */
+    openInExternalPlayer: function (itemId, done) {
+      function report(ok) { if (typeof done === "function") done(ok); }
+
       var bridge = null;
 
       try { bridge = window.ExternalPlayer && window.ExternalPlayer.initPlayer ? window.ExternalPlayer : null; }
@@ -335,28 +379,41 @@ export const BUNDLE_JS = `
       if (!bridge) { log("no ExternalPlayer bridge"); return false; }
 
       ensureCredentials(function (ok) {
-        if (!ok) { log("openInExternalPlayer aborted: no credentials"); return; }
+        if (!ok) { log("openInExternalPlayer aborted: no credentials"); report(false); return; }
 
         try {
           bridge.initPlayer(JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 }));
+          report(true);
         } catch (e) {
           log("initPlayer failed", e);
+          report(false);
         }
       });
 
       return true;
     },
 
-    playDirect: function (itemId) {
+    playDirect: function (itemId, done) {
+      function report(ok) { if (typeof done === "function") done(ok); }
+
       if (!nativeAvailable()) { log("playDirect() called but no native player"); return false; }
 
+      // Same contract as openInExternalPlayer above: the synchronous return
+      // says only that a bridge was found, and 'done' says what happened.
       ensureCredentials(function (ok) {
-        if (!ok) { log("playDirect() aborted: no credentials for native player"); return; }
+        if (!ok) { log("playDirect() aborted: no credentials for native player"); report(false); return; }
 
         var options = JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 });
 
-        if (externalAvailable()) window.ExternalPlayer.initPlayer(options);
-        else window.NativePlayer.loadPlayer(options);
+        try {
+          if (externalAvailable()) window.ExternalPlayer.initPlayer(options);
+          else window.NativePlayer.loadPlayer(options);
+
+          report(true);
+        } catch (e) {
+          log("playDirect failed", e);
+          report(false);
+        }
       });
 
       return true;

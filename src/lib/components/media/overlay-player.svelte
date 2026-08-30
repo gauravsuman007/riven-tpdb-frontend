@@ -594,6 +594,30 @@
         player.close();
     }
 
+    /*
+        The Android back gesture, while a video is open.
+
+        The multiplexer answers the client's back press by dispatching a
+        cancelable "mux:back" (see its inject.ts): the client evaluates
+        window.NavigationHelper.goBack() in the page, and without a handler
+        that walks history and navigates the whole app away from underneath
+        someone who only meant to close the video. Claiming the event here
+        makes back mean "close this player", which is what it means in every
+        other video app.
+    */
+    $effect(() => {
+        if (!target) return;
+
+        const onBack = (event: Event) => {
+            event.preventDefault();
+            close();
+        };
+
+        window.addEventListener("mux:back", onBack);
+
+        return () => window.removeEventListener("mux:back", onBack);
+    });
+
     function onKeydown(event: KeyboardEvent) {
         if (!target) return;
 
@@ -680,6 +704,97 @@
     }
 
     let openingExternal = $state(false);
+
+    /**
+     * Wait for evidence that another app actually came to the front.
+     *
+     * Needed because none of the native entry points can tell us. Both go
+     * through ExternalPlayer.initPlayer(), which resolves the item through
+     * PlaybackInfo on a coroutine and reports every failure -- bad play
+     * options, network failure, unsupported content -- with an Android Toast
+     * and no callback at all (ExternalPlayer.kt). A JS return value therefore
+     * says nothing about whether a player opened.
+     *
+     * What IS observable is this page losing the foreground. If a chooser or
+     * a player appears, the WebView is hidden within a moment; if
+     * initPlayer() failed, it never is.
+     */
+    function awaitForeground(timeoutMs = 5000): Promise<boolean> {
+        return new Promise((resolve) => {
+            if (typeof document === "undefined") return resolve(false);
+            if (document.hidden) return resolve(true);
+
+            let settled = false;
+
+            const finish = (ok: boolean) => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener("visibilitychange", onVisibility);
+                window.removeEventListener("riven:external-player", onReport);
+                clearTimeout(timer);
+                resolve(ok);
+            };
+
+            const onVisibility = () => {
+                if (document.hidden) finish(true);
+            };
+            // The external player reporting back is proof it ran, and arrives
+            // sooner than a visibility change on some shells.
+            const onReport = () => finish(true);
+            const timer = setTimeout(() => finish(false), timeoutMs);
+
+            document.addEventListener("visibilitychange", onVisibility);
+            window.addEventListener("riven:external-player", onReport);
+        });
+    }
+
+    /**
+     * Try one native hand-off, and close ONLY if it really happened.
+     *
+     * The player used to close the instant the bridge existed, which is why
+     * tapping this reportedly "just closed the player without doing
+     * anything": every failure downstream of that -- no credentials, a
+     * PlaybackInfo that 404s, a dead provider link -- happened after the
+     * overlay was already gone, with nothing on screen to say so.
+     */
+    async function bridgeHandoff(method: "openInExternalPlayer" | "playDirect", itemId: string) {
+        const bridge = window.RivenNative?.[method];
+
+        if (!bridge) return false;
+
+        // Paused before the wait, not after: two players pulling the same
+        // stream is the thing to avoid, and the wait is seconds long.
+        try {
+            video?.pause();
+        } catch {
+            /* Nothing to pause. */
+        }
+
+        const accepted = await new Promise<boolean>((resolve) => {
+            let called: boolean;
+
+            try {
+                called = !!bridge.call(window.RivenNative, itemId, resolve);
+            } catch {
+                called = false;
+            }
+
+            if (!called) resolve(false);
+        });
+
+        if (!accepted) return false;
+
+        if (await awaitForeground()) {
+            handedOff();
+            return true;
+        }
+
+        // The bridge took it and nothing opened. Stay put and say so -- the
+        // video is paused where it was, so play resumes it.
+        toast.error("The external player did not open. Check the client's player settings.");
+
+        return true;
+    }
 
     async function openInExternal() {
         if (!target || openingExternal) return;
@@ -770,11 +885,11 @@
                 check, so it works even when the web player is selected --
                 which is the only time this button is on screen at all.
             */
-            if (itemId && window.RivenNative?.openInExternalPlayer?.(itemId)) return handedOff();
+            if (itemId && (await bridgeHandoff("openInExternalPlayer", itemId))) return;
 
             // Then whichever native player is the default, for a shell that
             // has a player bridge but no external one.
-            if (itemId && window.RivenNative?.playDirect?.(itemId)) return handedOff();
+            if (itemId && (await bridgeHandoff("playDirect", itemId))) return;
 
             if (!url) {
                 toast.error("Could not build a link for an external player");
