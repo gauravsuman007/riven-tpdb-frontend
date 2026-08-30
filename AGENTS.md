@@ -91,10 +91,43 @@ history if it's ever relevant again.
   with an empty `<video>` (no src, showing a bare play button) underneath
   the native player, and its `touch-action:none` seek/zoom stage ate the OS
   edge-swipe-back gesture for a player the user couldn't see. A direct-site
-  video (no library item, so no ids to hand to `NativePlayer`) instead plays
-  through a bare native `<video>` + `webkitEnterFullscreen()`/
-  `requestFullscreen()` in that same code path, bypassing the custom overlay
-  entirely so the OS back gesture still works.
+  video plays through a bare native `<video>` +
+  `webkitEnterFullscreen()`/`requestFullscreen()` in that same code path,
+  bypassing the custom overlay entirely so the OS back gesture still works.
+  (It no longer lacks an id — see the direct-video bullet below — but this
+  in-page path is still what runs when no native player is selected.)
+- **A direct-site video HAS an id now — that is what makes external players
+  work.** Previously it had none, so "open in external player" fell back to
+  `NativeInterface.openUrl()`, which reaches Android as
+  `Intent(ACTION_VIEW, uri)` with **no MIME type set**. Android then resolves
+  an http URL by scheme alone and a browser always wins, so the media-player
+  chooser was never offered — reported as "it opens the video in the browser
+  and skips the player selection dialog". Reading `ExternalPlayer.kt`, the
+  bridge that builds the intent with `setDataAndType(uri, "video/*")` — the
+  thing that makes the chooser appear — is `initPlayer()`, and it takes
+  **item ids**; there is no entry point on it that accepts a raw URL. So the
+  fix is an id, not a better URL. `toDirectGuid()` mints one from the
+  direct-play token, and the Jellyfin surface answers for it at
+  `/Items/{id}`, `/Items/{id}/PlaybackInfo` and `/Videos/{id}/stream`. That
+  last one matters: both native players **build the stream URL themselves**
+  via `videosApi.getVideoStreamUrl()` rather than using anything the
+  MediaSource carried, so answering only PlaybackInfo is not enough. The same
+  change is what makes the in-app ExoPlayer work for direct videos at all.
+- **`fromGuid()` must reject EVERY reserved prefix, not just one.** It checked
+  only `SYNTHETIC_PREFIX`, so any second namespace fell through to
+  `parseInt(hex, 16)` and decoded as an enormous but perfectly finite number —
+  a valid-looking MediaItem id for a row that cannot exist, which 404s with
+  nothing pointing at the encoding as the cause. Direct-play tokens are 24 hex
+  chars precisely because the token **is** the id: 8 for the prefix, 24 left.
+- **Behind the multiplexer, the WebView and the video fetcher are different
+  HTTP clients.** ExoPlayer and the external-player handoff run in Kotlin,
+  outside the WebView, with their own HTTP client and **no cookie jar**. Any
+  proxy that routes on a browser cookie will 404 every `PlaybackInfo` and
+  every stream request while the UI itself works perfectly — which is exactly
+  how it presented. They do carry the Jellyfin access token, so that is the
+  only usable routing key for them. Fixed in `jellyfin-client-multiplexer`,
+  not here, but worth knowing before debugging playback that works direct and
+  fails proxied.
 - **Video delivery is a thin proxy, not a reimplementation.** `/Videos/{id}/stream`,
   `/Videos/{id}/main.m3u8`, and the HLS segment routes call the backend's
   existing `/api/v1/stream/file|playback_info|hls/...` endpoints directly —
