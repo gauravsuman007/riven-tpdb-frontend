@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import type { PageProps } from "./$types";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
     import { entryHref } from "$lib/collections";
@@ -216,11 +217,17 @@
                                         <div
                                             class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
                                             {#if entry.poster_path}
-                                                <img
+                                                <PosterImage
                                                     src={entry.poster_path}
                                                     alt={entry.title}
-                                                    loading="lazy"
-                                                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                    class="transition-transform duration-500 group-hover:scale-105">
+                                                    {#snippet fallback()}
+                                                        <div
+                                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                                                            {entry.title}
+                                                        </div>
+                                                    {/snippet}
+                                                </PosterImage>
                                             {:else}
                                                 <div
                                                     class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">

@@ -7,13 +7,20 @@ export const load: PageServerLoad = async (event) => {
         return redirect(302, "/auth/login");
     }
 
-    const overview = await getAvnOverview({
-        baseUrl: event.locals.backendUrl,
-        apiKey: event.locals.apiKey,
-        fetch: event.fetch
-    });
-
-    return { overview };
+    /*
+        Streamed, not awaited. The overview is one call carrying every ceremony
+        year with all its entries -- around 370KB and growing as years fill in
+        -- so the page used to sit blank until the whole thing had been fetched
+        and parsed. Returning the promise lets the shell and the year rail
+        render at once.
+    */
+    return {
+        overview: getAvnOverview({
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        })
+    };
 };
 
 export const actions: Actions = {

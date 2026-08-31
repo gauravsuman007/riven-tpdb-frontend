@@ -13,6 +13,9 @@
 -->
 <script lang="ts">
     import type { PageProps } from "./$types";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
+    import { streamed } from "$lib/streamed.svelte";
+    import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -25,7 +28,16 @@
 
     let { data, form }: PageProps = $props();
 
-    const overview = $derived(data.overview);
+    const stream = streamed(() => data.overview);
+
+    /*
+        An empty overview while the real one is in flight, so every `overview.x`
+        below keeps working without a null check on each one. `stream.pending`
+        is what the markup uses to tell "still loading" from "genuinely empty".
+    */
+    const overview = $derived(
+        stream.value ?? { enabled: false, years: [], progress: {} }
+    );
     // The form result covers the moment just after enabling, before the poll
     // has brought back a page with years on it.
     const enabled = $derived(overview.enabled || form?.enabled === true);
@@ -46,11 +58,17 @@
     <div
         class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
         {#if entry.poster_path}
-            <img
+            <PosterImage
                 src={entry.poster_path}
                 alt={entry.title}
-                loading="lazy"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                class="transition-transform duration-500 group-hover:scale-105">
+                {#snippet fallback()}
+                    <div
+                        class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                        {entry.title}
+                    </div>
+                {/snippet}
+            </PosterImage>
         {:else}
             <div
                 class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
@@ -106,7 +124,27 @@
             </div>
         </header>
 
-        {#if !enabled}
+        {#if stream.pending}
+            <!--
+                Loading, which is NOT the same as switched off -- and the
+                off branch below is the whole page, so showing it first and
+                replacing it a moment later would flash "turn this on" at
+                someone who already has.
+            -->
+            <div class="flex flex-col gap-12 pb-20">
+                {#each Array.from({ length: 3 }, (_, i) => i) as row (row)}
+                    <section class="flex flex-col gap-4">
+                        <Skeleton class="h-8 w-32" />
+                        <div class="flex gap-4 overflow-hidden">
+                            {#each Array.from({ length: 8 }, (_, i) => i) as cell (cell)}
+                                <Skeleton
+                                    class="aspect-[3/4] w-[150px] shrink-0 rounded-xl md:w-[180px]" />
+                            {/each}
+                        </div>
+                    </section>
+                {/each}
+            </div>
+        {:else if !enabled}
             <!--
                 The empty state is the whole page until this is switched on.
                 Saying what the job actually costs is the point: the button
