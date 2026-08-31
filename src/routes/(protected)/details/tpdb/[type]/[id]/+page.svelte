@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { PageData, ActionData } from "./$types";
+    import { streamed } from "$lib/streamed.svelte";
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";
@@ -26,11 +27,19 @@
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
     const item = $derived(data.item as Record<string, any>);
-    const collected = $derived(data.collected || (form as any)?.collected === true);
+    /*
+        Both stream in after the title has painted -- see the load. Until they
+        land the badge simply is not shown, which is the correct thing to say
+        about membership we do not know yet.
+    */
+    const collectedStream = streamed(() => data.collected);
+    const libraryStateStream = streamed(() => data.libraryState);
+
+    const collected = $derived(collectedStream.value === true || (form as any)?.collected === true);
 
     // `libraryState` is what Riven already knows; the form result covers the
     // moment just after requesting, before the page has been reloaded.
-    const libraryState = $derived(data.libraryState ?? null);
+    const libraryState = $derived(libraryStateStream.value ?? null);
     const requested = $derived(!!libraryState || (form as any)?.requested === true);
     const status = $derived(libraryState ? describeState(libraryState.state) : null);
 
@@ -247,7 +256,7 @@
                     this title. Shared with the riven-id detail page so the two
                     cannot drift -- see candidate-releases.svelte.
                 -->
-                <CandidateReleases releases={releases} rivenId={libraryState?.riven_id} />
+                <CandidateReleases {releases} rivenId={libraryState?.riven_id} />
 
                 <!--
                     Watch from a site: play a direct link without downloading

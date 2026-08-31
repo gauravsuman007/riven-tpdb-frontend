@@ -1,5 +1,6 @@
 <script lang="ts">
     import Mountain from "@lucide/svelte/icons/mountain";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import Check from "@lucide/svelte/icons/check";
     import { cn } from "$lib/utils";
     import Play from "@lucide/svelte/icons/play";
@@ -51,12 +52,11 @@
     )}>
     <!-- Background / Image -->
     {#if image}
-        <img
+        <PosterImage
             alt={title}
             src={image}
-            loading="lazy"
             class={cn(
-                "h-full w-full object-cover transition-transform duration-700 ease-out will-change-transform group-hover:scale-110",
+                "transition-transform duration-700 ease-out will-change-transform group-hover:scale-110",
                 isSelected ? "scale-105 opacity-40 grayscale-[0.5]" : "opacity-100"
             )} />
         <!-- Gradient Overlay - Stronger fade for text legibility using theme colors where possible but ensuring contrast -->

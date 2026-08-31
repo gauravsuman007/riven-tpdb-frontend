@@ -8,6 +8,7 @@
      * posters and names are frequently near-identical.
      */
     import { describeState, stateBadge } from "$lib/utils/item-state";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import { openPlayer } from "$lib/stores/player.svelte";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import PlayIcon from "@lucide/svelte/icons/play";
@@ -47,11 +48,10 @@
     class="group hover:bg-accent/40 relative flex items-start gap-4 rounded-lg p-3 transition-colors">
     <div class="bg-muted relative h-28 w-20 shrink-0 overflow-hidden rounded-md sm:h-32 sm:w-24">
         {#if item.poster_path}
-            <img
+            <PosterImage
                 src={item.poster_path}
-                alt={item.title}
-                loading="lazy"
-                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                alt={item.title ?? ""}
+                class="transition-transform duration-300 group-hover:scale-105" />
         {/if}
 
         {#if canPlay}

@@ -93,32 +93,44 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
     const numericId = item._id ?? null;
     const tpdbUuid = (item.id as string | undefined) ?? params.id;
 
-    // Both of these depend on the detail response (collection membership is
-    // keyed on the numeric id, not the uuid), so they can only start now --
-    // but they do not depend on each other, so they run together rather than
-    // adding two serial round trips to a page that was already slow.
-    const [status, library] = await Promise.all([
-        // The endpoint 404s for ids TPDB does not track -- treat that as
-        // "not collected" rather than failing the whole page.
+    /*
+        Both depend on the detail response (collection membership is keyed on
+        the numeric id, not the uuid) so they can only start now -- and neither
+        depends on the other, so they run together.
+
+        Streamed rather than awaited: they drive a badge and a state pill, not
+        the title, poster or synopsis. Blocking first paint on them added a
+        round trip to a page whose whole point is the content already fetched.
+    */
+    const collected = (
         numericId
-            ? providers.riven.GET("/api/v1/tpdb/collection/{numeric_id}", {
-                  ...auth,
-                  params: { path: { numeric_id: numericId } }
-              })
-            : Promise.resolve(null),
-        providers.riven.GET("/api/v1/items/library_states", {
+            ? providers.riven
+                  // The endpoint 404s for ids TPDB does not track -- treat that
+                  // as "not collected" rather than failing the page.
+                  .GET("/api/v1/tpdb/collection/{numeric_id}", {
+                      ...auth,
+                      params: { path: { numeric_id: numericId } }
+                  })
+                  .then((status) => status?.data?.collected ?? false)
+                  .catch(() => false)
+            : Promise.resolve(false)
+    ) as Promise<boolean>;
+
+    const libraryState = providers.riven
+        .GET("/api/v1/items/library_states", {
             ...auth,
             // Detail form: this page renders files, sizes and candidate
             // releases, none of which a poster grid would ask for.
             params: { query: { tpdb_ids: [tpdbUuid], detailed: true } }
         })
-    ]);
-
-    const collected = status?.data?.collected ?? false;
-
-    // Absent from the response means "not in the library" -- the endpoint omits
-    // ids it does not know rather than erroring, so a miss is not a failure.
-    const libraryState = library.data?.states?.[tpdbUuid] ?? null;
+        // Absent from the response means "not in the library" -- the endpoint
+        // omits ids it does not know rather than erroring, so a miss is not a
+        // failure.
+        .then((library) => library.data?.states?.[tpdbUuid] ?? null)
+        .catch((err) => {
+            logger.error("Library state fetch failed", err);
+            return null;
+        });
 
     return {
         item,
