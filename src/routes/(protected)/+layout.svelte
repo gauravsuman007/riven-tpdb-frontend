@@ -1,5 +1,6 @@
 <script lang="ts">
     import OverlayPlayer from "$lib/components/media/overlay-player.svelte";
+    import { player } from "$lib/stores/player.svelte";
     import AppLockGuard from "$lib/components/app-lock-guard.svelte";
     import "@fontsource/oxanium/300.css";
     import "@fontsource/oxanium/400.css";
@@ -17,7 +18,7 @@
     import "../../app.css";
     import type { LayoutProps } from "./$types";
     import { SidebarStore, isMobileStore } from "$lib/stores/global.svelte";
-    import { setContext } from "svelte";
+    import { onMount, setContext } from "svelte";
     import Header from "$lib/components/header.svelte";
     import MobileNav from "$lib/components/mobile-nav.svelte";
     import { SearchStore } from "$lib/services/search-store.svelte";
@@ -26,6 +27,17 @@
     let { data, children }: LayoutProps = $props();
 
     let mainContent: HTMLElement;
+
+    /*
+        Reopen a video the last load was interrupted mid-playback.
+
+        A foldable being opened changes the screen geometry, which makes
+        Android recreate the activity: the WebView is rebuilt on the start
+        URL, so the route and the player both vanish and the viewer lands
+        back on the home page. The store keeps a short-lived resume point for
+        exactly that; see player.svelte.ts for the age window.
+    */
+    onMount(() => player.restore());
 
     const searchStore = new SearchStore();
     const filterStore = new FilterStore();

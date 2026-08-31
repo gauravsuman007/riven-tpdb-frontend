@@ -253,6 +253,27 @@
         clampOffsets();
     }
 
+    /**
+     * Seek to the position the store restored, once there is a timeline to
+     * seek within. Consumed rather than re-applied: the point is only good
+     * for the load it came back on, and leaving it set would drag the viewer
+     * back there after every later seek of their own.
+     */
+    function applyResume() {
+        const at = player.resumeAt;
+        if (!video || at === null) return;
+
+        player.resumeAt = null;
+
+        if (!Number.isFinite(at) || at <= 0) return;
+
+        try {
+            video.currentTime = at;
+        } catch {
+            // Not seekable yet -- the position is lost, not the playback.
+        }
+    }
+
     function applyTwoFinger(centre: { x: number; y: number }, ratio: number) {
         const view = viewport();
         if (!view || !pinchStart) return;
@@ -431,6 +452,10 @@
         // While scrubbing, the readout follows the finger, not the element --
         // otherwise it snaps back on every timeupdate mid-drag.
         if (!scrubbing && !seeking) currentTime = video.currentTime;
+
+        // Keep the resume point current, so an activity restart (a foldable
+        // being opened mid-playback) comes back to the same second.
+        if (video.currentTime > 0) player.remember(video.currentTime);
 
         try {
             buffered = video.buffered.length
@@ -1076,6 +1101,7 @@
 
         element.addEventListener("loadedmetadata", syncMetadata);
         element.addEventListener("resize", syncMetadata);
+        element.addEventListener("loadedmetadata", applyResume);
         for (const name of playbackEvents) element.addEventListener(name, syncPlayback);
 
         syncMetadata();
@@ -1084,6 +1110,7 @@
         return () => {
             element.removeEventListener("loadedmetadata", syncMetadata);
             element.removeEventListener("resize", syncMetadata);
+            element.removeEventListener("loadedmetadata", applyResume);
             for (const name of playbackEvents) element.removeEventListener(name, syncPlayback);
         };
     });

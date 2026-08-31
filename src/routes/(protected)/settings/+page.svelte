@@ -9,6 +9,7 @@
         getValueSnapshot
     } from "@sjsf/form";
     import { page } from "$app/state";
+    import { replaceState } from "$app/navigation";
     import { createMeta, setupSvelteKitForm } from "@sjsf/sveltekit/client";
     import * as defaults from "$lib/components/settings/form-defaults";
     import IndexerPicker from "$lib/components/settings/indexer-picker.svelte";
@@ -342,7 +343,34 @@
             : [...TABS]
     );
 
-    let active = $state<string>(TABS[0].id);
+    /*
+        Which tab is open lives in the URL, not just in component state, so a
+        refresh comes back to the tab you were on -- the settings page reloads
+        itself after a save, and landing back on General every time loses your
+        place. A search param rather than a hash because the server sees it:
+        SSR and hydration then agree on the open tab, with no flash of General
+        in between.
+    */
+    const TAB_PARAM = "tab";
+
+    function requestedTab(): string {
+        const id = page.url.searchParams.get(TAB_PARAM);
+        const known = [...TABS.map((tab) => tab.id), "other"];
+        return id && known.includes(id) ? id : TABS[0].id;
+    }
+
+    let active = $state<string>(requestedTab());
+
+    function selectTab(id: string) {
+        active = id;
+
+        const url = new URL(page.url);
+        url.searchParams.set(TAB_PARAM, id);
+        // replaceState, not goto: this is the same page in a different
+        // presentation. A history entry per tab would turn the back gesture
+        // into a tour of the tabs you happened to open.
+        replaceState(url, page.state);
+    }
 </script>
 
 <svelte:head>
@@ -362,7 +390,7 @@
                     role="tab"
                     aria-selected={active === tab.id}
                     aria-controls="settings-panel-{tab.id}"
-                    onclick={() => (active = tab.id)}
+                    onclick={() => selectTab(tab.id)}
                     class={cn(
                         "rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
                         active === tab.id

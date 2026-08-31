@@ -97,8 +97,39 @@ function playDirectNative(src: string, mimeType: string): void {
     }
 }
 
+/**
+ * Where a resume point is kept, and for how long it stays good.
+ *
+ * `localStorage`, not `sessionStorage`, because the case this exists for is a
+ * foldable unfolding mid-playback: the screen geometry changes, Android
+ * recreates the activity, and the WebView is torn down and rebuilt on the
+ * start URL -- which loses the SPA route, the store, and any session storage
+ * with it. A restart that fast is indistinguishable from a plain reload from
+ * in here, so both are treated the same and the player comes back.
+ *
+ * The age window is what keeps that from becoming a nuisance: reopening the
+ * app the next morning must not resurrect last night's video. Only a reload
+ * that lands within the window restores, and closing the player deliberately
+ * clears the record outright.
+ */
+const RESUME_KEY = "riven:player-resume";
+const RESUME_MAX_AGE_MS = 30 * 60 * 1000;
+
+interface ResumeRecord {
+    target: PlayerTarget;
+    position: number;
+    savedAt: number;
+}
+
 class PlayerStore {
     current = $state<PlayerTarget | null>(null);
+
+    /**
+     * Seconds to seek to once the restored target's metadata arrives, or null
+     * for a normal open. Read and cleared by the overlay -- a resume point is
+     * only good for the load it was restored on.
+     */
+    resumeAt = $state<number | null>(null);
 
     open(itemId: number, title: string) {
         if (nativePlayerAvailable()) {
@@ -195,7 +226,77 @@ class PlayerStore {
         };
     }
 
+    /**
+     * Record where playback has got to, so a WebView restart can pick it up.
+     * Called from the player's timeupdate handler, so it runs about four
+     * times a second -- cheap enough to write straight through, and writing
+     * on an interval instead would risk missing the last seconds before the
+     * activity dies, which is exactly the position worth keeping.
+     */
+    remember(position: number) {
+        if (typeof localStorage === "undefined" || !this.current) return;
+
+        const record: ResumeRecord = {
+            target: this.current,
+            position,
+            savedAt: Date.now()
+        };
+
+        try {
+            localStorage.setItem(RESUME_KEY, JSON.stringify(record));
+        } catch {
+            // Private mode, or the quota is full. Losing the resume point is
+            // not worth breaking playback over.
+        }
+    }
+
+    /** Drop the resume point. Closing the player is a deliberate stop. */
+    forget() {
+        this.resumeAt = null;
+        if (typeof localStorage === "undefined") return;
+        try {
+            localStorage.removeItem(RESUME_KEY);
+        } catch {
+            // See remember().
+        }
+    }
+
+    /**
+     * Reopen whatever was playing when the page last went away, if it went
+     * away recently enough. Called once from the protected layout on mount.
+     */
+    restore() {
+        if (typeof localStorage === "undefined" || this.current) return;
+
+        let record: ResumeRecord | null = null;
+
+        try {
+            const raw = localStorage.getItem(RESUME_KEY);
+            record = raw ? (JSON.parse(raw) as ResumeRecord) : null;
+        } catch {
+            record = null;
+        }
+
+        if (!record?.target || typeof record.savedAt !== "number") return;
+
+        if (Date.now() - record.savedAt > RESUME_MAX_AGE_MS) {
+            this.forget();
+            return;
+        }
+
+        // The shell plays library titles natively; reopening the overlay
+        // behind ExoPlayer would put a second, invisible player on screen.
+        if (record.target.kind === "library" && nativePlayerAvailable()) {
+            this.forget();
+            return;
+        }
+
+        this.resumeAt = record.position > 0 ? record.position : null;
+        this.current = record.target;
+    }
+
     close() {
+        this.forget();
         this.current = null;
     }
 }
