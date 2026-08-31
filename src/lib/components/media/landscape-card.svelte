@@ -1,5 +1,6 @@
 <script lang="ts">
     import Mountain from "@lucide/svelte/icons/mountain";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import Star from "@lucide/svelte/icons/star";
     import { browser } from "$app/environment";
     import { cn } from "$lib/utils";
@@ -65,11 +66,10 @@
     )}>
     <div class="relative aspect-video w-full flex-grow overflow-hidden">
         {#if image}
-            <img
+            <PosterImage
                 alt={title}
-                class="h-full w-full transform-gpu object-cover transition-transform duration-500 group-hover:scale-105"
-                src={image}
-                loading="lazy" />
+                class="transform-gpu transition-transform duration-500 group-hover:scale-105"
+                src={image} />
         {:else}
             <div
                 class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center">

@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import type { PageProps } from "./$types";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -104,7 +105,8 @@
                 {#each ["Top Sellers", "Trending Now"] as placeholder (placeholder)}
                     <section class="flex flex-col gap-4">
                         <div class="space-y-1">
-                            <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                            <h2
+                                class="font-serif text-2xl font-medium tracking-tight text-white/90">
                                 {placeholder}
                             </h2>
                             <p class="font-mono text-xs text-zinc-500">
@@ -135,70 +137,69 @@
                     </p>
                 </div>
             {:else}
-            <div class="flex flex-col gap-12 pb-20">
-                {#each rows as row (row.key)}
-                    {#if row.titles.length}
-                        <section class="flex flex-col gap-4">
-                            <div class="space-y-1">
-                                <h2
-                                    class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                    {row.name}
-                                </h2>
-                                <p class="text-sm text-zinc-400">{row.description}</p>
-                            </div>
+                <div class="flex flex-col gap-12 pb-20">
+                    {#each rows as row (row.key)}
+                        {#if row.titles.length}
+                            <section class="flex flex-col gap-4">
+                                <div class="space-y-1">
+                                    <h2
+                                        class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                                        {row.name}
+                                    </h2>
+                                    <p class="text-sm text-zinc-400">{row.description}</p>
+                                </div>
 
-                            <ul
-                                class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                                {#each row.titles as title (title.product_id)}
-                                    <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
-                                        <!--
+                                <ul
+                                    class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
+                                    {#each row.titles as title (title.product_id)}
+                                        <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
+                                            <!--
                                             A form rather than a link: opening a
                                             title creates its catalogue entry,
                                             which is a write and must not happen
                                             on a crawler following a href.
                                         -->
-                                        <form method="POST" action="?/open" use:enhance>
-                                            <input
-                                                type="hidden"
-                                                name="productId"
-                                                value={title.product_id} />
-                                            <button
-                                                type="submit"
-                                                class="group flex w-full flex-col gap-2 text-left focus-visible:outline-none">
-                                                <div
-                                                    class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
-                                                    {#if title.poster}
-                                                        <img
-                                                            src={title.poster}
-                                                            alt={title.title}
-                                                            loading="lazy"
-                                                            class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                    {:else}
-                                                        <div
-                                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                            {title.title}
-                                                        </div>
-                                                    {/if}
+                                            <form method="POST" action="?/open" use:enhance>
+                                                <input
+                                                    type="hidden"
+                                                    name="productId"
+                                                    value={title.product_id} />
+                                                <button
+                                                    type="submit"
+                                                    class="group flex w-full flex-col gap-2 text-left focus-visible:outline-none">
+                                                    <div
+                                                        class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
+                                                        {#if title.poster}
+                                                            <PosterImage
+                                                                src={title.poster}
+                                                                alt={title.title}
+                                                                class="transition-transform duration-500 group-hover:scale-105" />
+                                                        {:else}
+                                                            <div
+                                                                class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                                                                {title.title}
+                                                            </div>
+                                                        {/if}
 
-                                                    <span
-                                                        class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-white">
-                                                        #{title.rank}
-                                                    </span>
-                                                </div>
+                                                        <span
+                                                            class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-white">
+                                                            #{title.rank}
+                                                        </span>
+                                                    </div>
 
-                                                <p
-                                                    class="truncate text-sm text-white/90 group-hover:text-white">
-                                                    {title.title}
-                                                </p>
-                                            </button>
-                                        </form>
-                                    </li>
-                                {/each}
-                            </ul>
-                        </section>
-                    {/if}
-                {/each}
-            </div>
+                                                    <p
+                                                        class="truncate text-sm text-white/90 group-hover:text-white">
+                                                        {title.title}
+                                                    </p>
+                                                </button>
+                                            </form>
+                                        </li>
+                                    {/each}
+                                </ul>
+                            </section>
+                        {/if}
+                    {/each}
+                </div>
             {/if}
         {:catch}
             <div class="flex flex-col items-center gap-3 py-24 text-center">

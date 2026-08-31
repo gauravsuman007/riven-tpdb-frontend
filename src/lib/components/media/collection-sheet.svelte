@@ -1,5 +1,6 @@
 <script lang="ts">
     import * as Sheet from "$lib/components/ui/sheet/index.js";
+    import PosterImage from "$lib/components/media/poster-image.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import LandscapeCard from "$lib/components/media/landscape-card.svelte";
     import Loader2 from "@lucide/svelte/icons/loader-2";
@@ -114,10 +115,7 @@
             {:else if collectionData}
                 {#if collectionData.backdrop_path}
                     <div class="relative h-48 w-full overflow-hidden rounded-xl shadow-lg md:h-64">
-                        <img
-                            src={collectionData.backdrop_path}
-                            alt={collectionData.name}
-                            class="h-full w-full object-cover" />
+                        <PosterImage src={collectionData.backdrop_path} alt={collectionData.name} />
                         <div
                             class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
                         </div>
