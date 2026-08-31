@@ -1,5 +1,7 @@
 <script lang="ts">
     import { getContext, onDestroy, onMount } from "svelte";
+    import { streamed } from "$lib/streamed.svelte";
+    import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { type Action } from "svelte/action";
     import ListItem from "$lib/components/list-item.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
@@ -16,6 +18,16 @@
 
     let { data } = $props();
 
+    /*
+        The discovery payload streams in behind the shell, so the search box is
+        usable while ~3MB of recommendations is still on the wire.
+    */
+    const disco = streamed(() => data.discovery);
+
+    const heroItems = $derived(disco.value?.heroItems ?? []);
+    const feelingLuckyItems = $derived(disco.value?.feelingLuckyItems ?? []);
+    const searchExamples = $derived(disco.value?.searchExamples ?? []);
+    const recommendationBasis = $derived(disco.value?.recommendationBasis ?? null);
     const searchStore = getContext<SearchStore>("searchStore");
 
     let currentExampleIndex = $state(0);
@@ -35,9 +47,7 @@
     let hasResults = $derived(Array.isArray(searchStore.results) && searchStore.results.length > 0);
 
     // Hero item derived from rotation
-    let heroItem = $derived(
-        data.heroItems && data.heroItems.length > 0 ? data.heroItems[currentHeroIndex] : null
-    );
+    let heroItem = $derived(heroItems && heroItems.length > 0 ? heroItems[currentHeroIndex] : null);
 
     // Derived background image: Use hero item for empty state, first result for active search
     let backgroundImage = $derived(
@@ -49,9 +59,8 @@
     );
 
     function handleFeelingLucky() {
-        if (!data.feelingLuckyItems?.length) return;
-        const randomItem =
-            data.feelingLuckyItems[Math.floor(Math.random() * data.feelingLuckyItems.length)];
+        if (!feelingLuckyItems?.length) return;
+        const randomItem = feelingLuckyItems[Math.floor(Math.random() * feelingLuckyItems.length)];
         const route = `/details/tpdb/${randomItem.media_type === "tv" ? "tv" : "movie"}/${randomItem.tpdb_uuid ?? randomItem.id}`;
         goto(route);
     }
@@ -59,15 +68,15 @@
     onMount(() => {
         // Rotate search examples
         const exampleInterval = setInterval(() => {
-            if (data.searchExamples?.length > 0) {
-                currentExampleIndex = (currentExampleIndex + 6) % data.searchExamples.length;
+            if (searchExamples?.length > 0) {
+                currentExampleIndex = (currentExampleIndex + 6) % searchExamples.length;
             }
         }, 4000);
 
         // Rotate hero item every 8 seconds (faster for more dynamism)
         const heroInterval = setInterval(() => {
-            if (data.heroItems?.length) {
-                currentHeroIndex = (currentHeroIndex + 1) % data.heroItems.length;
+            if (heroItems?.length) {
+                currentHeroIndex = (currentHeroIndex + 1) % heroItems.length;
             }
         }, 8000);
 
@@ -239,7 +248,27 @@
             {#if showEmptyState}
                 <div class="relative flex flex-col gap-12 py-12 md:py-16">
                     <!-- Hero section -->
-                    {#if heroItem}
+                    {#if disco.pending}
+                        <!--
+                            The hero's own shape while the recommendations are
+                            in flight. Sized to what replaces it so the search
+                            box above does not jump when it lands.
+                        -->
+                        <div class="flex flex-col gap-6 md:gap-8">
+                            <div class="max-w-3xl space-y-4">
+                                <Skeleton class="h-5 w-40" />
+                                <Skeleton class="h-12 w-3/4" />
+                                <Skeleton class="h-4 w-full" />
+                                <Skeleton class="h-4 w-5/6" />
+                            </div>
+                            <div class="flex gap-4 overflow-hidden">
+                                {#each Array.from({ length: 6 }, (_, i) => i) as tile (tile)}
+                                    <Skeleton
+                                        class="aspect-[2/3] w-[130px] shrink-0 rounded-xl md:w-[160px]" />
+                                {/each}
+                            </div>
+                        </div>
+                    {:else if heroItem}
                         {#key heroItem.id}
                             <div
                                 in:fly={{ y: 20, duration: 1000 }}
@@ -302,28 +331,36 @@
                             class="text-muted-foreground text-sm font-medium tracking-wider uppercase">
                             Trending now
                         </h3>
-                        {#key currentExampleIndex}
+                        {#if disco.pending}
                             <div class="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {#each (data.searchExamples ?? []).slice(currentExampleIndex, currentExampleIndex + 6) as example (example)}
-                                    <button
-                                        on:click={() => {
-                                            // Dispatch event for header search input
-                                            window.dispatchEvent(
-                                                new CustomEvent("riven:search", {
-                                                    detail: { query: example }
-                                                })
-                                            );
-                                        }}
-                                        class="bg-card/50 hover:bg-accent/50 group animate-in fade-in slide-in-from-bottom-2 hover:border-border/50 flex items-center gap-3 rounded-xl border border-transparent p-3 text-left backdrop-blur-sm transition-all duration-500 hover:scale-[1.02] md:gap-4 md:p-5">
-                                        <SearchIcon
-                                            class="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 transition-colors duration-300 md:h-5 md:w-5" />
-                                        <span
-                                            class="text-foreground text-sm leading-tight font-medium capitalize md:text-lg"
-                                            >{example}</span>
-                                    </button>
+                                {#each Array.from({ length: 6 }, (_, i) => i) as chip (chip)}
+                                    <Skeleton class="h-12 w-full rounded-lg" />
                                 {/each}
                             </div>
-                        {/key}
+                        {:else}
+                            {#key currentExampleIndex}
+                                <div class="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {#each (searchExamples ?? []).slice(currentExampleIndex, currentExampleIndex + 6) as example (example)}
+                                        <button
+                                            on:click={() => {
+                                                // Dispatch event for header search input
+                                                window.dispatchEvent(
+                                                    new CustomEvent("riven:search", {
+                                                        detail: { query: example }
+                                                    })
+                                                );
+                                            }}
+                                            class="bg-card/50 hover:bg-accent/50 group animate-in fade-in slide-in-from-bottom-2 hover:border-border/50 flex items-center gap-3 rounded-xl border border-transparent p-3 text-left backdrop-blur-sm transition-all duration-500 hover:scale-[1.02] md:gap-4 md:p-5">
+                                            <SearchIcon
+                                                class="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 transition-colors duration-300 md:h-5 md:w-5" />
+                                            <span
+                                                class="text-foreground text-sm leading-tight font-medium capitalize md:text-lg"
+                                                >{example}</span>
+                                        </button>
+                                    {/each}
+                                </div>
+                            {/key}
+                        {/if}
                     </div>
                 </div>
             {:else if hasResults}

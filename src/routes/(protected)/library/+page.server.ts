@@ -122,22 +122,51 @@ export const load: PageServerLoad = async (event) => {
         return redirect(302, "/auth/login");
     }
 
+    // Awaited: the search form is local work and the markup binds to it
+    // immediately, so there is nothing to gain by streaming it.
     const itemsSearchForm = await superValidate(event.url.searchParams, zod4(itemsSearchSchema));
 
-    const itemsResponse = await providers.riven.GET("/api/v1/items", {
-        params: {
-            query: itemsSearchForm.data
-        },
-        baseUrl: event.locals.backendUrl,
-        headers: {
-            "x-api-key": event.locals.apiKey
-        },
-        fetch: event.fetch
-    });
+    /*
+        The grid and the shelf are fetched in parallel and streamed.
 
-    if (itemsResponse.error) {
-        error(500, "Failed to fetch items");
-    }
+        They used to run one after the other -- collections waited on the item
+        query for no reason at all -- and the page waited on both. A large
+        library query is the slow one, and it now fills in behind a grid of
+        placeholder cards while the rest of the page is usable.
+
+        The whole item response is one promise rather than five, because
+        `items`, `page`, `totalPages` and the counts all come from the same
+        call: splitting them would mean four awaits on one request.
+    */
+    const library = (async () => {
+        const response = await providers.riven.GET("/api/v1/items", {
+            params: {
+                query: itemsSearchForm.data
+            },
+            baseUrl: event.locals.backendUrl,
+            headers: {
+                "x-api-key": event.locals.apiKey
+            },
+            fetch: event.fetch
+        });
+
+        if (response.error || !response.data) {
+            // Logged and degraded rather than thrown: a rejected streamed
+            // promise surfaces as an unhandled client error, and an empty
+            // grid with the rest of the page intact is the better failure.
+            logger.error("Failed to fetch items", response.error);
+
+            return { items: [], page: 1, totalPages: 1, limit: 20, totalItems: 0 };
+        }
+
+        return {
+            items: transformItems(response.data.items as unknown as RivenLibraryItem[]),
+            page: response.data.page,
+            totalPages: response.data.total_pages,
+            limit: response.data.limit,
+            totalItems: response.data.total_items
+        };
+    })();
 
     /*
         The user's own collections only. Source-built catalogues (AVN,
@@ -147,7 +176,7 @@ export const load: PageServerLoad = async (event) => {
         An addition to this page, so a failure here returns an empty shelf
         rather than taking the library down with it.
     */
-    const collections = await listCollections(
+    const collections = listCollections(
         {
             baseUrl: event.locals.backendUrl,
             apiKey: event.locals.apiKey,
@@ -156,15 +185,5 @@ export const load: PageServerLoad = async (event) => {
         "user"
     );
 
-    return {
-        collections,
-        items: itemsResponse.data
-            ? transformItems(itemsResponse.data.items as unknown as RivenLibraryItem[])
-            : [],
-        page: itemsResponse.data ? itemsResponse.data.page : 1,
-        totalPages: itemsResponse.data ? itemsResponse.data.total_pages : 1,
-        limit: itemsResponse.data ? itemsResponse.data.limit : 20,
-        totalItems: itemsResponse.data ? itemsResponse.data.total_items : 0,
-        itemsSearchForm
-    };
+    return { collections, library, itemsSearchForm };
 };

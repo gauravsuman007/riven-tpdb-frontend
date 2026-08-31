@@ -26,9 +26,21 @@
     import { resolve } from "$app/paths";
     import PageShell from "$lib/components/page-shell.svelte";
     import CollectionsShelf from "$lib/components/collections-shelf.svelte";
+    import { streamed } from "$lib/streamed.svelte";
+    import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { cn } from "$lib/utils";
 
     let { data }: PageProps = $props();
+
+    /*
+        The grid and the shelf stream in separately. `library` carries the item
+        page and its counts together, because they all come from one request.
+    */
+    const lib = streamed(() => data.library);
+    const shelf = streamed(() => data.collections);
+
+    const items = $derived(lib.value?.items ?? []);
+    const totalItems = $derived(lib.value?.totalItems ?? 0);
 
     // svelte-ignore state_referenced_locally
     const form = superForm(data.itemsSearchForm, {
@@ -111,7 +123,7 @@
                     <span class="font-mono text-xs tracking-widest uppercase">Index</span>
                     <span class="h-px w-8 bg-zinc-800"></span>
                     <span class="text-primary font-mono text-sm"
-                        >{data.totalItems.toLocaleString()} items</span>
+                        >{totalItems.toLocaleString()} items</span>
                 </div>
             </div>
 
@@ -200,13 +212,34 @@
             </form>
         </header>
 
-        <CollectionsShelf collections={data.collections} />
+        {#if shelf.pending}
+            <div class="flex gap-4 overflow-hidden py-2">
+                {#each Array.from({ length: 4 }, (_, i) => i) as tile (tile)}
+                    <Skeleton class="h-24 w-40 shrink-0 rounded-xl" />
+                {/each}
+            </div>
+        {:else}
+            <CollectionsShelf collections={shelf.value ?? []} />
+        {/if}
 
         <!-- Content Grid -->
-        {#if data.totalItems > 0}
+        {#if lib.pending}
+            <!--
+                Placeholder cards at the grid's own shape and count, so the
+                page does not jump when the real ones replace them. Checked
+                before the empty state below: "no items" is a claim the page
+                cannot make until the query has answered.
+            -->
             <div
                 class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-                {#each data.items as item, i (item.riven_id)}
+                {#each Array.from({ length: 14 }, (_, i) => i) as cell (cell)}
+                    <Skeleton class="aspect-[2/3] w-full rounded-xl" />
+                {/each}
+            </div>
+        {:else if totalItems > 0}
+            <div
+                class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+                {#each items as item, i (item.riven_id)}
                     <div
                         class="animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards duration-700"
                         style="animation-delay: {i * 30}ms">
@@ -224,7 +257,7 @@
             <!-- Pagination -->
             <div class="flex justify-center pt-12 pb-24">
                 <Pagination.Root
-                    count={data.totalItems}
+                    count={totalItems}
                     perPage={$formData.limit}
                     bind:page={$formData.page}>
                     {#snippet children({ pages, currentPage })}
