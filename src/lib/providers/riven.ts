@@ -978,6 +978,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/direct/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct Handoff
+         * @description The upstream URL for one rendition, when handing it out is safe.
+         *
+         *     Proxying every byte of a tube-site video through this server costs two
+         *     extra hops -- player to frontend, frontend to here, here to the CDN --
+         *     and every seek pays all of them again. When the source needs nothing
+         *     from us, the player is better off talking to the CDN itself.
+         *
+         *     "Safe" is narrow on purpose, and each refusal below is a case where the
+         *     direct URL would simply fail or would defeat a setting:
+         *
+         *     * The source declares required headers (Referer, mostly). A media player
+         *       fetching the URL sends none of them and the CDN answers 403. This is
+         *       the common case for these sites and the reason the proxy exists at all.
+         *     * Streaming is routed through the VPN. Handing the URL to a player would
+         *       quietly take playback off the tunnel -- the exact thing the setting is
+         *       there to prevent, and invisibly, which is worse than not offering it.
+         *
+         *     A URL that is bound to the requesting IP is NOT detectable here and is
+         *     not refused. It works in the normal case, where the player and this
+         *     server share one public address; it fails away from home, and the caller
+         *     is expected to fall back to the proxy path rather than treat this as a
+         *     promise.
+         */
+        get: operations["direct_handoff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/direct/stream": {
         parameters: {
             query?: never;
@@ -1588,6 +1629,65 @@ export interface paths {
          */
         post: operations["set_item_tpdb"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether keeping to disk is configured
+         * @description So the UI can hide the button entirely rather than offer a failing one.
+         */
+        get: operations["keep_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keep/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Local copy status for several items
+         * @description One call for a whole page of posters, rather than one call per card.
+         */
+        get: operations["keep_status_many"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/keep/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Local copy status for one item */
+        get: operations["keep_status"];
+        put?: never;
+        /** Keep an item on local disk */
+        post: operations["keep_item"];
+        /** Stop keeping an item on local disk */
+        delete: operations["unkeep_item"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3214,6 +3314,18 @@ export interface components {
             errors: string[];
         };
         /**
+         * DirectHandoffModel
+         * @description Whether one rendition can be fetched by something that is not us.
+         */
+        DirectHandoffModel: {
+            /** Url */
+            url?: string | null;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * DirectScrapingModel
          * @description Which direct-site scrapers run.
          *
@@ -3620,6 +3732,17 @@ export interface components {
              */
             cache_dir: string;
             /**
+             * Local Download Path
+             * @description Directory on this server where kept titles are copied. Leave empty to disable keeping titles on disk. Must be writable by the container and have room for the files you keep.
+             */
+            local_download_path?: string | null;
+            /**
+             * Local Download Concurrency
+             * @description How many titles to copy to local disk at once. Each copy is a sustained read from the debrid provider, so more is not faster on a limited connection and risks the provider's rate limits.
+             * @default 1
+             */
+            local_download_concurrency: number;
+            /**
              * Cache Max Size Mb
              * @description Maximum cache size in MB (10 GiB default)
              * @default 10240
@@ -3849,6 +3972,44 @@ export interface components {
              * @default http://localhost:8096
              */
             url: string;
+        };
+        /** KeepSettings */
+        KeepSettings: {
+            /** Enabled */
+            enabled: boolean;
+            /** Path */
+            path?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * KeepStatus
+         * @description One title's local copy, as the Keep button needs to render it.
+         */
+        KeepStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** State */
+            state?: string | null;
+            /**
+             * Percent
+             * @default 0
+             */
+            percent: number;
+            /**
+             * Bytes Done
+             * @default 0
+             */
+            bytes_done: number;
+            /**
+             * Bytes Total
+             * @default 0
+             */
+            bytes_total: number;
+            /** Path */
+            path?: string | null;
+            /** Error */
+            error?: string | null;
         };
         /**
          * LanguagesConfig
@@ -7958,6 +8119,47 @@ export interface operations {
             };
         };
     };
+    direct_handoff: {
+        parameters: {
+            query: {
+                site: string;
+                video_id: string;
+                index?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectHandoffModel"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     direct_stream: {
         parameters: {
             query: {
@@ -9151,6 +9353,210 @@ export interface operations {
                 "application/json": components["schemas"]["TpdbAssociationBody"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_settings: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepSettings"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_status_many: {
+        parameters: {
+            query: {
+                /** @description Comma-separated media item ids */
+                ids: string;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["KeepStatus"];
+                    };
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_status: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepStatus"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_item: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepStatus"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unkeep_item: {
+        parameters: {
+            query?: {
+                /** @description Also remove the copy from disk (default true) */
+                delete_file?: boolean;
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

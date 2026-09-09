@@ -16,6 +16,7 @@
     import PlayIcon from "@lucide/svelte/icons/play";
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
     import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
+    import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import TpdbLink from "$lib/components/media/riven/tpdb-link.svelte";
     import { describeState } from "$lib/utils/item-state";
@@ -90,6 +91,10 @@
                         <PlayIcon class="mr-2 size-4" />
                         Play
                     </Button>
+                {/if}
+
+                {#if playable}
+                    <KeepOnDisk id={item.id} title={item.title} class="w-fit" />
                 {/if}
 
                 <!--

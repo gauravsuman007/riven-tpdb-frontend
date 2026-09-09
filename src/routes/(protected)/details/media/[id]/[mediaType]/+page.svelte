@@ -24,6 +24,7 @@
     import PortraitCard from "$lib/components/media/portrait-card.svelte";
     import ItemRequest from "$lib/components/media/riven/item-request.svelte";
     import ItemDelete from "$lib/components/media/riven/item-delete.svelte";
+    import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
     import ItemPause from "$lib/components/media/riven/item-pause.svelte";
     import ItemReset from "$lib/components/media/riven/item-reset.svelte";
     import ItemRetry from "$lib/components/media/riven/item-retry.svelte";
@@ -579,6 +580,13 @@
                                         {/if}
                                     </ItemPause>
                                 {/if}
+
+                                <KeepOnDisk
+                                    size="default"
+                                    variant="secondary"
+                                    class="border-border text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
+                                    title={data.mediaDetails?.details.title}
+                                    id={rivenId} />
 
                                 <ItemDelete
                                     size="default"

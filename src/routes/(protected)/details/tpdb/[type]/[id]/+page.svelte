@@ -16,6 +16,7 @@
     import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
     import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
+    import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { liveState } from "$lib/utils/live-state.svelte";
     import { formatBytes } from "$lib/helpers";
@@ -139,6 +140,12 @@
                             <PlayIcon class="mr-2 size-4" />
                             Play
                         </Button>
+                    {/if}
+
+                    <!-- Only once the file exists: there is nothing to copy
+                         from a title Riven has not downloaded yet. -->
+                    {#if playable && libraryState}
+                        <KeepOnDisk id={libraryState.riven_id} title={item.title} />
                     {/if}
 
                     <!--
