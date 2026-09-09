@@ -60,7 +60,7 @@
                 onclick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    openPlayer(item.riven_id, item.title ?? "");
+                    openPlayer(item.riven_id, item.title ?? "", item.poster_path);
                 }}
                 aria-label={`Play ${item.title}`}
                 class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">

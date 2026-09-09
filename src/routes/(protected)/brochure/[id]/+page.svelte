@@ -130,7 +130,7 @@
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
                     {#if playable && libraryState}
-                        <Button onclick={() => openPlayer(libraryState.riven_id, entry.title)}>
+                        <Button onclick={() => openPlayer(libraryState.riven_id, entry.title, entry.poster_path)}>
                             <PlayIcon class="mr-2 size-4" />
                             Play
                         </Button>

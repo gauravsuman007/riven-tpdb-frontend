@@ -18,6 +18,7 @@
     import { resumeTarget } from "$lib/utils/playback";
     import Hls from "hls.js";
     import { toGuid } from "$lib/utils/jellyfin-ids";
+    import { FALLBACK_POSTER } from "$lib/stores/player.svelte";
 
     interface VideoPlayerProps {
         /**
@@ -34,6 +35,11 @@
         src?: string;
         /** What `src` serves. An HLS playlist needs hls.js, an MP4 does not. */
         mimeType?: string;
+        /**
+         * Still shown until the first frame paints. Never left empty: an
+         * element with no poster gets the WebView's own oversized play
+         * button drawn over it, which is what this displaces.
+         */
         poster?: string;
         class?: string;
         /**
@@ -432,7 +438,7 @@
             onplay={startProgressReporting}
             onpause={reportProgress}
             {controls}
-            {poster}
+            poster={poster || FALLBACK_POSTER}
             autoplay
             controlslist="nofullscreen noremoteplayback nodownload"
             disablepictureinpicture

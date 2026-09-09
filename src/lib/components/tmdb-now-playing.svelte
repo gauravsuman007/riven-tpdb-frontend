@@ -345,7 +345,10 @@
                                                 onclick={() =>
                                                     openPlayer(
                                                         (item as any).riven_id,
-                                                        item.title ?? ""
+                                                        item.title ?? "",
+                                                        (item as any).poster_path
+                                                            ? `${TMDB_IMAGE_BASE_URL}/w780${(item as any).poster_path}`
+                                                            : null
                                                     )}
                                                 variant="default"
                                                 size="lg"

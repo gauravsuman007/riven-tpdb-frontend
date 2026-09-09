@@ -100,7 +100,9 @@
         {isSelectable}
         isSelected={isSelectable && !!data.riven_id && selectStore?.has(data.riven_id!)}
         onSelectToggle={() => data.riven_id && selectStore?.toggle(data.riven_id!)}
-        onPlay={canPlay ? () => openPlayer(data.riven_id, data.title) : undefined}
+        onPlay={canPlay
+            ? () => openPlayer(data.riven_id, data.title, data.poster_path)
+            : undefined}
         {stateColor}>
         {#snippet topRight()}
             {#if data.badge}

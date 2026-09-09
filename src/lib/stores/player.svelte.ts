@@ -19,11 +19,38 @@ function nativePlayerAvailable(): boolean {
     return typeof window !== "undefined" && !!window.RivenNative?.available();
 }
 
+
+/**
+ * What fills the video element before the first frame arrives.
+ *
+ * A `<video>` with no poster is not blank: Android's WebView draws its own
+ * oversized play button over the black, which is the ugly part. Any poster at
+ * all displaces it, so there is always one -- the title's own where a caller
+ * had it, the app icon otherwise.
+ */
+export const FALLBACK_POSTER = "/android-chrome-512x512.png";
+
+/**
+ * Callers pass a URL the page could already render, not a bare provider path:
+ * a leading slash is genuinely ambiguous here (site-absolute for a backend
+ * poster, provider-relative for a TMDB one), so resolving is the call site's
+ * job -- it is the only place that knows which provider the path came from.
+ */
+function posterUrl(poster: string | null | undefined): string | undefined {
+    return poster || undefined;
+}
+
 interface LibraryTarget {
     kind: "library";
     /** Riven media item id -- what the stream endpoints are keyed on. */
     itemId: number;
     title: string;
+    /**
+     * Shown while the first frame is still being fetched. Optional because
+     * not every play button has one to hand; the player falls back to the
+     * app icon rather than leaving the element bare -- see FALLBACK_POSTER.
+     */
+    poster?: string;
 }
 
 interface DirectTarget {
@@ -131,12 +158,12 @@ class PlayerStore {
      */
     resumeAt = $state<number | null>(null);
 
-    open(itemId: number, title: string) {
+    open(itemId: number, title: string, poster?: string | null) {
         if (nativePlayerAvailable()) {
             window.RivenNative!.play(toGuid(itemId));
             return;
         }
-        this.current = { kind: "library", itemId, title };
+        this.current = { kind: "library", itemId, title, poster: posterUrl(poster) };
     }
 
     openDirect(options: {
@@ -304,7 +331,11 @@ class PlayerStore {
 export const player = new PlayerStore();
 
 /** Convenience for card components, which usually hold a nullable id. */
-export function openPlayer(itemId: number | null | undefined, title: string) {
+export function openPlayer(
+    itemId: number | null | undefined,
+    title: string,
+    poster?: string | null
+) {
     if (!itemId) return;
-    player.open(itemId, title);
+    player.open(itemId, title, poster);
 }

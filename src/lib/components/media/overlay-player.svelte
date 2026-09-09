@@ -1289,6 +1289,7 @@
                     {#if target.kind === "library"}
                         <VideoPlayer
                             itemId={target.itemId}
+                            poster={target.poster}
                             bind:element={video}
                             bind:duration={probedDuration}
                             bind:resolution={probedResolution}

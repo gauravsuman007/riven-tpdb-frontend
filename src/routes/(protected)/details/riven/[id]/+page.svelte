@@ -86,7 +86,7 @@
                 </div>
 
                 {#if playable}
-                    <Button class="w-fit" onclick={() => openPlayer(item.id, item.title)}>
+                    <Button class="w-fit" onclick={() => openPlayer(item.id, item.title, item.poster_path)}>
                         <PlayIcon class="mr-2 size-4" />
                         Play
                     </Button>
