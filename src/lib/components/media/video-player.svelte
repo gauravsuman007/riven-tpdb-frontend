@@ -156,9 +156,56 @@
         videoElement?.play().catch(() => {});
     }
 
-    function startDirect() {
+    /**
+     * True once we have handed the element a CDN URL rather than our own
+     * proxy, so a decode failure can retry through the proxy before giving up
+     * on direct play entirely.
+     */
+    let servedByCdn = $state(false);
+
+    /**
+     * Play the file, from the debrid CDN when the backend offers it.
+     *
+     * Going through this server costs every byte twice on its connection --
+     * once inbound from the provider, once outbound to here -- and a seek pays
+     * both again. The backend answers with a URL only when handing one out is
+     * enabled and safe; `{url: null}` is the normal answer, not a failure.
+     */
+    async function startDirect() {
         mode = "direct";
-        if (videoElement) videoElement.src = directUrl;
+        servedByCdn = false;
+
+        if (!videoElement) return;
+
+        if (itemId !== undefined) {
+            try {
+                const response = await fetch(`/api/stream/${itemId}/direct`);
+                const offer: { url?: string | null; reason?: string | null } =
+                    await response.json();
+
+                if (offer.url) {
+                    servedByCdn = true;
+                    videoElement.src = offer.url;
+                    attemptPlay();
+                    return;
+                }
+            } catch {
+                // Asking is an optimisation. Fall through to the proxy.
+            }
+        }
+
+        videoElement.src = directUrl;
+    }
+
+    /** Retry the same file through this server after a CDN URL failed. */
+    function startProxied() {
+        mode = "direct";
+        servedByCdn = false;
+
+        if (videoElement) {
+            videoElement.src = directUrl;
+            attemptPlay();
+        }
     }
 
     function startRemux() {
@@ -393,6 +440,16 @@
         // The element could not decode what we handed it. If we were direct
         // playing, escalate rather than showing a dead player.
         if (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+            if (mode === "direct" && servedByCdn) {
+                // The CDN link may simply have expired between minting and
+                // first byte. That is not a codec problem, so retry the same
+                // file through this server before deciding the browser
+                // cannot decode it.
+                console.log("Direct CDN play failed; retrying through the server.");
+                startProxied();
+                return;
+            }
+
             if (mode === "direct") {
                 console.log("Direct play failed to decode; falling back to remux.");
                 startRemux();
