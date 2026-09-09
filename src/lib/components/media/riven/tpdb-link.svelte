@@ -30,6 +30,8 @@
         date: string | null;
         site: string | null;
         poster: string | null;
+        /** Which TPDB collection the record came from. */
+        kind: "movie" | "scene";
     }
 
     interface Props {
@@ -52,24 +54,66 @@
     let confirmDetach = $state(false);
     let busy = $state(false);
 
+    /**
+     * One TPDB collection's matches for the query.
+     *
+     * The collection name is PLURAL. `type=movie` is rejected outright with a
+     * 422 -- the endpoint's allowed values are scenes/movies/performers/sites
+     * -- and that, plus the response shape below, is why this picker returned
+     * nothing at all for every title it was ever asked about.
+     */
+    async function searchCollection(
+        collection: "movies" | "scenes",
+        kind: Candidate["kind"]
+    ): Promise<Candidate[]> {
+        const response = await fetch(
+            `/api/v1/tpdb/search?query=${encodeURIComponent(query.trim())}&type=${collection}`
+        );
+
+        if (!response.ok) throw new Error(`Search returned ${response.status}`);
+
+        const payload = await response.json();
+
+        // The endpoint answers with a BARE ARRAY. Reading `payload.results`
+        // off it yields undefined, so this fell through to `[]` and rendered
+        // "Nothing found" over a perfectly good list of candidates. The
+        // object forms are kept as a fallback in case the shape ever changes.
+        const rows: any[] = Array.isArray(payload)
+            ? payload
+            : (payload.results ?? payload.data ?? []);
+
+        return rows.map((r: any) => ({
+            id: r.tpdb_uuid ?? r.id,
+            title: r.title,
+            date: r.date ?? r.release_date ?? null,
+            site: r.site?.name ?? r.site_name ?? null,
+            poster: r.poster ?? r.poster_path ?? null,
+            kind
+        }));
+    }
+
     async function search() {
         if (!query.trim()) return;
 
         searching = true;
         try {
-            const response = await fetch(
-                `/api/v1/tpdb/search?query=${encodeURIComponent(query.trim())}&type=movie`
-            );
-            if (!response.ok) throw new Error(`Search returned ${response.status}`);
+            // Both collections, because the indexer resolves an id by trying
+            // scenes and then movies -- so either kind of record works here,
+            // and a library title that is really a scene would otherwise be
+            // unmatchable however hard the user searched.
+            const [movies, scenes] = await Promise.all([
+                searchCollection("movies", "movie"),
+                searchCollection("scenes", "scene")
+            ]);
 
-            const payload = await response.json();
-            results = (payload.results ?? payload.data ?? []).map((r: any) => ({
-                id: r.tpdb_uuid ?? r.id,
-                title: r.title,
-                date: r.date ?? r.release_date ?? null,
-                site: r.site?.name ?? r.site_name ?? null,
-                poster: r.poster ?? r.poster_path ?? null
-            }));
+            // Movies first: the picker is reached from a title with no match,
+            // and those are far more often films than single scenes.
+            const seen = new Set<string>();
+            results = [...movies, ...scenes].filter((candidate) => {
+                if (!candidate.id || seen.has(candidate.id)) return false;
+                seen.add(candidate.id);
+                return true;
+            });
             searched = true;
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "Search failed");
@@ -110,8 +154,8 @@
                 {#if currentTpdbId}
                     Linked. Cast, poster and description come from that record.
                 {:else}
-                    Not linked &mdash; showing this title's own metadata. Nothing on TPDB matched
-                    it confidently.
+                    Not linked &mdash; showing this title's own metadata. Nothing on TPDB matched it
+                    confidently.
                 {/if}
             </p>
         </div>
@@ -154,7 +198,12 @@
                     placeholder="Search TPDB"
                     aria-label="Search TPDB for the correct title"
                     class="border-border/60 bg-background focus:border-primary/50 min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none" />
-                <Button type="button" variant="secondary" size="sm" disabled={searching} onclick={search}>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={searching}
+                    onclick={search}>
                     {#if searching}
                         <LoaderCircleIcon class="size-4 animate-spin" />
                     {:else}
@@ -167,8 +216,8 @@
                 <p class="text-muted-foreground text-xs">Searching&hellip;</p>
             {:else if searched && !results.length}
                 <p class="text-muted-foreground text-xs">
-                    Nothing found for &ldquo;{query}&rdquo;. Try the studio name alongside the
-                    title &mdash; that is what makes TPDB's own search surface the right record.
+                    Nothing found for &ldquo;{query}&rdquo;. Try the studio name alongside the title
+                    &mdash; that is what makes TPDB's own search surface the right record.
                 </p>
             {:else}
                 <div class="flex max-h-80 flex-col gap-1.5 overflow-y-auto">
@@ -190,13 +239,18 @@
                                     {candidate.title}
                                 </span>
                                 <span class="text-muted-foreground block truncate text-xs">
-                                    {[candidate.site, candidate.date?.slice(0, 10)]
+                                    {[
+                                        candidate.kind === "scene" ? "Scene" : "Movie",
+                                        candidate.site,
+                                        candidate.date?.slice(0, 10)
+                                    ]
                                         .filter(Boolean)
-                                        .join(" · ") || "no studio or date listed"}
+                                        .join(" · ")}
                                 </span>
                             </span>
                             {#if candidate.id === currentTpdbId}
-                                <Badge variant="outline" class="shrink-0 text-[10px]">current</Badge>
+                                <Badge variant="outline" class="shrink-0 text-[10px]"
+                                    >current</Badge>
                             {:else}
                                 <LinkIcon class="text-muted-foreground size-4 shrink-0" />
                             {/if}
@@ -218,8 +272,8 @@
             <AlertDialog.Title>Remove TPDB metadata?</AlertDialog.Title>
             <AlertDialog.Description>
                 This title keeps its own name, cast, poster and downloaded files &mdash; only the
-                link to the TPDB record goes. Do this when the linked record is the wrong film.
-                You can search for the right one at any time.
+                link to the TPDB record goes. Do this when the linked record is the wrong film. You
+                can search for the right one at any time.
             </AlertDialog.Description>
         </AlertDialog.Header>
         <AlertDialog.Footer>
