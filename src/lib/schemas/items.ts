@@ -41,7 +41,12 @@ export const itemsSearchSchema = z.object({
         .min(1, "At least one sort option must be selected")
         .optional()
         .default(["date_desc"]),
-    search: z.string().min(1, "Search term must be at least 1 character").optional()
+    search: z.string().min(1, "Search term must be at least 1 character").optional(),
+    // Facet filters, set by picking a suggestion. Exact names, not substrings:
+    // choosing a performer from the dropdown should show that performer's
+    // titles, not everything their name happens to appear inside.
+    performer: z.string().min(1).optional(),
+    site: z.string().min(1).optional()
 });
 
 export type ItemsSearchSchema = z.infer<typeof itemsSearchSchema>;

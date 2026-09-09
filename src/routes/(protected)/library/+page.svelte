@@ -18,7 +18,8 @@
     import ListChecks from "@lucide/svelte/icons/list-checks";
     import * as Select from "$lib/components/ui/select/index.js";
     import { ItemStore } from "$lib/stores/library-items.svelte";
-    import { reset_items, retry_items, remove_items } from "./library.remote";
+    import { reset_items, retry_items, remove_items, suggest } from "./library.remote";
+    import { EMPTY_SUGGESTIONS, type Suggestions } from "$lib/suggestions";
     import * as Pagination from "$lib/components/ui/pagination/index.js";
     import Loading2Circle from "@lucide/svelte/icons/loader-2";
     import { toast } from "svelte-sonner";
@@ -67,6 +68,12 @@
             url.searchParams.delete("search");
         }
 
+        // Typing replaces a facet. Keeping both would show the intersection
+        // of "titles by this performer" and "titles matching this text",
+        // which is not what either control looks like it does.
+        url.searchParams.delete("performer");
+        url.searchParams.delete("site");
+
         url.searchParams.delete("type");
         if ($formData.type?.length) {
             $formData.type.forEach((t) => url.searchParams.append("type", t));
@@ -88,14 +95,138 @@
         });
     }
 
+    /*
+        Suggestions.
+
+        Two timers, deliberately at different delays: the dropdown is a cheap
+        local query and should feel live (150ms), while the grid reload is a
+        full page navigation and should not fire on every keystroke (300ms).
+
+        `requestToken` is what keeps the list honest. Responses can land out
+        of order -- a query for "ri" can answer after "riley" -- and without
+        the token a slow early response would overwrite the current one with
+        results for a prefix the user has already typed past.
+    */
+    let suggestions = $state<Suggestions>(EMPTY_SUGGESTIONS);
+    let suggestOpen = $state(false);
+    let activeIndex = $state(-1);
+    let suggestTimer: ReturnType<typeof setTimeout> | undefined;
+    let requestToken = 0;
+
+    type Flat = { kind: "title" | "studio" | "performer"; value: string; count: number };
+
+    const flatSuggestions = $derived<Flat[]>([
+        ...suggestions.titles.map((s) => ({ kind: "title" as const, ...s })),
+        ...suggestions.studios.map((s) => ({ kind: "studio" as const, ...s })),
+        ...suggestions.performers.map((s) => ({ kind: "performer" as const, ...s }))
+    ]);
+
+    // The facet currently narrowing the grid, if any. Read from the URL
+    // rather than held in state so a bookmarked or reloaded page shows it.
+    const activePerformer = $derived(page.url.searchParams.get("performer"));
+    const activeSite = $derived(page.url.searchParams.get("site"));
+
+    async function loadSuggestions(term: string) {
+        const token = ++requestToken;
+
+        if (term.trim().length < 2) {
+            suggestions = EMPTY_SUGGESTIONS;
+            suggestOpen = false;
+            return;
+        }
+
+        try {
+            const result = await suggest({ q: term.trim() });
+
+            if (token !== requestToken) return;
+
+            suggestions = result;
+            activeIndex = -1;
+            suggestOpen =
+                result.titles.length + result.studios.length + result.performers.length > 0;
+        } catch {
+            // The dropdown is an addition to a search box that works without
+            // it; a failure here must not disturb what is being typed.
+            if (token === requestToken) {
+                suggestions = EMPTY_SUGGESTIONS;
+                suggestOpen = false;
+            }
+        }
+    }
+
     function handleSearchInput() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(search, 300);
+
+        clearTimeout(suggestTimer);
+        const term = $formData.search ?? "";
+        suggestTimer = setTimeout(() => loadSuggestions(term), 150);
+    }
+
+    /** Filter by an exact studio or performer, replacing any text search. */
+    function applyFacet(kind: Flat["kind"], value: string) {
+        clearTimeout(debounceTimer);
+        clearTimeout(suggestTimer);
+        suggestOpen = false;
+        activeIndex = -1;
+
+        if (kind === "title") {
+            // A title is not a facet: it is just the search everyone already
+            // expected, with the term filled in.
+            $formData.search = value;
+            search();
+            return;
+        }
+
+        const url = new URL(page.url);
+
+        url.searchParams.delete("search");
+        url.searchParams.delete("performer");
+        url.searchParams.delete("site");
+        url.searchParams.set(kind === "performer" ? "performer" : "site", value);
+        url.searchParams.set("page", "1");
+
+        $formData.search = "";
+        $formData.page = 1;
+
+        goto(url.toString(), { keepFocus: true, noScroll: true, invalidateAll: true });
+    }
+
+    function clearFacet() {
+        const url = new URL(page.url);
+
+        url.searchParams.delete("performer");
+        url.searchParams.delete("site");
+        url.searchParams.set("page", "1");
+        $formData.page = 1;
+
+        goto(url.toString(), { noScroll: true, invalidateAll: true });
+    }
+
+    function handleSearchKeydown(event: KeyboardEvent) {
+        if (!suggestOpen || flatSuggestions.length === 0) return;
+
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            activeIndex = (activeIndex + 1) % flatSuggestions.length;
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            activeIndex = activeIndex <= 0 ? flatSuggestions.length - 1 : activeIndex - 1;
+        } else if (event.key === "Enter" && activeIndex >= 0) {
+            event.preventDefault();
+            const picked = flatSuggestions[activeIndex];
+            applyFacet(picked.kind, picked.value);
+        } else if (event.key === "Escape") {
+            suggestOpen = false;
+            activeIndex = -1;
+        }
     }
 
     onDestroy(() => {
         clearTimeout(debounceTimer);
         debounceTimer = undefined;
+        clearTimeout(suggestTimer);
+        suggestTimer = undefined;
     });
 </script>
 
@@ -142,13 +273,80 @@
                                 <Input
                                     {...props}
                                     bind:value={$formData.search}
-                                    placeholder="Search..."
+                                    placeholder="Title, studio or performer..."
                                     oninput={handleSearchInput}
+                                    onkeydown={handleSearchKeydown}
+                                    onfocus={() => {
+                                        if (flatSuggestions.length) suggestOpen = true;
+                                    }}
+                                    onblur={() => {
+                                        // Deferred: a click on a suggestion
+                                        // blurs the input before it lands, and
+                                        // closing immediately would swallow it.
+                                        setTimeout(() => (suggestOpen = false), 150);
+                                    }}
+                                    autocomplete="off"
+                                    role="combobox"
+                                    aria-expanded={suggestOpen}
+                                    aria-autocomplete="list"
                                     class="h-10 rounded-xl border-transparent bg-transparent pl-9 transition-all placeholder:text-zinc-600 hover:bg-white/5 focus:bg-white/10" />
                             {/snippet}
                         </Form.Control>
                     </Form.Field>
+
+                    {#if suggestOpen && flatSuggestions.length}
+                        <div
+                            role="listbox"
+                            aria-label="Search suggestions"
+                            transition:fly={{ y: -4, duration: 120, easing: cubicOut }}
+                            class="absolute top-full left-0 z-50 mt-2 max-h-96 w-full min-w-[18rem] overflow-y-auto rounded-xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl backdrop-blur-md">
+                            {#each [{ key: "titles", label: "Titles", items: suggestions.titles, kind: "title" as const }, { key: "studios", label: "Studios", items: suggestions.studios, kind: "studio" as const }, { key: "performers", label: "Performers", items: suggestions.performers, kind: "performer" as const }] as group (group.key)}
+                                {#if group.items.length}
+                                    <div
+                                        class="px-3 pt-2 pb-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
+                                        {group.label}
+                                    </div>
+                                    {#each group.items as suggestion (suggestion.value)}
+                                        {@const index = flatSuggestions.findIndex(
+                                            (entry) =>
+                                                entry.kind === group.kind &&
+                                                entry.value === suggestion.value
+                                        )}
+                                        <button
+                                            type="button"
+                                            role="option"
+                                            aria-selected={index === activeIndex}
+                                            onmouseenter={() => (activeIndex = index)}
+                                            onclick={() => applyFacet(group.kind, suggestion.value)}
+                                            class={cn(
+                                                "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition-colors",
+                                                index === activeIndex
+                                                    ? "bg-white/10 text-white"
+                                                    : "hover:bg-white/5"
+                                            )}>
+                                            <span class="truncate">{suggestion.value}</span>
+                                            <span class="shrink-0 font-mono text-xs text-zinc-500"
+                                                >{suggestion.count}</span>
+                                        </button>
+                                    {/each}
+                                {/if}
+                            {/each}
+                        </div>
+                    {/if}
                 </div>
+
+                {#if activePerformer || activeSite}
+                    <button
+                        type="button"
+                        onclick={clearFacet}
+                        class="text-primary flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm transition-colors hover:bg-white/10">
+                        <span class="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
+                            {activePerformer ? "Cast" : "Studio"}
+                        </span>
+                        <span class="max-w-[12rem] truncate">{activePerformer ?? activeSite}</span>
+                        <X class="h-3.5 w-3.5 text-zinc-400" />
+                    </button>
+                {/if}
 
                 <div class="mx-1 hidden h-6 w-px bg-white/10 md:block"></div>
 

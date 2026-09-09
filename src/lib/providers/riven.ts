@@ -8414,8 +8414,12 @@ export interface operations {
                 states?: (components["schemas"]["States"] | components["schemas"]["StatesFilter"])[] | null;
                 /** @description Sort order(s). Multiple sorts allowed but only one per type (title or date) */
                 sort?: components["schemas"]["SortOrderEnum"][] | null;
-                /** @description Search by title or IMDB/TVDB/TMDB ID */
+                /** @description Search by title, studio, cast member, or IMDB/TVDB/TMDB ID */
                 search?: string | null;
+                /** @description Restrict to titles this performer appears in (exact name, case-insensitive) */
+                performer?: string | null;
+                /** @description Restrict to titles from this studio/site (exact name, case-insensitive) */
+                site?: string | null;
                 /** @description Include extended item details */
                 extended?: boolean;
                 api_key?: string | null;

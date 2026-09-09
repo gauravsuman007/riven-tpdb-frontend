@@ -2,6 +2,7 @@ import { command } from "$app/server";
 import { z } from "zod";
 import providers from "$lib/providers";
 import { getRequestEvent } from "$app/server";
+import { EMPTY_SUGGESTIONS, getSuggestions, type Suggestions } from "$lib/suggestions";
 
 const itemIdsSchema = z.object({
     ids: z.array(z.string())
@@ -82,3 +83,26 @@ export const remove_items = command(itemIdsSchema, async ({ ids }) => {
 
     return { success: true, count: ids.length };
 });
+
+/**
+ * Search suggestions for the library search box.
+ *
+ * A remote command rather than a load: it fires per keystroke and must not
+ * re-run the page's data load. The backend answers from the library only, so
+ * this is a local database query however fast the user types.
+ */
+export const suggest = command(
+    z.object({ q: z.string().min(2) }),
+    async ({ q }): Promise<Suggestions> => {
+        const event = getRequestEvent();
+        if (!event) throw new Error("No event found");
+
+        const { backendUrl, apiKey } = event.locals;
+
+        if (!backendUrl || !apiKey) {
+            return EMPTY_SUGGESTIONS;
+        }
+
+        return getSuggestions(q, { baseUrl: backendUrl, apiKey, fetch: event.fetch });
+    }
+);
