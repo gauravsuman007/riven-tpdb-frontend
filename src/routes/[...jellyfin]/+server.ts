@@ -43,7 +43,14 @@ import { user } from "$lib/server/schema";
 import { BUNDLE_JS, BUNDLE_PATH } from "$lib/server/jellyfin/bundle";
 import { jellyfinEnabled, jellyfinServerName, jellyfinUsername } from "$lib/server/jellyfin/config";
 import * as identity from "$lib/server/jellyfin/auth";
-import { LIBRARY_ID, SERVER_ID, USER_ID, fromDirectGuid, fromGuid, toGuid } from "$lib/utils/jellyfin-ids";
+import {
+    LIBRARY_ID,
+    SERVER_ID,
+    USER_ID,
+    fromDirectGuid,
+    fromGuid,
+    toGuid
+} from "$lib/utils/jellyfin-ids";
 import { baseItem, mediaSourceDto } from "$lib/server/jellyfin/mapping";
 import { issuePlaySession, isValidPlaySession } from "$lib/server/jellyfin/play-sessions";
 import { resolveDirectToken } from "$lib/server/direct-tokens";
@@ -133,14 +140,12 @@ function requireStreamAuth(event: Ctx, apiKey: string, rivenId: number): void {
     requireEnabled();
 
     const playSession =
-        event.url.searchParams.get("playSessionId") ??
-        event.url.searchParams.get("PlaySessionId");
+        event.url.searchParams.get("playSessionId") ?? event.url.searchParams.get("PlaySessionId");
 
     if (isValidPlaySession(playSession, rivenId)) return;
 
     requireAuth(event, apiKey);
 }
-
 
 async function backendFetch(event: Ctx, path: string, init?: RequestInit): Promise<Response> {
     return event.fetch(`${event.locals.backendUrl}${path}`, {
@@ -179,7 +184,6 @@ async function withProgress(items: Json[]): Promise<Json[]> {
 
     return Promise.all(items.map((item) => baseItem(item, null, positions.get(Number(item.id)))));
 }
-
 
 function publicInfo(event: Ctx): Json {
     return {
@@ -286,7 +290,14 @@ const PLAYABLE_STATES = ["Symlinked", "Completed", "PartiallyCompleted", "Downlo
 
 async function fetchItems(
     event: Ctx,
-    opts: { search?: string | null; limit?: number; startIndex?: number; sortBy?: string | null; sortOrder?: string | null; ids?: number[] }
+    opts: {
+        search?: string | null;
+        limit?: number;
+        startIndex?: number;
+        sortBy?: string | null;
+        sortOrder?: string | null;
+        ids?: number[];
+    }
 ): Promise<{ items: Json[]; total: number }> {
     const params = new URLSearchParams();
     params.set("limit", String(Math.min(opts.limit ?? 100, 1000)));
@@ -362,17 +373,94 @@ async function proxyStream(event: Ctx, rivenId: number): Promise<Response> {
     const range = event.request.headers.get("range");
     if (range) headers["range"] = range;
 
-    const response = await backendFetch(event, `/api/v1/stream/file/${rivenId}${event.url.search}`, {
-        headers
-    });
+    const response = await backendFetch(
+        event,
+        `/api/v1/stream/file/${rivenId}${event.url.search}`,
+        {
+            headers
+        }
+    );
 
     const forwarded = new Headers();
-    for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-disposition"]) {
+    for (const name of [
+        "content-type",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+        "content-disposition"
+    ]) {
         const value = response.headers.get(name);
         if (value) forwarded.set(name, value);
     }
 
     return new Response(response.body, { status: response.status, headers: forwarded });
+}
+
+/**
+ * The title as an M3U playlist, for an external player.
+ *
+ * A scene compilation is one torrent holding several scenes, and an external
+ * player is handed a URL and nothing else -- there is no way to tell VLC or
+ * MX Player "and then five more files". A playlist is that way.
+ *
+ * Every entry is a full `/Videos/{guid}/stream.{container}` URL carrying the
+ * SAME play-session token this request authenticated with. The player fetches
+ * them itself, with no cookie and no key, so an entry that dropped the token
+ * would be a 401 -- the playlist would open and every track would fail.
+ */
+async function proxyExternalPlaylist(event: Ctx, rivenId: number, guid: string): Promise<Response> {
+    const response = await backendFetch(event, `/api/v1/stream/parts/${rivenId}`);
+
+    if (!response.ok) return notFound();
+
+    const payload = (await response.json()) as {
+        title?: string;
+        parts?: { index: number; title: string; duration: number | null }[];
+    };
+
+    const parts = payload.parts ?? [];
+
+    if (!parts.length) return notFound();
+
+    const token =
+        event.url.searchParams.get("playSessionId") ?? event.url.searchParams.get("PlaySessionId");
+
+    const info = await fetchPlaybackInfo(event, rivenId);
+    const container = normaliseContainer(info?.container);
+
+    const lines = ["#EXTM3U"];
+
+    for (const entry of parts) {
+        const query = new URLSearchParams({ static: "true" });
+
+        if (token) query.set("playSessionId", token);
+        // Part 0 is the default on the backend, so it is left off -- the URL
+        // an external player gets for a single-file title stays exactly what
+        // it was before playlists existed.
+        if (entry.index > 0) query.set("part", String(entry.index));
+
+        const href = new URL(`/Videos/${guid}/stream.${container}?${query}`, event.url.origin).href;
+
+        lines.push(`#EXTINF:${Math.round(entry.duration ?? -1)},${entry.title}`);
+        lines.push(href);
+    }
+
+    return new Response(lines.join("\n") + "\n", {
+        headers: {
+            "content-type": "audio/x-mpegurl",
+            "cache-control": "no-store"
+        }
+    });
+}
+
+/** A safe container extension for a URL path, "mp4" when unknown. */
+function normaliseContainer(container: string | null | undefined): string {
+    const first = String(container ?? "")
+        .split(",")[0]
+        .trim()
+        .toLowerCase();
+
+    return /^[a-z0-9]{2,5}$/.test(first) ? first : "mp4";
 }
 
 async function proxyHlsPlaylist(event: Ctx, rivenId: number): Promise<Response> {
@@ -423,7 +511,14 @@ function route(method: string, path: string, handler: Handler): Route {
 
 const ROUTES: Route[] = [
     // --- The web app bootstrap ---------------------------------------------
-    route("GET", BUNDLE_PATH, () => new Response(BUNDLE_JS, { headers: { "content-type": "application/javascript; charset=utf-8" } })),
+    route(
+        "GET",
+        BUNDLE_PATH,
+        () =>
+            new Response(BUNDLE_JS, {
+                headers: { "content-type": "application/javascript; charset=utf-8" }
+            })
+    ),
     /*
         Step two of the LG webOS client's connection handshake.
 
@@ -560,7 +655,13 @@ const ROUTES: Route[] = [
     route("GET", "/Library/VirtualFolders", (event) => {
         requireAuth(event, event.locals.apiKey);
         return json([
-            { Name: "Library", ItemId: LIBRARY_ID.replace(/-/g, ""), CollectionType: "movies", Locations: [], LibraryOptions: {} }
+            {
+                Name: "Library",
+                ItemId: LIBRARY_ID.replace(/-/g, ""),
+                CollectionType: "movies",
+                Locations: [],
+                LibraryOptions: {}
+            }
         ]);
     }),
 
@@ -569,7 +670,11 @@ const ROUTES: Route[] = [
         requireAuth(event, event.locals.apiKey);
 
         const limit = Math.min(Number(event.url.searchParams.get("limit") ?? 20), 100);
-        const { items } = await fetchItems(event, { limit, sortBy: "DateCreated", sortOrder: "Descending" });
+        const { items } = await fetchItems(event, {
+            limit,
+            sortBy: "DateCreated",
+            sortOrder: "Descending"
+        });
 
         return json(await withProgress(items));
     }),
@@ -609,8 +714,12 @@ const ROUTES: Route[] = [
         // object is what the framework can actually merge into.
         return new Response(null, { status: 302, headers: { location: item.poster_path } });
     }),
-    route("GET", "/Items/{itemId}/PlaybackInfo", async (event, match) => playbackInfoResponse(event, match[1])),
-    route("POST", "/Items/{itemId}/PlaybackInfo", async (event, match) => playbackInfoResponse(event, match[1])),
+    route("GET", "/Items/{itemId}/PlaybackInfo", async (event, match) =>
+        playbackInfoResponse(event, match[1])
+    ),
+    route("POST", "/Items/{itemId}/PlaybackInfo", async (event, match) =>
+        playbackInfoResponse(event, match[1])
+    ),
 
     // --- Display preferences / sessions (accepted, mostly discarded) --------
     route("GET", "/DisplayPreferences/{preferenceId}", (event, match) => {
@@ -698,6 +807,12 @@ const ROUTES: Route[] = [
         if (rivenId === null) return notFound();
         requireStreamAuth(event, event.locals.apiKey, rivenId);
         return proxyStream(event, rivenId);
+    }),
+    route("GET", "/Videos/{itemId}/playlist.m3u", async (event, match) => {
+        const rivenId = fromGuid(match[1]);
+        if (rivenId === null) return notFound();
+        requireStreamAuth(event, event.locals.apiKey, rivenId);
+        return proxyExternalPlaylist(event, rivenId, match[1]);
     }),
     route("GET", "/Videos/{itemId}/main.m3u8", async (event, match) => {
         const rivenId = fromGuid(match[1]);
@@ -796,7 +911,6 @@ function markPlayed(guid: string, played: boolean): Response {
     setPlayed(userId, rivenId, played);
     return noContent();
 }
-
 
 /**
  * The Jellyfin view of a direct-scrape video.
@@ -903,7 +1017,9 @@ async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
     return json(
         await baseItem(
             item,
-            playback ? { container: playback.container, durationSeconds: playback.durationSeconds } : null,
+            playback
+                ? { container: playback.container, durationSeconds: playback.durationSeconds }
+                : null,
             userId ? getProgress(userId, rivenId) : null
         )
     );
@@ -933,7 +1049,12 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
     const playback = await fetchPlaybackInfo(event, rivenId);
     const token = identity.issueToken(event.locals.apiKey);
 
-    const source = mediaSourceDto(toGuid(rivenId), item.title, playback?.container ?? null, playback?.durationSeconds ?? null);
+    const source = mediaSourceDto(
+        toGuid(rivenId),
+        item.title,
+        playback?.container ?? null,
+        playback?.durationSeconds ?? null
+    );
 
     // Mirrors the backend's former decision: reusing this app's existing
     // playback_info endpoint (browser-capability based, not per-client -- see

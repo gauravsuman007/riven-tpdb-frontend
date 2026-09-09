@@ -80,6 +80,16 @@
          */
         resolution?: string;
         fileSize?: number;
+        /**
+         * Which file of a multi-file release to play.
+         *
+         * A scene compilation is one torrent holding several scenes, and each
+         * of them is addressed by index through the stream endpoints. 0 for a
+         * single-file title, which is every title that is not one of these.
+         */
+        part?: number;
+        /** Fired when this part plays to its end, so the overlay can advance. */
+        onended?: () => void;
     }
 
     interface PlaybackInfo {
@@ -107,8 +117,19 @@
         controls = false,
         duration = $bindable(),
         resolution = $bindable(),
-        fileSize = $bindable()
+        fileSize = $bindable(),
+        part = 0,
+        onended
     }: VideoPlayerProps = $props();
+
+    /**
+     * `?part=N` for the stream endpoints, or nothing at all for part 0.
+     *
+     * Omitted rather than sent as `part=0` so every URL a single-file title
+     * produces is byte-for-byte what it was before playlists existed -- which
+     * keeps the HLS session keys, and anything caching on URL, unchanged.
+     */
+    const partQuery = $derived(part > 0 ? `?part=${part}` : "");
 
     let videoElement: HTMLVideoElement | undefined = $state();
 
@@ -123,9 +144,9 @@
 
     // Derived, not const: the overlay player reuses one instance across
     // titles, so these have to follow the id rather than freeze on first mount.
-    const directUrl = $derived(`/api/stream/${itemId}`);
-    const remuxUrl = $derived(`/api/stream/${itemId}/remux`);
-    const hlsUrl = $derived(`/api/stream/${itemId}/hls/index.m3u8`);
+    const directUrl = $derived(`/api/stream/${itemId}${partQuery}`);
+    const remuxUrl = $derived(`/api/stream/${itemId}/remux${partQuery}`);
+    const hlsUrl = $derived(`/api/stream/${itemId}/hls/index.m3u8${partQuery}`);
 
     /** Can this browser decode what the backend says is in the file? */
     function browserCanPlay(mimeType: string | null): boolean {
@@ -378,7 +399,7 @@
         }
 
         try {
-            const response = await fetch(`/api/stream/${itemId}/playback_info`);
+            const response = await fetch(`/api/stream/${itemId}/playback_info${partQuery}`);
 
             if (!response.ok) throw new Error(`playback_info returned ${response.status}`);
 
@@ -430,7 +451,9 @@
 
         // Free the ffmpeg session rather than waiting for it to idle out.
         if (mode === "transcode" && itemId !== undefined && typeof fetch !== "undefined") {
-            fetch(`/api/stream/${itemId}/hls/index.m3u8`, { method: "DELETE" }).catch(() => {});
+            fetch(`/api/stream/${itemId}/hls/index.m3u8${partQuery}`, {
+                method: "DELETE"
+            }).catch(() => {});
         }
     });
 
@@ -439,7 +462,10 @@
 
         // The element could not decode what we handed it. If we were direct
         // playing, escalate rather than showing a dead player.
-        if (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        if (
+            code === MediaError.MEDIA_ERR_DECODE ||
+            code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+        ) {
             if (mode === "direct" && servedByCdn) {
                 // The CDN link may simply have expired between minting and
                 // first byte. That is not a codec problem, so retry the same
@@ -494,6 +520,10 @@
             oncanplay={attemptPlay}
             onplay={startProgressReporting}
             onpause={reportProgress}
+            onended={() => {
+                reportProgress();
+                onended?.();
+            }}
             {controls}
             poster={poster || FALLBACK_POSTER}
             autoplay

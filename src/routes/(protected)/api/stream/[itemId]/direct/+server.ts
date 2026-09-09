@@ -14,7 +14,7 @@ import type { RequestHandler } from "./$types";
  * provider whose links only work from this server. That is a normal answer,
  * not an error: the player falls back to the proxied route.
  */
-export const GET: RequestHandler = async ({ params, locals, fetch }) => {
+export const GET: RequestHandler = async ({ params, locals, fetch, url }) => {
     const { itemId } = params;
 
     if (!itemId || isNaN(Number(itemId))) {
@@ -22,9 +22,12 @@ export const GET: RequestHandler = async ({ params, locals, fetch }) => {
     }
 
     try {
-        const response = await fetch(`${locals.backendUrl}/api/v1/stream/direct/${itemId}`, {
-            headers: { "x-api-key": locals.apiKey }
-        });
+        const response = await fetch(
+            `${locals.backendUrl}/api/v1/stream/direct/${itemId}${url.search}`,
+            {
+                headers: { "x-api-key": locals.apiKey }
+            }
+        );
 
         if (!response.ok) {
             // Not fatal, and deliberately not an error status: the caller

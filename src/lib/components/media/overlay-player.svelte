@@ -42,6 +42,9 @@
     import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
     import ZoomOutIcon from "@lucide/svelte/icons/zoom-out";
     import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+    import ListVideoIcon from "@lucide/svelte/icons/list-video";
+    import SkipBackIcon from "@lucide/svelte/icons/skip-back";
+    import SkipForwardIcon from "@lucide/svelte/icons/skip-forward";
     import { formatBytes } from "$lib/helpers";
     import {
         MIN_SCALE,
@@ -120,6 +123,85 @@
     let lastTap = 0;
 
     const target = $derived(player.current);
+
+    /*
+        Playlists.
+
+        A scene compilation is one torrent holding five or six separate
+        scenes. The player used to resolve one file and call that the title,
+        so the rest were downloaded, mounted and unreachable. `/parts` lists
+        them; `part` says which one is playing, and every stream URL the
+        VideoPlayer builds carries it.
+
+        A single-file title comes back as a one-entry list, so there is one
+        code path here rather than a playlist mode and a normal mode.
+    */
+    interface MediaPart {
+        index: number;
+        title: string;
+        filename: string;
+        file_size: number;
+        duration: number | null;
+    }
+
+    let parts = $state<MediaPart[]>([]);
+    let part = $state(0);
+    let partsOpen = $state(false);
+
+    const isPlaylist = $derived(parts.length > 1);
+    const currentPart = $derived(parts.find((entry) => entry.index === part) ?? null);
+
+    $effect(() => {
+        const active = player.current;
+
+        if (!active || active.kind !== "library") {
+            parts = [];
+            part = 0;
+            partsOpen = false;
+            return;
+        }
+
+        const itemId = active.itemId;
+
+        // Reset before the fetch, not after: the overlay is reused across
+        // titles, and leaving the previous title's list up while this one
+        // loads would offer parts that belong to something else.
+        parts = [];
+        part = 0;
+        partsOpen = false;
+
+        void (async () => {
+            try {
+                const response = await fetch(`/api/stream/${itemId}/parts`);
+
+                if (!response.ok) return;
+
+                const payload = await response.json();
+
+                // Ignore a response that arrived after the user moved on.
+                if (player.current?.kind !== "library" || player.current.itemId !== itemId) {
+                    return;
+                }
+
+                parts = payload.parts ?? [];
+            } catch {
+                // The player falls back to part 0, which is what it played
+                // before playlists existed.
+            }
+        })();
+    });
+
+    function playPart(index: number): void {
+        if (index < 0 || index >= parts.length) return;
+
+        part = index;
+        partsOpen = false;
+    }
+
+    /** Advance when a part finishes; stop at the end rather than looping. */
+    function onPartEnded(): void {
+        if (part + 1 < parts.length) playPart(part + 1);
+    }
 
     /** How long the chrome stays up after the last interaction, in fullscreen. */
     const CONTROLS_HIDE_MS = 3000;
@@ -279,15 +361,7 @@
         if (!view || !pinchStart) return;
 
         apply(
-            twoFingerTransform(
-                view,
-                pinchStart,
-                centre,
-                ratio,
-                maxScale(),
-                videoWidth,
-                videoHeight
-            )
+            twoFingerTransform(view, pinchStart, centre, ratio, maxScale(), videoWidth, videoHeight)
         );
     }
 
@@ -446,8 +520,7 @@
 
         paused = video.paused;
         muted = video.muted;
-        duration =
-            probedDuration ?? (Number.isFinite(video.duration) ? video.duration : 0);
+        duration = probedDuration ?? (Number.isFinite(video.duration) ? video.duration : 0);
 
         // While scrubbing, the readout follows the finger, not the element --
         // otherwise it snaps back on every timeupdate mid-drag.
@@ -458,9 +531,7 @@
         if (video.currentTime > 0) player.remember(video.currentTime);
 
         try {
-            buffered = video.buffered.length
-                ? video.buffered.end(video.buffered.length - 1)
-                : 0;
+            buffered = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
         } catch {
             // `buffered` throws while the media is still being set up.
             buffered = 0;
@@ -670,7 +741,6 @@
         }
     }
 
-    
     /**
      * Whether we can open the current video in an external player.
      * True when: (1) external player is available on the Jellyfin shell,
@@ -898,7 +968,6 @@
                 if (response.ok) url = (await response.json()).url ?? null;
             }
 
-
             /*
                 Deliberately NOT gated on externalPlayerSelected(). That
                 setting picks the DEFAULT for tapping Play; this button is an
@@ -973,9 +1042,7 @@
     const shownResolution = $derived(
         directTarget ? (liveResolution ?? directTarget.resolution) : probedResolution
     );
-    const shownSize = $derived(
-        directTarget ? (liveSize ?? directTarget.size) : probedFileSize
-    );
+    const shownSize = $derived(directTarget ? (liveSize ?? directTarget.size) : probedFileSize);
     const canBookmark = $derived(!!directTarget?.site && !!directTarget?.videoId);
 
     async function checkBookmarked() {
@@ -1183,6 +1250,11 @@
                 : 'pointer-events-none opacity-0'}">
             <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-white">{target.title}</p>
+                {#if isPlaylist}
+                    <p class="truncate text-xs text-white/60">
+                        {part + 1} of {parts.length}{currentPart ? ` · ${currentPart.title}` : ""}
+                    </p>
+                {/if}
                 <!--
                     Resolution and size, for both kinds of source.
 
@@ -1208,6 +1280,35 @@
 
             <div class="flex shrink-0 items-center gap-1">
                 <span class="mr-1 font-mono text-xs text-white/60">{scale.toFixed(1)}x</span>
+
+                {#if isPlaylist}
+                    <button
+                        type="button"
+                        onclick={() => playPart(part - 1)}
+                        disabled={part === 0}
+                        aria-label="Previous part"
+                        class="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-30">
+                        <SkipBackIcon class="size-5" />
+                    </button>
+                    <button
+                        type="button"
+                        onclick={() => playPart(part + 1)}
+                        disabled={part >= parts.length - 1}
+                        aria-label="Next part"
+                        class="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-30">
+                        <SkipForwardIcon class="size-5" />
+                    </button>
+                    <button
+                        type="button"
+                        onclick={() => (partsOpen = !partsOpen)}
+                        aria-label="Show the parts of this title"
+                        aria-expanded={partsOpen}
+                        class="rounded-lg p-2 hover:bg-white/10 {partsOpen
+                            ? 'text-primary'
+                            : 'text-white/80 hover:text-white'}">
+                        <ListVideoIcon class="size-5" />
+                    </button>
+                {/if}
 
                 {#if canBookmark}
                     <button
@@ -1285,10 +1386,52 @@
                     is reused across targets, and a stale src would otherwise
                     keep playing under the new title.
                 -->
-                {#key target.kind === "library" ? `item-${target.itemId}` : target.src}
+                {#if partsOpen && isPlaylist}
+                    <!--
+                        Over the video rather than beside it: the stage fills
+                        the overlay, and taking width from it would letterbox
+                        the picture every time the list opened.
+                    -->
+                    <div
+                        class="absolute top-0 right-0 bottom-0 z-20 flex w-72 max-w-[80%] flex-col gap-1 overflow-y-auto border-l border-white/10 bg-black/85 p-2 backdrop-blur-md">
+                        <p
+                            class="px-2 pt-1 pb-2 font-mono text-[10px] tracking-widest text-white/50 uppercase">
+                            {parts.length} parts
+                        </p>
+                        {#each parts as entry (entry.index)}
+                            <button
+                                type="button"
+                                onclick={() => playPart(entry.index)}
+                                class="flex items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors {entry.index ===
+                                part
+                                    ? 'bg-white/15 text-white'
+                                    : 'text-white/70 hover:bg-white/10 hover:text-white'}">
+                                <span class="w-5 shrink-0 font-mono text-xs text-white/40">
+                                    {entry.index + 1}
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate">{entry.title}</span>
+                                    <span
+                                        class="block truncate font-mono text-[11px] text-white/40">
+                                        {[
+                                            entry.duration ? formatTime(entry.duration) : null,
+                                            entry.file_size ? formatBytes(entry.file_size) : null
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                    </span>
+                                </span>
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+
+                {#key target.kind === "library" ? `item-${target.itemId}-${part}` : target.src}
                     {#if target.kind === "library"}
                         <VideoPlayer
                             itemId={target.itemId}
+                            {part}
+                            onended={onPartEnded}
                             poster={target.poster}
                             bind:element={video}
                             bind:duration={probedDuration}
@@ -1313,8 +1456,7 @@
                 -->
                 <div
                     class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1">
-                    <div
-                        class="rounded-2xl bg-black/70 px-5 py-3 text-center backdrop-blur-md">
+                    <div class="rounded-2xl bg-black/70 px-5 py-3 text-center backdrop-blur-md">
                         <p class="font-mono text-3xl font-semibold text-white tabular-nums">
                             {seekPreview.offset}
                         </p>
@@ -1376,7 +1518,8 @@
                             video.duration
                         );
                     }}>
-                    <div class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20">
+                    <div
+                        class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20">
                         <div
                             class="absolute inset-y-0 left-0 rounded-full bg-white/25"
                             style="width: {duration ? (buffered / duration) * 100 : 0}%">
@@ -1404,7 +1547,6 @@
                             <PauseIcon class="size-6" />
                         {/if}
                     </button>
-
 
                     <button
                         type="button"

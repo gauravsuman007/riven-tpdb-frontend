@@ -26,7 +26,12 @@ import { toGuid } from "$lib/utils/jellyfin-ids";
  * Never throws and never blocks the link: an unknown container is a worse
  * guess, not a failure.
  */
-async function containerFor(fetcher: typeof fetch, backendUrl: string, apiKey: string, itemId: number) {
+async function containerFor(
+    fetcher: typeof fetch,
+    backendUrl: string,
+    apiKey: string,
+    itemId: number
+) {
     try {
         const response = await fetcher(`${backendUrl}/api/v1/stream/playback_info/${itemId}`, {
             headers: { "x-api-key": apiKey }
@@ -38,11 +43,40 @@ async function containerFor(fetcher: typeof fetch, backendUrl: string, apiKey: s
 
         // Some probes report a comma-separated list ("mov,mp4,m4a,..."); the
         // first entry is the one to name.
-        const first = String(container ?? "").split(",")[0].trim().toLowerCase();
+        const first = String(container ?? "")
+            .split(",")[0]
+            .trim()
+            .toLowerCase();
 
         return /^[a-z0-9]{2,5}$/.test(first) ? first : "mp4";
     } catch {
         return "mp4";
+    }
+}
+
+/**
+ * How many playable files this title has.
+ *
+ * 1 on any failure: a title that cannot be asked is played the way every
+ * title was played before playlists existed, which is right for all but the
+ * handful of releases this feature is for.
+ */
+async function partCount(
+    fetcher: typeof fetch,
+    backendUrl: string,
+    apiKey: string,
+    itemId: number
+) {
+    try {
+        const response = await fetcher(`${backendUrl}/api/v1/stream/parts/${itemId}`, {
+            headers: { "x-api-key": apiKey }
+        });
+
+        if (!response.ok) return 1;
+
+        return Math.max(1, ((await response.json())?.parts ?? []).length);
+    } catch {
+        return 1;
     }
 }
 
@@ -76,14 +110,26 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
         `/Videos/{id}/stream.{container}` is an existing route and serves the
         same bytes as `/stream`.
     */
-    const container = await containerFor(fetch, locals.backendUrl, locals.apiKey, itemId);
+    const [container, parts] = await Promise.all([
+        containerFor(fetch, locals.backendUrl, locals.apiKey, itemId),
+        partCount(fetch, locals.backendUrl, locals.apiKey, itemId)
+    ]);
+
+    // A multi-file release goes over as a PLAYLIST. Handing across one file
+    // is what made a six-scene compilation play one scene in VLC exactly as
+    // it did in the browser -- the app was never told the rest existed.
+    //
+    // `.m3u` earns its place in the Android chooser the same way `.mp4` does
+    // (see the note above): media players declare pathPattern filters for it,
+    // browsers do not.
+    const path =
+        parts > 1
+            ? `/Videos/${toGuid(itemId)}/playlist.m3u?playSessionId=${token}`
+            : `/Videos/${toGuid(itemId)}/stream.${container}?static=true&playSessionId=${token}`;
 
     // Absolute: this is handed to another application, which has no page to
     // resolve a relative path against.
-    const streamUrl = new URL(
-        `/Videos/${toGuid(itemId)}/stream.${container}?static=true&playSessionId=${token}`,
-        url.origin
-    ).href;
+    const streamUrl = new URL(path, url.origin).href;
 
-    return json({ url: streamUrl });
+    return json({ url: streamUrl, parts });
 };

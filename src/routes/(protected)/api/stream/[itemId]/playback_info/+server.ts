@@ -7,7 +7,7 @@ import type { RequestHandler } from "./$types";
  * The player used to ask the browser whether it supported HEVC and never looked
  * at the file, which sent every Firefox viewer through the transcoder.
  */
-export const GET: RequestHandler = async ({ params, locals, fetch }) => {
+export const GET: RequestHandler = async ({ params, locals, fetch, url }) => {
     const { itemId } = params;
 
     if (!itemId || isNaN(Number(itemId))) {
@@ -15,9 +15,12 @@ export const GET: RequestHandler = async ({ params, locals, fetch }) => {
     }
 
     try {
-        const response = await fetch(`${locals.backendUrl}/api/v1/stream/playback_info/${itemId}`, {
-            headers: { "x-api-key": locals.apiKey }
-        });
+        const response = await fetch(
+            `${locals.backendUrl}/api/v1/stream/playback_info/${itemId}${url.search}`,
+            {
+                headers: { "x-api-key": locals.apiKey }
+            }
+        );
 
         if (!response.ok) {
             error(response.status, `Failed to inspect media: ${response.statusText}`);
