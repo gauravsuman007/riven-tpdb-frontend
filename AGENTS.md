@@ -9,7 +9,7 @@ settings tab; PIN and timeout in `app_lock` (frontend DB), verification in
 
 - **It is an in-page OVERLAY, not a redirect, and this is not negotiable.** It
   used to be a hook that answered 303 to a standalone `/lock` page, which is
-  stricter -- a locked browser was never *sent* the content. It also broke the
+  stricter -- a locked browser was never _sent_ the content. It also broke the
   Jellyfin clients outright: `JellyfinWebViewClient` only counts itself
   connected when it sees a request for `main.*.bundle.js`, the lock page is
   outside the layout that emits that tag, and so locking dropped the client
@@ -29,7 +29,7 @@ settings tab; PIN and timeout in `app_lock` (frontend DB), verification in
   inline head script below.
 - **The cover is painted by an inline `<head>` script** (`injectAppLockCover`
   in `hooks.server.ts`), not by the component. A page restored from a killed
-  background process paints its content and *then* hydrates, so a component
+  background process paints its content and _then_ hydrates, so a component
   overlay arrives a frame or two after the thing it is meant to hide. A
   synchronous head script sets `data-app-locked` on `<html>` before `<body>`
   is parsed. The component adopts that decision rather than re-deriving it.
@@ -104,15 +104,16 @@ history if it's ever relevant again.
   carried a token this app has never heard of. On-device (Jellyfin Android
   2.7.1, adb logcat):
 
-      E/MediaSourceResolver: Failed to load media source 0000...035e
-      InvalidStatusException: Invalid HTTP status in response: 401
+        E/MediaSourceResolver: Failed to load media source 0000...035e
+        InvalidStatusException: Invalid HTTP status in response: 401
 
-  ExoPlayer and the external player failed identically because both resolve
-  the media source through the same `ApiClient` before they diverge. The
-  `/web/session-token` exchange is therefore UNCONDITIONAL; a stored
-  credential is only a fallback for when there is no session to exchange.
+    ExoPlayer and the external player failed identically because both resolve
+    the media source through the same `ApiClient` before they diverge. The
+    `/web/session-token` exchange is therefore UNCONDITIONAL; a stored
+    credential is only a fallback for when there is no session to exchange.
+
 - **The minted token is claimed with the multiplexer** (`POST
-  /__mux/claim-token`). The native player is a separate HTTP stack from the
+/__mux/claim-token`). The native player is a separate HTTP stack from the
   WebView, so its requests carry no `mux_device` cookie and the token is the
   only thing left to route them by -- and the multiplexer only learns tokens
   by watching AuthenticateByName responses, which this one never produces.
@@ -140,7 +141,7 @@ history if it's ever relevant again.
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
-  takes no radix argument and *ignores* one, so `("862").toString(16)`
+  takes no radix argument and _ignores_ one, so `("862").toString(16)`
   returns `"862"` rather than `"35e"`. The decimal id then zero-pads into a
   perfectly valid-looking GUID that decodes as a completely different item
   (862 -> `...000862` -> 2146), and every request for it 404s with nothing
@@ -153,7 +154,7 @@ history if it's ever relevant again.
   `required` arrays are almost entirely empty, so it will call a response
   valid that a real client rejects outright. jellyfin-android deserializes
   via jellyfin-sdk-kotlin, where a field is required iff its generated data
-  class declares it *without a default*; a missing key throws
+  class declares it _without a default_; a missing key throws
   `MissingFieldException` and aborts playback with no useful client-side
   error (the server sees a clean 200). `scripts/jellyfin-required-fields.py`
   reads those generated models and diffs them against live responses —
@@ -230,14 +231,14 @@ history if it's ever relevant again.
 - **TRAP, cost a real debugging cycle**: `Response.redirect(url, 302)`
   returns a Response whose `Headers` object has `guard: "immutable"`.
   SvelteKit's own hook chain tries to `headers.append()` a `Set-Cookie` onto
-  *every* outgoing response (this app sets a `tvdb_cookie` on demand in
+  _every_ outgoing response (this app sets a `tvdb_cookie` on demand in
   `hooks.server.ts`), and appending to an immutable Headers object throws
   `TypeError: immutable`, turning any such redirect into a bare 500 with no
   useful message client-side. Found by an actual end-to-end test (real
   Postgres + built backend + built frontend, not just `svelte-check`) hitting
   `Items/{id}/Images/{type}`, which redirects to the poster CDN URL. Fix used
   throughout this router: `new Response(null, { status: 302, headers: {
-  location: url } })` — a plain object literal headers argument produces a
+location: url } })` — a plain object literal headers argument produces a
   normal, mutable Headers object. Never use the `Response.redirect()` /
   `Response.json()` static helpers anywhere a cookie-setting hook might also
   touch the response.
@@ -282,3 +283,56 @@ Rail data is `lib/recommendations.ts`, hand-maintained against
 `routers/secure/explore.py` for the same reason as `collections.ts`:
 `providers/riven.ts` is generated from an OpenAPI spec that needs a running
 backend.
+
+## Cards: the title sits below the poster
+
+Every grid and carousel renders through `list-item` -> `media/portrait-card`,
+so the home page, library, search, the trending lists and the TPDB detail rows
+all change together. The title used to be printed over the bottom of the
+artwork behind a `from-black/90` gradient; it is now below it, which is what
+made room for a second metadata line at all.
+
+- **TRAP: a caller's `class` lands on the outer column, not the poster.** The
+  library grid passed `aspect-[2/3]`, which used to shape the poster and now
+  shapes poster-plus-text -- squashing every image to fit the title in. Pass
+  width classes only.
+- `showContent={false}` still gives the bare artwork; the detail pages rely on
+  that and are unaffected.
+
+### Ratings render through one component
+
+`media/rating-badge.svelte`, everywhere -- cards, the AVN grid, collection
+rows, the Explore rails, the home hero. It renders **nothing** for a missing
+rating _and for zero_, because "no rating" arrives in two shapes:
+
+- TPDB writes a literal 0 on every record; it has no ranking at all.
+- Adult Empire omits the field for a title nobody reviewed.
+
+Never test `rating != null` at a call site. The TPDB feeds genuinely have no
+ratings and say so by omission rather than by drawing an empty star bar.
+
+## Explore rails carry their own controls
+
+`rail-controls.svelte` + `explore/rail/+server.ts`. Changing a rail's star
+floor or sort re-asks the catalogue for that one rail rather than filtering
+what is on screen -- see the backend notes for why those differ. It is an
+endpoint and not a form action because a form action re-runs the page load,
+which would re-rank every other row to change one of them.
+
+A failed re-rank keeps the items already ranked and says so. A row that
+emptied itself on a network error reads as "nothing matches", which is a claim
+about the catalogue rather than about the network.
+
+## The home hero is the Explore "for you" rail
+
+Not a separate ranking -- the same rail, so the two surfaces cannot disagree.
+The TPDB feeds remain the fallback for a deployment whose corpora have never
+synced. Two things the hero had to learn, both because a ranked catalogue
+entry is not a TMDB record:
+
+- **It has cover art and no banner.** The poster fills the frame blurred and
+  the cover is shown sharp beside the text; cropping 2:3 into 16:9 throws away
+  most of the image.
+- **It is addressed by entry id.** The hero's link assumed a TPDB uuid, which
+  404s on exactly the titles that are not in the library yet -- which is every
+  title the engine recommends. Items carry their own `href`.
