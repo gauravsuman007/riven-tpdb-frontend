@@ -11,6 +11,7 @@
     import { Play, Info, Star } from "@lucide/svelte";
     import { describeState } from "$lib/utils/item-state";
     import { openPlayer } from "$lib/stores/player.svelte";
+    import RatingBadge from "$lib/components/media/rating-badge.svelte";
 
     export interface TMDBNowPlayingItem {
         id: number;
@@ -18,6 +19,20 @@
         title?: string;
         name?: string;
         backdrop_path?: string | null;
+        /**
+         * Stands in for a missing backdrop. A recommendation is a catalogue
+         * entry and catalogue entries have cover art, not banners -- so
+         * rather than dropping every ranked title from the hero for want of a
+         * 16:9 image, the poster fills the frame blurred with the cover shown
+         * sharp beside the text. See the fallback below.
+         */
+        poster_path?: string | null;
+        /** Overrides the TPDB detail link, for items addressed another way. */
+        href?: string | null;
+        /** Audience stars out of five; absent and zero both render nothing. */
+        rating?: number | null;
+        /** Why the engine put this title here, in its own words. */
+        reasons?: string[];
         release_date?: string;
         first_air_date?: string;
         vote_average?: number | null;
@@ -154,14 +169,35 @@
                     {@const mediaType = isTV ? "tv" : "movie"}
                     {@const displayTitle = item.title ?? item.name ?? "Untitled"}
                     <Carousel.Item class="relative w-full {heightClass}">
-                        <!-- Backdrop Image -->
-                        <img
-                            src={item.backdrop_path?.startsWith("http")
+                        {@const backdrop = item.backdrop_path
+                            ? item.backdrop_path.startsWith("http")
                                 ? item.backdrop_path
-                                : `${TMDB_IMAGE_BASE_URL}/original${item.backdrop_path}`}
+                                : `${TMDB_IMAGE_BASE_URL}/original${item.backdrop_path}`
+                            : null}
+                        {@const cover = item.poster_path
+                            ? item.poster_path.startsWith("http")
+                                ? item.poster_path
+                                : `${TMDB_IMAGE_BASE_URL}/w780${item.poster_path}`
+                            : null}
+
+                        <!--
+                            Backdrop, or a poster standing in for one.
+
+                            A ranked catalogue entry has cover art and no
+                            banner. Cropping a 2:3 cover to a wide frame throws
+                            away most of it, so the poster fills the frame
+                            blurred and is shown sharp beside the text instead.
+                        -->
+                        <img
+                            src={backdrop ?? cover}
                             alt={displayTitle}
-                            class="h-full w-full object-cover object-top select-none"
+                            class="h-full w-full object-cover object-top select-none {backdrop
+                                ? ''
+                                : 'scale-110 blur-2xl'}"
                             loading="lazy" />
+                        {#if !backdrop && cover}
+                            <div class="bg-background/40 absolute inset-0"></div>
+                        {/if}
 
                         <!-- Gradient Overlay with dramatic landscape-card style mask -->
                         <div
@@ -272,6 +308,16 @@
                                                     </a>
                                                 {/each}
                                             </div>
+                                        {:else if item.rating}
+                                            <!--
+                                                Out of five, from the
+                                                catalogue. Distinct from
+                                                `vote_average`, which is
+                                                TMDB's ten-point scale and is
+                                                never populated here.
+                                            -->
+                                            <span class="text-white/40">|</span>
+                                            <RatingBadge rating={item.rating} size="md" />
                                         {:else if item.vote_average}
                                             <span class="text-white/40">|</span>
                                             <span
@@ -282,6 +328,27 @@
                                             </span>
                                         {/if}
                                     </div>
+
+                                    <!--
+                                        Why this title is here, when the
+                                        engine ranked it. A catalogue entry
+                                        has no synopsis, and the provenance is
+                                        the more useful sentence anyway: a
+                                        recommendation nobody can interrogate
+                                        is one nobody can correct.
+                                    -->
+                                    {#if !item.overview && item.reasons?.length}
+                                        <p
+                                            in:fly|global={{
+                                                y: 20,
+                                                duration: 1000,
+                                                delay: 300,
+                                                easing: cubicOut
+                                            }}
+                                            class="mt-3 line-clamp-2 max-w-xl font-mono text-xs text-white/70 drop-shadow-md md:mt-4">
+                                            {item.reasons.join(" · ")}
+                                        </p>
+                                    {/if}
 
                                     <!-- Overview -->
                                     {#if item.overview}
@@ -360,14 +427,29 @@
                                         <Button
                                             variant="secondary"
                                             size="lg"
-                                            href="/details/tpdb/{mediaType}/{(item as any)
-                                                .tpdb_uuid ?? item.id}"
+                                            href={item.href ??
+                                                `/details/tpdb/${mediaType}/${
+                                                    (item as any).tpdb_uuid ?? item.id
+                                                }`}
                                             class="flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/10 px-8 text-sm font-bold text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:bg-white/20 md:h-12 md:text-base">
                                             More Info
                                         </Button>
                                     </div>
                                 </div>
                             </div>
+                            {#if !backdrop && cover}
+                                <!--
+                                The cover, sharp, over its own blurred fill.
+                                Hidden on narrow screens where the text block
+                                already takes the whole frame.
+                            -->
+                                <img
+                                    src={cover}
+                                    alt=""
+                                    aria-hidden="true"
+                                    class="absolute top-1/2 right-8 z-10 hidden max-h-[70%] -translate-y-1/2 rounded-xl shadow-2xl ring-1 ring-white/15 lg:right-24 lg:block"
+                                    loading="lazy" />
+                            {/if}
                         {/key}
                     </Carousel.Item>
                 {/each}

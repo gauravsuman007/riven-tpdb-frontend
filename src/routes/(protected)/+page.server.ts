@@ -4,16 +4,59 @@ import providers from "$lib/providers";
 import { transformTPDBList } from "$lib/providers/parser";
 import { createScopedLogger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
+import { entryHref } from "$lib/collections";
+import { getRows, type Recommendation } from "$lib/recommendations";
+import type { TMDBNowPlayingItem } from "$lib/components/tmdb-now-playing.svelte";
 
 const logger = createScopedLogger("home");
 
 /**
- * The hero carousel is sourced from the backend's TPDB endpoints rather than
- * TMDB trending, so an adult-only deployment does not surface mainstream
- * titles. Recommendations lead when the TPDB collection has anything in it;
- * otherwise the newest movies stand in.
+ * Turn a ranked recommendation into the hero's item shape.
  *
- * `recentlyAdded` already came from the Riven library and is unchanged.
+ * A catalogue entry has cover art and no banner, so `poster_path` is passed
+ * through for the hero to stand in with; it blurs it to fill the frame and
+ * shows the cover sharp beside the text rather than cropping a 2:3 image into
+ * a 16:9 one.
+ *
+ * `href` is set explicitly because a rail item is a `CollectionEntry`, which
+ * is addressed by entry id when it has no TPDB match. The hero's default link
+ * assumes a TPDB uuid and would 404 on exactly the titles that are not yet in
+ * the library -- which is every title the engine recommends.
+ */
+function heroItem(item: Recommendation): TMDBNowPlayingItem {
+    return {
+        id: item.entry_id ?? 0,
+        media_type: item.kind === "scene" ? "tv" : "movie",
+        title: item.title,
+        backdrop_path: null,
+        poster_path: item.poster_path,
+        release_date: item.year ? `${item.year}-01-01` : undefined,
+        rating: item.rating,
+        reasons: item.reasons,
+        href:
+            item.entry_id === null
+                ? null
+                : entryHref({
+                      id: item.entry_id,
+                      tpdb_id: item.tpdb_id,
+                      tpdb_kind: item.kind === "scene" ? "scene" : "movie"
+                  })
+    };
+}
+
+/**
+ * The hero carousel is the Explore page's "Recommended for you" rail.
+ *
+ * That row is ranked from award history, storefront ratings, demand and what
+ * the library already contains, over titles that are catalogued but not yet
+ * owned -- which is a better answer to "what should I watch" than the newest
+ * thing TPDB happened to index, and it is the same answer the Explore page
+ * gives, so the two surfaces cannot disagree.
+ *
+ * The TPDB feeds remain as the fallback. The engine ranks what has already
+ * been catalogued, so a deployment whose brochure and award corpora have never
+ * synced has nothing to rank, and an empty hero would be worse than a generic
+ * one.
  */
 export const load: PageServerLoad = async ({ locals, fetch }) => {
     if (!locals.user || !locals.session) redirect(302, "/auth/login");
@@ -24,6 +67,18 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
             headers: { "x-api-key": locals.apiKey },
             fetch
         };
+
+        const rows = await getRows(
+            { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
+            12
+        );
+        const forYou = rows.rails.find((rail) => rail.key === "for-you");
+
+        if (forYou?.items.length) {
+            return { nowPlaying: forYou.items.map(heroItem) };
+        }
+
+        logger.info("No ranked recommendations yet; the hero falls back to TPDB.");
 
         // Only the carousel is awaited. Everything else on this page is below
         // the fold and its promise is streamed, so first paint no longer waits
@@ -48,8 +103,8 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
         );
         const latest = transformTPDBList(latestMovies.data ?? []);
 
-        // The carousel is a backdrop-led layout, so anything without one is
-        // dropped rather than rendered as an empty panel.
+        // The fallback carousel is a backdrop-led layout, so anything without
+        // one is dropped rather than rendered as an empty panel.
         const withBackdrop = [...recommended, ...latest].filter((item) => item.backdrop_path);
 
         // "Recently added" is fetched client-side by the page's list store, so
