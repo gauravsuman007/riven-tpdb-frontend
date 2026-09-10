@@ -10,7 +10,14 @@
     import { Input } from "$lib/components/ui/input/index.js";
 
     import ListItem from "$lib/components/list-item.svelte";
-    import { itemsSearchSchema, typeOptions, stateOptions } from "$lib/schemas/items";
+    import {
+        itemsSearchSchema,
+        typeOptions,
+        stateOptions,
+        groupOptions,
+        GROUP_SORT,
+        type GroupKey
+    } from "$lib/schemas/items";
     import Trash from "@lucide/svelte/icons/trash";
     import Search from "@lucide/svelte/icons/search";
     import X from "@lucide/svelte/icons/x";
@@ -52,6 +59,150 @@
     const { form: formData } = form;
 
     const itemsStore = new ItemStore();
+
+    /*
+        Sort and group.
+
+        Both live in the URL rather than in component state, so a grouped view
+        is bookmarkable, survives a reload, and comes back the same way after
+        an action re-runs the load.
+
+        Choosing a group also sets the sort it implies. Grouping a page that is
+        ordered by something else repeats the same heading down the page and
+        splits every group across every page -- headings that describe
+        nothing. See GROUP_SORT.
+    */
+    const sortLabels: Record<string, string> = {
+        date_desc: "Recently added",
+        date_asc: "Oldest added",
+        title_asc: "Title A–Z",
+        title_desc: "Title Z–A",
+        rating_desc: "Highest rated",
+        rating_asc: "Lowest rated",
+        year_desc: "Newest release",
+        year_asc: "Oldest release",
+        studio_asc: "Studio A–Z",
+        studio_desc: "Studio Z–A"
+    };
+
+    const groupLabels: Record<GroupKey, string> = {
+        none: "No grouping",
+        studio: "By studio",
+        year: "By decade",
+        state: "By state",
+        rating: "By rating"
+    };
+
+    const activeSort = $derived(page.url.searchParams.get("sort") ?? "date_desc");
+    const activeGroup = $derived((page.url.searchParams.get("group") ?? "none") as GroupKey);
+
+    function navigate(mutate: (url: URL) => void) {
+        const url = new URL(page.url);
+
+        mutate(url);
+        url.searchParams.set("page", "1");
+        $formData.page = 1;
+
+        goto(url.toString(), { keepFocus: true, noScroll: true, invalidateAll: true });
+    }
+
+    function setSort(value: string) {
+        navigate((url) => url.searchParams.set("sort", value));
+    }
+
+    function setGroup(value: GroupKey) {
+        navigate((url) => {
+            if (value === "none") {
+                url.searchParams.delete("group");
+            } else {
+                url.searchParams.set("group", value);
+            }
+
+            const implied = GROUP_SORT[value];
+
+            if (implied) {
+                url.searchParams.set("sort", implied);
+            }
+        });
+    }
+
+    /*
+        Grouping is applied to the page that was loaded, not to the library.
+
+        The alternative -- asking the backend to group -- means either loading
+        the whole library to count the groups or paginating within each group,
+        and the grid is already paginated. Pairing the group with a sort on the
+        same key is what makes this correct in practice: members are
+        contiguous, so a page shows whole groups apart from the two at its
+        edges.
+    */
+    function bandOf(rating: number | null | undefined): string {
+        // A stored 0 means "no ranking" -- TPDB writes it on every record --
+        // so it groups with the unrated rather than as a score of zero.
+        if (!rating) return "Not rated";
+        if (rating >= 4.5) return "4.5 and up";
+        if (rating >= 4) return "4 – 4.5";
+        if (rating >= 3) return "3 – 4";
+
+        return "Below 3";
+    }
+
+    function groupKeyFor(item: (typeof items)[number]): string {
+        switch (activeGroup) {
+            case "studio":
+                return (item as any).site_name || "Unknown studio";
+            case "year": {
+                const year = Number(item.year);
+
+                return Number.isFinite(year) && year > 0
+                    ? `${Math.floor(year / 10) * 10}s`
+                    : "Unknown year";
+            }
+            case "state":
+                return item.state || "Unknown state";
+            case "rating":
+                return bandOf((item as any).rating);
+            default:
+                return "";
+        }
+    }
+
+    const grouped = $derived.by(() => {
+        if (activeGroup === "none") {
+            return [] as { key: string; items: typeof items }[];
+        }
+
+        const out: { key: string; items: typeof items }[] = [];
+
+        for (const item of items) {
+            const key = groupKeyFor(item);
+            const last = out[out.length - 1];
+
+            // Appended in order rather than bucketed by key: the rows arrive
+            // sorted on the group key, so consecutive runs are the groups.
+            // Bucketing would silently merge two runs that a page boundary
+            // separated, which would claim a group is complete when it is not.
+            if (last && last.key === key) {
+                last.items.push(item);
+            } else {
+                out.push({ key, items: [item] });
+            }
+        }
+
+        return out;
+    });
+
+    /** Every item on this page, for the select-all control. */
+    const pageIds = $derived(items.map((item) => item.riven_id).filter(Boolean) as number[]);
+    const allSelected = $derived(pageIds.length > 0 && pageIds.every((id) => itemsStore.has(id)));
+
+    function toggleAll() {
+        if (allSelected) {
+            pageIds.forEach((id) => itemsStore.has(id) && itemsStore.toggle(id));
+        } else {
+            pageIds.forEach((id) => !itemsStore.has(id) && itemsStore.toggle(id));
+        }
+    }
 
     let actionInProgress = $state(false);
     let formElement: HTMLFormElement;
@@ -420,6 +571,63 @@
             <CollectionsShelf collections={shelf.value ?? []} />
         {/if}
 
+        <!--
+            Sort, group and select-all.
+
+            Sitting above the grid rather than inside the search header because
+            they act on what the grid is showing, not on what it is filtered
+            to. The count on the left is the honest one -- the whole result
+            set, not this page.
+        -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <p class="font-mono text-xs text-zinc-400">
+                {totalItems}
+                {totalItems === 1 ? "title" : "titles"}
+                {#if activeGroup !== "none"}
+                    · grouped {groupLabels[activeGroup].toLowerCase()} within this page
+                {/if}
+            </p>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="border-white/10 bg-black/20 text-xs"
+                    disabled={!pageIds.length}
+                    onclick={toggleAll}>
+                    <ListChecks class="mr-2 size-4" />
+                    {allSelected ? "Clear page" : "Select page"}
+                </Button>
+
+                <Select.Root type="single" value={activeSort} onValueChange={setSort}>
+                    <Select.Trigger
+                        class="h-9 w-[170px] border-white/10 bg-black/20 text-xs text-zinc-200">
+                        {sortLabels[activeSort] ?? "Sort"}
+                    </Select.Trigger>
+                    <Select.Content class="border-zinc-800 bg-zinc-900">
+                        {#each Object.entries(sortLabels) as [value, label] (value)}
+                            <Select.Item {value} {label} />
+                        {/each}
+                    </Select.Content>
+                </Select.Root>
+
+                <Select.Root
+                    type="single"
+                    value={activeGroup}
+                    onValueChange={(value) => setGroup(value as GroupKey)}>
+                    <Select.Trigger
+                        class="h-9 w-[150px] border-white/10 bg-black/20 text-xs text-zinc-200">
+                        {groupLabels[activeGroup]}
+                    </Select.Trigger>
+                    <Select.Content class="border-zinc-800 bg-zinc-900">
+                        {#each Object.keys(groupOptions) as value (value)}
+                            <Select.Item {value} label={groupLabels[value as GroupKey]} />
+                        {/each}
+                    </Select.Content>
+                </Select.Root>
+            </div>
+        </div>
+
         <!-- Content Grid -->
         {#if lib.pending}
             <!--
@@ -435,22 +643,47 @@
                 {/each}
             </div>
         {:else if totalItems > 0}
-            <div
-                class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-                {#each items as item, i (item.riven_id)}
-                    <div
-                        class="animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards duration-700"
-                        style="animation-delay: {i * 30}ms">
-                        <ListItem
-                            data={item}
-                            indexer={item.indexer}
-                            type={item.type}
-                            isSelectable
-                            selectStore={itemsStore}
-                            class="aspect-[2/3] w-full" />
-                    </div>
-                {/each}
-            </div>
+            {#snippet card(item: (typeof items)[number], i: number)}
+                <div
+                    class="animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards duration-700"
+                    style="animation-delay: {i * 30}ms">
+                    <ListItem
+                        data={item}
+                        indexer={item.indexer}
+                        type={item.type}
+                        isSelectable
+                        selectStore={itemsStore}
+                        class="w-full" />
+                </div>
+            {/snippet}
+
+            {#if activeGroup === "none"}
+                <div
+                    class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+                    {#each items as item, i (item.riven_id)}
+                        {@render card(item, i)}
+                    {/each}
+                </div>
+            {:else}
+                <div class="flex flex-col gap-10">
+                    {#each grouped as group (group.key)}
+                        <section class="flex flex-col gap-4">
+                            <div class="flex items-baseline gap-3">
+                                <h2 class="text-lg font-semibold text-white/90">{group.key}</h2>
+                                <span class="font-mono text-xs text-zinc-500">
+                                    {group.items.length}
+                                </span>
+                            </div>
+                            <div
+                                class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+                                {#each group.items as item, i (item.riven_id)}
+                                    {@render card(item, i)}
+                                {/each}
+                            </div>
+                        </section>
+                    {/each}
+                </div>
+            {/if}
 
             <!-- Pagination -->
             <div class="flex justify-center pt-12 pb-24">

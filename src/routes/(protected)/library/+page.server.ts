@@ -147,9 +147,24 @@ export const load: PageServerLoad = async (event) => {
         call: splitting them would mean four awaits on one request.
     */
     const library = (async () => {
+        /*
+            `group` is stripped: it is a rendering choice, applied to the page
+            the grid received, and the backend has no such parameter.
+
+            `sort` is cast because `providers/riven.ts` is generated from the
+            backend's OpenAPI spec, which needs a running backend to
+            regenerate, so it still knows only the four original sort values
+            and not the rating/year/studio ones the backend now accepts. The
+            zod schema in `schemas/items.ts` is the check that matters here --
+            anything it rejects never reaches this call -- and the cast is
+            confined to the one field that drifted rather than widening the
+            whole query object.
+        */
+        const { group: _group, ...query } = itemsSearchForm.data;
+
         const response = await providers.riven.GET("/api/v1/items", {
             params: {
-                query: itemsSearchForm.data
+                query: { ...query, sort: query.sort as never[] }
             },
             baseUrl: event.locals.backendUrl,
             headers: {
