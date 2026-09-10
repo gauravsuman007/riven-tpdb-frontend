@@ -16,7 +16,8 @@
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
     import { entryHref } from "$lib/collections";
-    import type { Recommendation } from "$lib/recommendations";
+    import type { Rail, RailSort, Recommendation } from "$lib/recommendations";
+    import RailControls from "$lib/components/rail-controls.svelte";
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -27,6 +28,73 @@
     import TagsIcon from "@lucide/svelte/icons/tags";
 
     let { data, form }: PageProps = $props();
+
+    /*
+        Per-rail overrides, keyed by rail key.
+
+        A rail is left exactly as the page load ranked it until someone touches
+        its controls; only then does an entry appear here. That way a failed
+        re-rank can fall back to the row that was already on screen instead of
+        blanking a row that was fine a moment ago.
+    */
+    interface RailView {
+        minRating: number;
+        sort: RailSort;
+        items?: Recommendation[];
+        busy: boolean;
+        error?: string;
+    }
+
+    let views = $state<Record<string, RailView>>({});
+
+    function view(rail: Rail): RailView {
+        return views[rail.key] ?? { minRating: 0, sort: "score", busy: false };
+    }
+
+    function itemsFor(rail: Rail): Recommendation[] {
+        return views[rail.key]?.items ?? rail.items;
+    }
+
+    async function adjust(rail: Rail, next: { minRating: number; sort: RailSort }) {
+        const current = view(rail);
+
+        views[rail.key] = { ...current, ...next, busy: true, error: undefined };
+
+        const query = new URLSearchParams({
+            engine: rail.kind,
+            sort: next.sort,
+            limit: "20"
+        });
+
+        if (rail.intent) {
+            query.set("intent", rail.intent);
+        }
+
+        if (next.minRating > 0) {
+            query.set("min_rating", String(next.minRating));
+        }
+
+        try {
+            const response = await fetch(`/explore/rail?${query}`);
+
+            if (!response.ok) {
+                throw new Error(String(response.status));
+            }
+
+            const body = (await response.json()) as { items: Recommendation[] };
+
+            views[rail.key] = { ...next, items: body.items, busy: false };
+        } catch {
+            // The previously ranked items are kept. A rail that empties itself
+            // because a request failed would read as "nothing matches", which
+            // is a claim about the catalogue rather than about the network.
+            views[rail.key] = {
+                ...views[rail.key],
+                busy: false,
+                error: "Could not re-rank this row."
+            };
+        }
+    }
 
     /*
         A scene has no entry to open. Linking it anywhere would be a lie about
@@ -195,16 +263,28 @@
                                 </h2>
                                 <p class="max-w-2xl text-sm text-zinc-400">{rail.reason}</p>
                             </div>
-                            {#if rail.kind === "scenes"}
-                                <span class="shrink-0 font-mono text-xs text-zinc-400">
-                                    StashDB · browse only
-                                </span>
-                            {/if}
+                            <div class="flex shrink-0 flex-col items-end gap-2">
+                                <RailControls
+                                    minRating={view(rail).minRating}
+                                    sort={view(rail).sort}
+                                    busy={view(rail).busy}
+                                    onChange={(next) => adjust(rail, next)} />
+                                {#if rail.kind === "scenes"}
+                                    <span class="font-mono text-xs text-zinc-400">
+                                        StashDB · browse only
+                                    </span>
+                                {/if}
+                                {#if view(rail).error}
+                                    <span class="font-mono text-xs text-amber-400">
+                                        {view(rail).error}
+                                    </span>
+                                {/if}
+                            </div>
                         </div>
 
                         <ul
                             class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                            {#each rail.items as item (item.key)}
+                            {#each itemsFor(rail) as item (item.key)}
                                 <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
                                     <svelte:element
                                         this={href(item) ? "a" : "div"}
@@ -280,6 +360,26 @@
                                 </li>
                             {/each}
                         </ul>
+
+                        {#if !itemsFor(rail).length}
+                            <!--
+                                Only reachable through the controls -- a rail
+                                that ranked empty is dropped by the backend.
+                                Named rather than left blank, and it names the
+                                filter, because "nothing here" and "nothing
+                                here at four stars and up" are different facts.
+                            -->
+                            <p class="py-6 font-mono text-sm text-zinc-400">
+                                {#if rail.kind === "scenes"}
+                                    StashDB carries no audience ratings, so no scene can meet a
+                                    minimum. Set it back to Any.
+                                {:else}
+                                    Nothing in this row is rated {view(rail).minRating} or higher yet.
+                                    Ratings are read from Adult Empire's product pages — run the rating
+                                    backfill if you have not.
+                                {/if}
+                            </p>
+                        {/if}
                     </section>
                 {/each}
             </div>

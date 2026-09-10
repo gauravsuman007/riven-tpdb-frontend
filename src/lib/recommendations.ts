@@ -50,6 +50,12 @@ export interface Rail {
     /** Why this row exists, in the intent's own words. */
     reason: string;
     kind: "movies" | "scenes";
+    /**
+     * The intent this row asks, or null for the unfiltered baseline row.
+     * Carried by the backend so a client can re-rank one rail; splitting the
+     * key on a hyphen would work only until an intent name contains one.
+     */
+    intent: string | null;
     items: Recommendation[];
 }
 
@@ -127,9 +133,54 @@ export async function getRows(options: FetchOptions, perRail = 20): Promise<Expl
     );
 }
 
-export async function getCategoryIndex(
-    options: FetchOptions
-): Promise<CategoryIndexStatus | null> {
+/** How a rail may be ordered. */
+export type RailSort = "score" | "rating";
+
+export interface RailQuery {
+    intent: string | null;
+    engine: "movies" | "scenes";
+    sort: RailSort;
+    /** Audience stars out of five. 0 means "no minimum". */
+    minRating: number;
+    limit?: number;
+}
+
+/**
+ * Re-rank one rail under its own rating filter and sort.
+ *
+ * Deliberately a fresh ranking of the whole corpus rather than a filter over
+ * the rail already on screen. Twenty titles narrowed to the three that happen
+ * to have four stars is not the same answer as the catalogue's best three
+ * four-star titles for that intent, and it is the wrong one.
+ *
+ * Returns null on failure so the caller can leave the rail as it was and say
+ * so, rather than blanking a row that was fine a moment ago.
+ */
+export async function getRail(
+    options: FetchOptions,
+    { intent, engine, sort, minRating, limit = 20 }: RailQuery
+): Promise<Recommendation[] | null> {
+    const query = new URLSearchParams({
+        engine,
+        sort,
+        limit: String(limit)
+    });
+
+    if (intent) {
+        query.set("intent", intent);
+    }
+
+    // Omitted rather than sent as 0: the backend treats a zero minimum as no
+    // filter anyway, and not sending it keeps the request honest about what
+    // was actually asked for.
+    if (minRating > 0) {
+        query.set("min_rating", String(minRating));
+    }
+
+    return get<Recommendation[]>(`/explore/recommendations?${query}`, options);
+}
+
+export async function getCategoryIndex(options: FetchOptions): Promise<CategoryIndexStatus | null> {
     return get<CategoryIndexStatus>("/explore/categories", options);
 }
 
