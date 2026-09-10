@@ -63,7 +63,7 @@ export const actions: Actions = {
             the full TPDB page when the title resolved, so this deliberately
             does not try to decide that here -- one place owns that branch.
         */
-        redirect(303, `/brochure/${result.entryId}`);
+        redirect(303, `/explore/brochure/${result.entryId}`);
     },
 
     save: async (event) => {

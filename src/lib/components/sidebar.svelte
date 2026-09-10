@@ -15,8 +15,7 @@
     import Settings from "@lucide/svelte/icons/settings";
     import Search from "@lucide/svelte/icons/search";
     import Library from "@lucide/svelte/icons/library";
-    import BookOpen from "@lucide/svelte/icons/book-open";
-    import Trophy from "@lucide/svelte/icons/trophy";
+    import Compass from "@lucide/svelte/icons/compass";
     import User from "@lucide/svelte/icons/user";
     import { getContext } from "svelte";
     import Tooltip from "./tooltip.svelte";
@@ -30,15 +29,31 @@
         { href: "/", icon: Home, label: "Home" },
         { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { href: "/library", icon: Library, label: "Library" },
-        { href: "/brochure", icon: BookOpen, label: "Brochure" },
-        { href: "/avn", icon: Trophy, label: "AVN" },
-        { href: "/explore", icon: Search, label: "Explore" },
+        { href: "/explore", icon: Compass, label: "Explore" },
+        { href: "/search", icon: Search, label: "Search" },
         { href: "/auth", icon: User, label: "Profile" },
         { href: "/settings", icon: Settings, label: "Settings" },
         { href: "/logs", icon: FileClock, label: "Logs" }
     ] as const;
 
     let { user } = $props();
+
+    /*
+        Prefix, not equality. Explore is a hub with children (/explore/awards,
+        /explore/brochure), and an exact match would leave the whole nav with
+        nothing highlighted the moment someone opened a tab -- which reads as
+        having navigated out of the section they are plainly still in. "/" is
+        excluded because every path starts with it.
+    */
+    function isActive(href: (typeof navItems)[number]["href"]): boolean {
+        const target = resolve(href);
+
+        if (target === "/") {
+            return page.url.pathname === "/";
+        }
+
+        return page.url.pathname === target || page.url.pathname.startsWith(`${target}/`);
+    }
 
     const SidebarStore = getContext<ReturnType<typeof createSidebarStore>>("sidebarStore");
 </script>
@@ -64,11 +79,9 @@
                         data-sveltekit-preload-data={item.label === "Settings" ? "off" : "hover"}
                         href={resolve(item.href)}
                         class="hover:bg-accent/80 group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors"
-                        class:bg-accent={page.url.pathname === resolve(item.href)}
+                        class:bg-accent={isActive(item.href)}
                         aria-label={item.label}
-                        aria-current={page.url.pathname === resolve(item.href)
-                            ? "page"
-                            : undefined}>
+                        aria-current={isActive(item.href) ? "page" : undefined}>
                         <item.icon class="size-5" />
                     </a>
                 {/snippet}
@@ -223,10 +236,8 @@
                         href={resolve(item.href)}
                         onclick={() => SidebarStore.toggle()}
                         class="hover:text-foreground flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/10
-						{page.url.pathname === resolve(item.href) ? 'text-primary bg-white/10' : 'text-muted-foreground'}"
-                        aria-current={page.url.pathname === resolve(item.href)
-                            ? "page"
-                            : undefined}>
+						{isActive(item.href) ? 'text-primary bg-white/10' : 'text-muted-foreground'}"
+                        aria-current={isActive(item.href) ? "page" : undefined}>
                         <item.icon class="size-4" />
                         <span>{item.label}</span>
                     </a>

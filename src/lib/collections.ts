@@ -356,7 +356,7 @@ export function entryHref(entry: {
     // Resolved through the typed route ids rather than built as a string, so
     // a renamed route breaks the build instead of producing a dead link.
     if (!entry.tpdb_id) {
-        return resolve("/(protected)/brochure/[id]", { id: String(entry.id) });
+        return resolve("/(protected)/explore/brochure/[id]", { id: String(entry.id) });
     }
 
     return resolve("/(protected)/details/tpdb/[type]/[id]", {

@@ -246,3 +246,39 @@ history if it's ever relevant again.
   bridge-networked, so LAN broadcast can't reach it, and `network_mode: host`
   would collide with the real Jellyfin already on 7359/8096 on that host.
   Clients must be added by address.
+
+## Explore: one section, three tabs (and `/search` is the old `/explore`)
+
+Recommendations, the AVN corpus and the Adult Empire brochure used to be three
+separate navbar entries, which read as three unrelated features. They are three
+sources of the same answer, so they now live under one entry:
+
+- `/explore` — the ranked rails (`/api/v1/explore/rows` on the backend)
+- `/explore/awards` — was `/avn`
+- `/explore/brochure`, `/explore/brochure/[id]` — was `/brochure`
+
+The tab strip is in `explore/+layout.svelte`, not in the pages, so it does not
+shift by a pixel between tabs — a strip that moves makes tabbed navigation feel
+like a page reload. The pages under it drop the `pt-32` they used to carry for
+the fixed mobile header; the layout provides that clearance now, and leaving
+both doubles it.
+
+**The search page moved to `/search`.** The old `/explore` was the search and
+discovery surface, and the header/mobile search boxes navigate to it by literal
+path — `header.svelte` and `mobile-nav.svelte` both hardcode it, and both need
+changing together if it moves again.
+
+`/avn`, `/brochure` and `/brochure/[id]` survive as 308 redirects rather than
+being deleted: bookmarks, the Jellyfin shell's saved links and anything the
+multiplexer injected still point at them, and a 404 reads as the feature having
+been removed.
+
+`sidebar.svelte`'s active state is a **prefix** test, not equality. With exact
+matching, opening any Explore tab left the entire nav unhighlighted — which
+looks like having navigated out of the section you are plainly still in. `/` is
+special-cased because every path starts with it.
+
+Rail data is `lib/recommendations.ts`, hand-maintained against
+`routers/secure/explore.py` for the same reason as `collections.ts`:
+`providers/riven.ts` is generated from an OpenAPI spec that needs a running
+backend.

@@ -19,11 +19,11 @@
     function navigateToSearch() {
         if (debounceTimer) clearTimeout(debounceTimer);
         const query = inputRef?.value.trim() || "";
-        const currentlyExplore = page.url.pathname === "/explore";
-        goto(query ? `/explore?query=${encodeURIComponent(query)}` : "/explore", {
-            keepFocus: currentlyExplore,
+        const currentlySearch = page.url.pathname === "/search";
+        goto(query ? `/search?query=${encodeURIComponent(query)}` : "/search", {
+            keepFocus: currentlySearch,
             noScroll: true,
-            replaceState: currentlyExplore
+            replaceState: currentlySearch
         });
     }
 

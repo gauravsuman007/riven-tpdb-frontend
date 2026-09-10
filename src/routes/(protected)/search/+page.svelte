@@ -1,0 +1,407 @@
+<script lang="ts">
+    import { getContext, onDestroy, onMount } from "svelte";
+    import { streamed } from "$lib/streamed.svelte";
+    import { Skeleton } from "$lib/components/ui/skeleton/index.js";
+    import { type Action } from "svelte/action";
+    import ListItem from "$lib/components/list-item.svelte";
+    import MediaRowItem from "$lib/components/media/media-row-item.svelte";
+    import { Button } from "$lib/components/ui/button/index.js";
+    import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
+    import { SearchStore } from "$lib/services/search-store.svelte";
+    import AnimatedToggle from "$lib/components/animated-toggle.svelte";
+    import SearchIcon from "@lucide/svelte/icons/search";
+    import Sparkles from "@lucide/svelte/icons/sparkles";
+    import Info from "@lucide/svelte/icons/info";
+    import { scale, fly } from "svelte/transition";
+    import { goto } from "$app/navigation";
+    import { resolve } from "$app/paths";
+
+    let { data } = $props();
+
+    /*
+        The discovery payload streams in behind the shell, so the search box is
+        usable while ~3MB of recommendations is still on the wire.
+    */
+    const disco = streamed(() => data.discovery);
+
+    const heroItems = $derived(disco.value?.heroItems ?? []);
+    const feelingLuckyItems = $derived(disco.value?.feelingLuckyItems ?? []);
+    const searchExamples = $derived(disco.value?.searchExamples ?? []);
+    const recommendationBasis = $derived(disco.value?.recommendationBasis ?? null);
+    const searchStore = getContext<SearchStore>("searchStore");
+
+    let currentExampleIndex = $state(0);
+    let currentHeroIndex = $state(0);
+    let showEmptyState = $derived(
+        !searchStore.rawSearchString && Object.keys(searchStore.filterParams).length === 0
+    );
+    /** Search returns TPDB rows plus the occasional person/company. */
+    const searchHref = (item: Record<string, any>) => {
+        const type = item.media_type === "tv" ? "tv" : "movie";
+        if (item.indexer === "tpdb") {
+            return `/details/tpdb/${type}/${item.tpdb_uuid ?? item.id}`;
+        }
+        return `/details/media/${item.id}/${type}`;
+    };
+
+    let hasResults = $derived(Array.isArray(searchStore.results) && searchStore.results.length > 0);
+
+    // Hero item derived from rotation
+    let heroItem = $derived(heroItems && heroItems.length > 0 ? heroItems[currentHeroIndex] : null);
+
+    // Derived background image: Use hero item for empty state, first result for active search
+    let backgroundImage = $derived(
+        hasResults && searchStore.results[0]
+            ? (searchStore.results[0].backdrop_path ?? searchStore.results[0].poster_path)
+            : !hasResults && heroItem
+              ? (heroItem.backdrop_path ?? heroItem.poster_path)
+              : null
+    );
+
+    function handleFeelingLucky() {
+        if (!feelingLuckyItems?.length) return;
+        const randomItem = feelingLuckyItems[Math.floor(Math.random() * feelingLuckyItems.length)];
+        const route = `/details/tpdb/${randomItem.media_type === "tv" ? "tv" : "movie"}/${randomItem.tpdb_uuid ?? randomItem.id}`;
+        goto(route);
+    }
+
+    onMount(() => {
+        // Rotate search examples
+        const exampleInterval = setInterval(() => {
+            if (searchExamples?.length > 0) {
+                currentExampleIndex = (currentExampleIndex + 6) % searchExamples.length;
+            }
+        }, 4000);
+
+        // Rotate hero item every 8 seconds (faster for more dynamism)
+        const heroInterval = setInterval(() => {
+            if (heroItems?.length) {
+                currentHeroIndex = (currentHeroIndex + 1) % heroItems.length;
+            }
+        }, 8000);
+
+        return () => {
+            clearInterval(exampleInterval);
+            clearInterval(heroInterval);
+        };
+    });
+
+    $effect.pre(() => {
+        if (data.parsed) {
+            searchStore.syncQuery(data.parsed);
+        }
+    });
+
+    onDestroy(() => {
+        searchStore.clear();
+    });
+
+    const infiniteScroll: Action<HTMLDivElement> = (node) => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && !searchStore.loading && searchStore.hasMore) {
+                    searchStore.loadMore();
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        observer.observe(node);
+
+        return {
+            destroy() {
+                observer.disconnect();
+                searchStore.cancelPendingRequests();
+            }
+        };
+    };
+</script>
+
+<svelte:head>
+    <title>Explore - Riven</title>
+</svelte:head>
+
+<div class="relative min-h-screen w-full overflow-x-hidden">
+    <!-- Immersive Background -->
+    {#if backgroundImage}
+        <div class="fixed top-0 left-0 z-0 h-screen w-full transition-opacity duration-1000">
+            {#key backgroundImage}
+                <img
+                    alt=""
+                    class="absolute inset-0 h-full w-full object-cover opacity-30 blur-3xl"
+                    src={backgroundImage}
+                    loading="lazy"
+                    transition:scale={{ duration: 2000, start: 1.1, opacity: 0 }} />
+            {/key}
+            <div class="bg-background/80 absolute inset-0 mix-blend-multiply"></div>
+            <div
+                class="to-background absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent">
+            </div>
+            <div
+                class="to-background absolute inset-0 bg-gradient-to-b from-zinc-950/20 via-transparent to-transparent">
+            </div>
+        </div>
+    {:else}
+        <!-- Default subtle background -->
+        <div class="pointer-events-none fixed inset-0 z-0">
+            <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black">
+            </div>
+            <div
+                class="bg-primary/5 absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full blur-[120px]">
+            </div>
+            <div
+                class="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]">
+            </div>
+        </div>
+    {/if}
+
+    <!-- Content Container -->
+    <div
+        class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-6 px-6 pt-6 pb-24 md:px-12 md:pt-16 md:pb-12 lg:px-16">
+        <!-- Header -->
+        <div class="flex flex-col gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-col gap-2">
+                    <h1
+                        class="text-foreground text-3xl font-black tracking-tight drop-shadow-md sm:text-4xl lg:text-5xl">
+                        {#if searchStore.rawSearchString}
+                            Search Results
+                        {:else}
+                            Explore
+                        {/if}
+                    </h1>
+                    <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+                        {#if searchStore.rawSearchString}
+                            <span>Results for</span>
+                            <span
+                                class="bg-muted/50 border-border rounded-md border px-2 py-0.5 font-mono text-xs">
+                                {searchStore.rawSearchString}
+                            </span>
+                        {/if}
+                        {#if searchStore.totalResults > 0 && !searchStore.loading}
+                            {#if searchStore.rawSearchString}
+                                <span class="text-border">•</span>
+                            {/if}
+                            <span class="font-medium tabular-nums"
+                                >{searchStore.totalResults.toLocaleString()} results</span>
+                        {/if}
+                    </div>
+                </div>
+
+                <!-- Desktop filter tabs -->
+                <div class="hidden md:block">
+                    <AnimatedToggle
+                        options={[
+                            { label: "All", value: "both" },
+                            { label: "Movies", value: "movie" },
+                            { label: "TV Shows", value: "tv" },
+                            { label: "People", value: "person" },
+                            { label: "Studios", value: "company" }
+                        ]}
+                        value={searchStore.mediaType}
+                        onchange={(value) =>
+                            searchStore.setMediaType(
+                                value as "both" | "movie" | "tv" | "person" | "company"
+                            )} />
+                </div>
+            </div>
+
+            <!-- Mobile filter tabs - inline below header -->
+            <div class="-mx-1 block overflow-x-auto md:hidden">
+                <AnimatedToggle
+                    options={[
+                        { label: "All", value: "both" },
+                        { label: "Movies", value: "movie" },
+                        { label: "TV Shows", value: "tv" },
+                        { label: "People", value: "person" },
+                        { label: "Studios", value: "company" }
+                    ]}
+                    value={searchStore.mediaType}
+                    onchange={(value) =>
+                        searchStore.setMediaType(
+                            value as "both" | "movie" | "tv" | "person" | "company"
+                        )} />
+            </div>
+
+            <!-- Warnings -->
+            {#if searchStore.warnings?.length > 0}
+                <div
+                    class="rounded-lg border border-yellow-500 bg-yellow-500/10 p-4 text-yellow-600 dark:text-yellow-500">
+                    <p class="font-semibold">Warnings</p>
+                    <ul class="mt-1 list-disc pl-5 text-sm">
+                        {#each searchStore.warnings as warning}
+                            <li>{warning}</li>
+                        {/each}
+                    </ul>
+                </div>
+            {/if}
+
+            <!-- Error -->
+            {#if searchStore.error}
+                <div class="rounded-lg border border-red-500 bg-red-500/10 p-4 text-red-500">
+                    <p class="font-semibold">Error</p>
+                    <p class="text-sm">{searchStore.error}</p>
+                </div>
+            {/if}
+
+            <!-- Content -->
+            {#if showEmptyState}
+                <div class="relative flex flex-col gap-12 py-12 md:py-16">
+                    <!-- Hero section -->
+                    {#if disco.pending}
+                        <!--
+                            The hero's own shape while the recommendations are
+                            in flight. Sized to what replaces it so the search
+                            box above does not jump when it lands.
+                        -->
+                        <div class="flex flex-col gap-6 md:gap-8">
+                            <div class="max-w-3xl space-y-4">
+                                <Skeleton class="h-5 w-40" />
+                                <Skeleton class="h-12 w-3/4" />
+                                <Skeleton class="h-4 w-full" />
+                                <Skeleton class="h-4 w-5/6" />
+                            </div>
+                            <div class="flex gap-4 overflow-hidden">
+                                {#each Array.from({ length: 6 }, (_, i) => i) as tile (tile)}
+                                    <Skeleton
+                                        class="aspect-[2/3] w-[130px] shrink-0 rounded-xl md:w-[160px]" />
+                                {/each}
+                            </div>
+                        </div>
+                    {:else if heroItem}
+                        {#key heroItem.id}
+                            <div
+                                in:fly={{ y: 20, duration: 1000 }}
+                                class="flex flex-col gap-6 md:gap-8">
+                                <div class="max-w-3xl space-y-4">
+                                    {#if (heroItem as any).site_name}
+                                        <div class="flex items-center gap-4">
+                                            <div
+                                                class="bg-background/50 flex items-center gap-1.5 rounded-xl border border-white/10 px-2.5 py-1 backdrop-blur-md">
+                                                <span class="text-sm font-bold text-white"
+                                                    >{(heroItem as any).site_name}</span>
+                                            </div>
+                                        </div>
+                                    {/if}
+                                    <h2
+                                        class="text-foreground text-4xl font-black tracking-tight drop-shadow-lg md:text-6xl lg:text-7xl">
+                                        {heroItem.title}
+                                    </h2>
+                                    <p
+                                        class="text-muted-foreground line-clamp-3 text-lg md:text-xl md:leading-relaxed">
+                                        {heroItem.overview}
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-4 pt-2">
+                                        <Button
+                                            size="lg"
+                                            class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary rounded-xl border bg-transparent font-bold shadow-xl backdrop-blur-md"
+                                            href={`/details/tpdb/${heroItem.media_type === "tv" ? "tv" : "movie"}/${(heroItem as any).tpdb_uuid ?? heroItem.id}`}>
+                                            <Info class="mr-2 h-5 w-5" />
+                                            View Details
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="lg"
+                                            onclick={handleFeelingLucky}
+                                            class="border-border text-muted-foreground hover:bg-muted/10 hover:text-foreground hover:border-border/80 group rounded-xl border bg-transparent font-bold backdrop-blur-md">
+                                            <Sparkles
+                                                class="text-primary group-hover:text-primary mr-2 h-5 w-5 transition-transform duration-500 group-hover:rotate-12" />
+                                            Feeling Lucky
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        {/key}
+                    {:else}
+                        <!-- Fallback Hero (if no trending items) -->
+                        <div class="flex flex-col gap-4">
+                            <h2
+                                class="text-foreground text-4xl font-bold tracking-tight drop-shadow-sm md:text-5xl lg:text-6xl">
+                                What would you like to watch?
+                            </h2>
+                            <p class="text-muted-foreground text-lg md:text-xl">
+                                Search our entire library
+                            </p>
+                        </div>
+                    {/if}
+
+                    <!-- Search suggestions -->
+                    <div class="flex flex-col gap-6 pt-8">
+                        <h3
+                            class="text-muted-foreground text-sm font-medium tracking-wider uppercase">
+                            Trending now
+                        </h3>
+                        {#if disco.pending}
+                            <div class="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {#each Array.from({ length: 6 }, (_, i) => i) as chip (chip)}
+                                    <Skeleton class="h-12 w-full rounded-lg" />
+                                {/each}
+                            </div>
+                        {:else}
+                            {#key currentExampleIndex}
+                                <div class="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {#each (searchExamples ?? []).slice(currentExampleIndex, currentExampleIndex + 6) as example (example)}
+                                        <button
+                                            on:click={() => {
+                                                // Dispatch event for header search input
+                                                window.dispatchEvent(
+                                                    new CustomEvent("riven:search", {
+                                                        detail: { query: example }
+                                                    })
+                                                );
+                                            }}
+                                            class="bg-card/50 hover:bg-accent/50 group animate-in fade-in slide-in-from-bottom-2 hover:border-border/50 flex items-center gap-3 rounded-xl border border-transparent p-3 text-left backdrop-blur-sm transition-all duration-500 hover:scale-[1.02] md:gap-4 md:p-5">
+                                            <SearchIcon
+                                                class="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 transition-colors duration-300 md:h-5 md:w-5" />
+                                            <span
+                                                class="text-foreground text-sm leading-tight font-medium capitalize md:text-lg"
+                                                >{example}</span>
+                                        </button>
+                                    {/each}
+                                </div>
+                            {/key}
+                        {/if}
+                    </div>
+                </div>
+            {:else if hasResults}
+                <div class="divide-border/60 mx-auto flex w-full max-w-5xl flex-col divide-y">
+                    {#each searchStore.results as item (`${item.media_type}-${item.id}`)}
+                        <MediaRowItem {item} href={searchHref(item)} />
+                    {/each}
+                    {#if searchStore.loading}
+                        {#each Array(6) as _, i (i)}
+                            <div class="aspect-[2/3] w-full">
+                                <PortraitCardSkeleton />
+                            </div>
+                        {/each}
+                    {/if}
+                </div>
+            {:else if searchStore.loading}
+                <div
+                    class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
+                    {#each Array(12) as _, i (i)}
+                        <div class="aspect-[2/3] w-full">
+                            <PortraitCardSkeleton />
+                        </div>
+                    {/each}
+                </div>
+            {:else}
+                <div class="flex flex-col items-center justify-center gap-2 py-16">
+                    <p class="text-muted-foreground text-lg">No results found</p>
+                    <p class="text-muted-foreground text-sm">
+                        Try adjusting your search or filters
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => searchStore.clear()}
+                        class="text-muted-foreground hover:text-foreground border-border/50 mt-2 bg-transparent">
+                        Clear Search
+                    </Button>
+                </div>
+            {/if}
+
+            <div use:infiniteScroll></div>
+        </div>
+    </div>
+</div>

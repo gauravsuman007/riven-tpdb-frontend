@@ -99,7 +99,7 @@
     <title>AVN Awards · Riven</title>
 </svelte:head>
 
-<PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden">
+<PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden !pt-6">
     <div class="pointer-events-none fixed inset-0 z-0">
         <div class="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black"></div>
         <div
@@ -108,7 +108,7 @@
     </div>
 
     <div class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-10">
-        <header class="flex flex-col gap-2 pt-32 md:pt-0">
+        <header class="flex flex-col gap-2">
             <h1 class="font-serif text-5xl font-medium tracking-tight text-white/90 md:text-7xl">
                 AVN Awards
             </h1>

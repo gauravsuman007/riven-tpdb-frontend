@@ -58,20 +58,20 @@
         clearTimeout(debounceTimer);
         // Read directly from local state
         const query = inputValue.trim();
-        const currentlyExplore = page.url.pathname === "/explore";
+        const currentlySearch = page.url.pathname === "/search";
 
         // Client-first search: Immediately update store if we're on the explore page
         // This avoids waiting for the server round-trip (goto -> load -> data -> effect)
         // and fixes reactivity issues when typing quickly.
-        if (currentlyExplore) {
+        if (currentlySearch) {
             const parsed = parseSearchQuery(query);
             searchStore.syncQuery(parsed);
         }
 
-        await goto(query ? `/explore?query=${encodeURIComponent(query)}` : "/explore", {
+        await goto(query ? `/search?query=${encodeURIComponent(query)}` : "/search", {
             keepFocus: true,
             noScroll: true,
-            replaceState: currentlyExplore
+            replaceState: currentlySearch
         });
     }
 
