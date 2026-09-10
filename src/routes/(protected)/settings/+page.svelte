@@ -361,7 +361,7 @@
         {
             id: "metadata",
             label: "Metadata",
-            sections: ["metadata", "tpdb", "stashdb"]
+            sections: ["metadata", "tpdb", "adultempire_metadata", "stashdb"]
         },
         // Its own tab rather than a sub-section of TPDB. `content` holds the
         // brochure, the AVN corpus, user collections and the TPDB
