@@ -12,6 +12,7 @@
     placeholders that fill in reads as progress.
 -->
 <script lang="ts">
+    import RatingBadge from "$lib/components/media/rating-badge.svelte";
     import type { PageProps } from "./$types";
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import { streamed } from "$lib/streamed.svelte";
@@ -35,9 +36,7 @@
         below keeps working without a null check on each one. `stream.pending`
         is what the markup uses to tell "still loading" from "genuinely empty".
     */
-    const overview = $derived(
-        stream.value ?? { enabled: false, years: [], progress: {} }
-    );
+    const overview = $derived(stream.value ?? { enabled: false, years: [], progress: {} });
     // The form result covers the moment just after enabling, before the poll
     // has brought back a page with years on it.
     const enabled = $derived(overview.enabled || form?.enabled === true);
@@ -89,9 +88,14 @@
         <p class="truncate text-sm text-white/90 group-hover:text-white">{entry.title}</p>
         <!--
             The category is the reason the title is on this page, so it is the
-            subtitle rather than the studio.
+            subtitle rather than the studio. The audience rating sits beside it
+            because the two disagree usefully -- an award ballot and a
+            storefront's reviewers are not the same jury.
         -->
-        <p class="truncate font-mono text-xs text-amber-400/80">{entry.category ?? "Winner"}</p>
+        <p class="flex min-w-0 items-center gap-2 font-mono text-xs text-amber-400/80">
+            <RatingBadge rating={entry.rating} class="text-zinc-300" />
+            <span class="truncate">{entry.category ?? "Winner"}</span>
+        </p>
     </div>
 {/snippet}
 

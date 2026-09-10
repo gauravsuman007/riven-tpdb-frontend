@@ -11,6 +11,7 @@
                       kept visible as a known gap rather than hidden
 -->
 <script lang="ts">
+    import RatingBadge from "$lib/components/media/rating-badge.svelte";
     import type { PageProps } from "./$types";
     import { enhance } from "$app/forms";
     import { page } from "$app/state";
@@ -150,11 +151,20 @@
 
                                     <div class="min-w-0 flex-1">
                                         <p class="truncate text-white/90">{entry.title}</p>
-                                        {#if entry.studio || entry.performers?.length}
-                                            <p class="truncate font-mono text-xs text-zinc-400">
-                                                {[entry.studio, entry.performers?.join(", ")]
-                                                    .filter(Boolean)
-                                                    .join(" · ")}
+                                        {#if entry.rating || entry.studio || entry.performers?.length}
+                                            <p
+                                                class="flex min-w-0 items-center gap-2 font-mono text-xs text-zinc-400">
+                                                <RatingBadge rating={entry.rating} />
+                                                {#if entry.studio || entry.performers?.length}
+                                                    <span class="truncate">
+                                                        {[
+                                                            entry.studio,
+                                                            entry.performers?.join(", ")
+                                                        ]
+                                                            .filter(Boolean)
+                                                            .join(" · ")}
+                                                    </span>
+                                                {/if}
                                             </p>
                                         {/if}
                                     </div>

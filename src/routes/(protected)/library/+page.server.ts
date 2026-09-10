@@ -30,6 +30,12 @@ interface RivenLibraryItem {
     poster_path?: string | null;
     aired_at?: string | null;
     state?: string | null;
+    /**
+     * Out of five. TPDB writes a literal 0 on every record because it has no
+     * ranking at all, so this arrives as 0 far more often than as a score --
+     * `rating-badge.svelte` is where that is turned back into "no rating".
+     */
+    rating?: number | null;
 }
 
 function getItemType(type: string): ItemType {
@@ -92,6 +98,7 @@ function transformItems(items: RivenLibraryItem[]) {
                     type: getItemType(item.type),
                     riven_id: Number(item.id),
                     state: item.state ?? null,
+                    rating: item.rating ?? null,
                     badge: stateBadge(item.state)
                 };
             }
@@ -109,6 +116,7 @@ function transformItems(items: RivenLibraryItem[]) {
                 // (notably toGuid for the native player) need a real number.
                 riven_id: Number(item.id),
                 state: item.state ?? null,
+                rating: item.rating ?? null,
                 // The card renders whatever `badge` it is handed; deriving it
                 // here keeps the state vocabulary in one place.
                 badge: stateBadge(item.state)

@@ -20,7 +20,7 @@
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
-    import StarIcon from "@lucide/svelte/icons/star";
+    import RatingBadge from "$lib/components/media/rating-badge.svelte";
     import CheckIcon from "@lucide/svelte/icons/check";
     import InfoIcon from "@lucide/svelte/icons/info";
     import SparklesIcon from "@lucide/svelte/icons/sparkles";
@@ -106,7 +106,9 @@
                     {#each rows.notices as notice (notice)}
                         <li
                             class="flex items-start gap-2 rounded-xl border border-dashed border-white/20 px-4 py-3 text-sm text-zinc-300">
-                            <InfoIcon class="mt-0.5 size-4 shrink-0 text-white/50" aria-hidden="true" />
+                            <InfoIcon
+                                class="mt-0.5 size-4 shrink-0 text-white/50"
+                                aria-hidden="true" />
                             <span>{notice}</span>
                         </li>
                     {/each}
@@ -148,9 +150,9 @@
                         StashDB's tag vocabulary has not been read yet.
                     </div>
                     <p class="max-w-2xl font-mono text-xs text-zinc-400">
-                        It is what lets an intent like “outdoors” or “believable” be answered by
-                        tag rather than by guesswork — about 3,000 curated tags, grouped. Around
-                        thirty calls, once; the graph barely moves afterwards.
+                        It is what lets an intent like “outdoors” or “believable” be answered by tag
+                        rather than by guesswork — about 3,000 curated tags, grouped. Around thirty
+                        calls, once; the graph barely moves afterwards.
                     </p>
                     <form method="POST" action="?/ingest" use:enhance>
                         <Button type="submit" size="sm" variant="secondary">
@@ -252,12 +254,7 @@
                                             </p>
                                             <p
                                                 class="flex items-center gap-1.5 truncate font-mono text-xs text-zinc-400">
-                                                {#if item.rating}
-                                                    <StarIcon
-                                                        class="size-3 fill-amber-400 text-amber-400"
-                                                        aria-hidden="true" />
-                                                    {item.rating.toFixed(2)}
-                                                {/if}
+                                                <RatingBadge rating={item.rating} />
                                                 {#if item.year}
                                                     <span>{item.year}</span>
                                                 {/if}
