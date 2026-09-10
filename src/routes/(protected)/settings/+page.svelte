@@ -189,13 +189,37 @@
     function saveNow() {
         clearTimeout(autosaveTimer);
         lastFailed = undefined;
+        submitNow();
+    }
 
+    /**
+     * Post the current form value.
+     *
+     * NOT via `requestSubmit()`, which is what this used to do and why
+     * nothing on this page could be saved at all. The integration's submit
+     * handler reaches the request task only after an await, and a DOM event's
+     * `currentTarget` is nulled the moment dispatch finishes -- so by the
+     * time the task read it, it was null, and every save died on
+     * "Event currentTarget is not an HTMLFormElement" before a request was
+     * ever built. No POST left the browser, which is why the server logs
+     * showed nothing and the backend looked innocent: it was.
+     *
+     * Driving the task directly with a synthetic event removes the timing
+     * question entirely. The task reads exactly two things from it:
+     * `currentTarget`, which must be the real <form> because its method,
+     * action and enctype are read off a clone of it, and `submitter`, which
+     * is optional and null here since no button carries form* overrides.
+     */
+    function submitNow() {
         const form_ = formHost?.querySelector("form");
 
         if (!form_) return;
 
         inFlight = snapshot();
-        form_.requestSubmit();
+        request.run(getValueSnapshot(form), {
+            currentTarget: form_,
+            submitter: null
+        } as unknown as SubmitEvent);
     }
 
     /**
@@ -215,10 +239,13 @@
      *  - saves never overlap: while one is in flight the watcher waits, and
      *    the debounce restarts, so a burst of typing is one request.
      *
-     * The submit path itself is unchanged -- this calls `requestSubmit()` on
-     * the real <form>, so the integration's own enhanced handler still runs.
-     * Calling anything else would drop the form to a native POST, which the
-     * server parses down a different branch (see the comment on `<Form>`).
+     * Submitting goes through `submitNow()` below, which drives the request
+     * task directly. It used to call `requestSubmit()` on the real <form>,
+     * on the reasoning that anything else would drop to a native POST the
+     * server parses down a different branch -- true of a native submit, but
+     * `submitNow()` is not one: it runs the integration's own task, just
+     * without depending on a DOM event that no longer exists by the time the
+     * task reads it. See the note on `submitNow`.
      */
     const AUTOSAVE_DEBOUNCE_MS = 900;
 
@@ -294,14 +321,7 @@
         if (request.isProcessed) return;
 
         clearTimeout(autosaveTimer);
-        autosaveTimer = setTimeout(() => {
-            const form_ = formHost?.querySelector("form");
-
-            if (!form_) return;
-
-            inFlight = snapshot();
-            form_.requestSubmit();
-        }, AUTOSAVE_DEBOUNCE_MS);
+        autosaveTimer = setTimeout(submitNow, AUTOSAVE_DEBOUNCE_MS);
 
         return () => clearTimeout(autosaveTimer);
     });
@@ -556,9 +576,8 @@
                     automatically, and never writes. A button is the recourse
                     that was missing, and it also answers "is it stuck?"
                     without the user having to guess.
-                    It submits through requestSubmit() on the real form, the
-                    same path autosave uses, so the integration's enhanced
-                    handler still runs -- see the comment on <Form>.
+                    It posts through submitNow(), the same path autosave
+                    uses, so the integration's own request task still runs.
                 -->
                 <div
                     class="border-border/60 bg-background/80 text-muted-foreground sticky bottom-0 mt-8 flex items-center gap-2 border-t py-4 text-xs backdrop-blur-md"
