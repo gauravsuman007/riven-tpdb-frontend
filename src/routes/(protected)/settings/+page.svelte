@@ -179,6 +179,26 @@
     setFormContext(form);
 
     /**
+     * Submit immediately, bypassing the debounce and the change detection.
+     *
+     * Unconditional on purpose: it must work even when the watcher believes
+     * there is nothing to save, since that belief is exactly what is wrong
+     * in the cases this button exists for. It also clears `lastFailed`, so a
+     * value that was rejected once can be retried deliberately.
+     */
+    function saveNow() {
+        clearTimeout(autosaveTimer);
+        lastFailed = undefined;
+
+        const form_ = formHost?.querySelector("form");
+
+        if (!form_) return;
+
+        inFlight = snapshot();
+        form_.requestSubmit();
+    }
+
+    /**
      * Autosave.
      *
      * There is no Save button: every field commits on its own, a short pause
@@ -224,12 +244,29 @@
     let inFlight: string | undefined;
     let lastFailed: string | undefined;
 
+    /*
+        A snapshot that cannot be serialised is not a reason to break the
+        page -- but it IS a reason to stop pretending everything is fine.
+        Autosave is the only save path, so a throw here silently disables
+        saving entirely: edits stay on screen, the status bar still reads
+        "Changes save automatically", and nothing is ever written. Swallowing
+        it was how that state became indistinguishable from a working page.
+    */
+    let snapshotBroken = $state(false);
+
     function snapshot(): string | undefined {
         try {
-            return JSON.stringify(getValueSnapshot(form));
-        } catch {
-            // A snapshot that cannot be serialised is not a reason to break
-            // the page; it only means this edit is not autosaved.
+            const value = JSON.stringify(getValueSnapshot(form));
+            snapshotBroken = false;
+            return value;
+        } catch (err) {
+            if (!snapshotBroken) {
+                snapshotBroken = true;
+                console.error("[settings] cannot snapshot form value", err);
+                toast.error("Autosave is unavailable", {
+                    description: "Use Save now to write your changes."
+                });
+            }
             return undefined;
         }
     }
@@ -507,10 +544,21 @@
                 {/each}
 
                 <!--
-                    Status, not a control: there is nothing to press. It stays
-                    sticky because "did that save?" is the question this bar
-                    exists to answer, and an indicator you have to scroll to
-                    find does not answer it.
+                    Mostly status -- "did that save?" is the question this bar
+                    exists to answer, which is why it is sticky rather than
+                    something you scroll to find.
+                    It also carries an explicit Save, which it deliberately
+                    did not before. Autosave is the only write path, and every
+                    way it can fail (a value that will not serialise, a
+                    debounce cancelled by a re-render, a snapshot equal to one
+                    already rejected) fails by doing nothing at all -- leaving
+                    a page that shows your edits, claims it saves
+                    automatically, and never writes. A button is the recourse
+                    that was missing, and it also answers "is it stuck?"
+                    without the user having to guess.
+                    It submits through requestSubmit() on the real form, the
+                    same path autosave uses, so the integration's enhanced
+                    handler still runs -- see the comment on <Form>.
                 -->
                 <div
                     class="border-border/60 bg-background/80 text-muted-foreground sticky bottom-0 mt-8 flex items-center gap-2 border-t py-4 text-xs backdrop-blur-md"
@@ -525,6 +573,14 @@
                         <SaveIcon class="size-3.5" />
                         Changes save automatically, across every tab
                     {/if}
+
+                    <button
+                        type="button"
+                        class="border-border/60 hover:bg-muted/60 ml-auto rounded-md border px-3 py-1.5 font-medium disabled:opacity-50"
+                        disabled={saveState === "saving"}
+                        onclick={saveNow}>
+                        Save now
+                    </button>
                 </div>
             </Form>
         </div>
