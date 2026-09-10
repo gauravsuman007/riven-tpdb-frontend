@@ -29,6 +29,13 @@ export const GET: RequestHandler = async ({ locals, request }) => {
             headers: { cookie: request.headers.get("cookie") ?? "" }
         });
 
+        /*
+            An empty list on a refusal, not the refusal itself. The common
+            cause is a viewer signed in by network address alone, who has
+            no cookie to forward and no transferable session either -- so
+            there is nothing they could approve, and a prompt they cannot
+            answer is worse than no prompt.
+        */
         if (!response.ok) return json({ pending: [] });
 
         return json(await response.json());
@@ -61,6 +68,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
             })
         });
 
+        /*
+            The refusal text IS passed through here, unlike the poll: this
+            is a deliberate press, and "nothing happened" would be the
+            worst possible answer to it.
+        */
         return json(await response.json(), { status: response.status });
     } catch {
         return json({ ok: false, message: "Could not reach the TV service." }, { status: 502 });

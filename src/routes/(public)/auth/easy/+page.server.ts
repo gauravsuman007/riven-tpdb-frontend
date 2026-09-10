@@ -17,6 +17,17 @@ const RIVEN_TV = (env.RIVEN_TV_URL || "http://riven-tv:3200").replace(/\/+$/, ""
 const HANDLE = "riven_pair_handle";
 const HANDLE_MAX_AGE = 4 * 60;
 
+/*
+    `secure` has to follow the scheme, not default to on.
+
+    SvelteKit sets `secure: true` unless the host is localhost, and this
+    app is served over plain HTTP on the LAN -- so the default marks every
+    cookie here Secure and the browser then never sends one back. It fails
+    silently and looks exactly like a pairing that expired, which is how it
+    was found: the handle came back "expired" one second after being set.
+*/
+const secureFor = (url: URL) => url.protocol === "https:";
+
 export const load: PageServerLoad = async ({ locals }) => {
     if (locals.user) redirect(303, "/");
 
@@ -25,7 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
     /** Ask, and show the number this browser must be identified by. */
-    start: async ({ cookies, request }) => {
+    start: async ({ cookies, request, url }) => {
         const label = /mobile|android|iphone/i.test(request.headers.get("user-agent") ?? "")
             ? "A phone or tablet"
             : "A browser";
@@ -46,6 +57,7 @@ export const actions: Actions = {
             cookies.set(HANDLE, pairing.id, {
                 path: "/auth/easy",
                 httpOnly: true,
+                secure: secureFor(url),
                 sameSite: "lax",
                 maxAge: HANDLE_MAX_AGE
             });
@@ -66,7 +78,7 @@ export const actions: Actions = {
      * mechanism: the approver's session becomes this browser's session,
      * which is exactly what approving meant.
      */
-    check: async ({ cookies }) => {
+    check: async ({ cookies, url }) => {
         const handle = cookies.get(HANDLE);
 
         if (!handle) return fail(400, { error: "That request has expired. Start again." });
@@ -108,6 +120,7 @@ export const actions: Actions = {
             cookies.set(pair.slice(0, equals).trim(), pair.slice(equals + 1).trim(), {
                 path: "/",
                 httpOnly: true,
+                secure: secureFor(url),
                 sameSite: "lax",
                 maxAge: 60 * 60 * 24 * 30
             });
