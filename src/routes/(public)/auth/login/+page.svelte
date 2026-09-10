@@ -310,6 +310,18 @@
                     </Card.Root>
 
                     <!--
+                        The alternative to a password on a device with a bad
+                        keyboard -- a television, or a phone across the room.
+                        A link, not a form: it starts nothing, it only opens
+                        the page that does.
+                    -->
+                    <div class="mt-4 flex justify-center">
+                        <a class="text-sm underline text-muted-foreground" href="/auth/easy">
+                            Easy sign in from another device
+                        </a>
+                    </div>
+
+                    <!--
                         The way out. Signing out inside the Jellyfin client
                         lands here, and the WebView has no address bar and no
                         back gesture out of the web content -- so without this

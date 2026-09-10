@@ -2,6 +2,7 @@
     import OverlayPlayer from "$lib/components/media/overlay-player.svelte";
     import { player } from "$lib/stores/player.svelte";
     import AppLockGuard from "$lib/components/app-lock-guard.svelte";
+    import TvPairPrompt from "$lib/components/tv-pair-prompt.svelte";
     import "@fontsource/oxanium/300.css";
     import "@fontsource/oxanium/400.css";
     import "@fontsource/oxanium/500.css";
@@ -92,3 +93,9 @@
 
 <!-- Rendered once: play buttons anywhere in the app open it via the store. -->
 <OverlayPlayer />
+<!--
+    Below the player in the tree and it checks `player.current` itself:
+    a modal over a film is the worst thing an app can do, and a pairing
+    request waits three minutes, so it can wait for the film to be closed.
+-->
+<TvPairPrompt />
