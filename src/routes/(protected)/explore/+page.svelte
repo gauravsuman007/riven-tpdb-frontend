@@ -113,6 +113,33 @@
                 </ul>
             {/if}
 
+            {#if data.categoryIndex && !data.categoryIndex.built}
+                <div
+                    class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+                    <div class="flex items-center gap-2 text-sm text-white/90">
+                        <TagsIcon class="size-4" aria-hidden="true" />
+                        Movie genres have not been indexed yet.
+                    </div>
+                    <p class="max-w-2xl font-mono text-xs text-zinc-400">
+                        An Adult Empire product page lists length, year, studio and cast — and no
+                        genre at all. The genres live in the site's {data.categoryIndex.categories
+                            .length} browsable categories instead, so they are read from that side:
+                        {data.categoryIndex.categories.join(", ")}. A few minutes of
+                        one-request-per-second crawling, in the background.
+                    </p>
+                    <form method="POST" action="?/indexCategories" use:enhance>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            variant="secondary"
+                            disabled={data.categoryIndex.running}>
+                            <TagsIcon class="mr-2 size-4" aria-hidden="true" />
+                            {data.categoryIndex.running ? "Indexing…" : "Index movie genres"}
+                        </Button>
+                    </form>
+                </div>
+            {/if}
+
             {#if data.vocabulary && !data.vocabulary.ingested}
                 <div
                     class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">

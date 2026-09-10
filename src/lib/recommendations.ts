@@ -79,6 +79,15 @@ export interface VocabularyStatus {
     scene_engine_available: boolean;
 }
 
+export interface CategoryIndexStatus {
+    built: boolean;
+    /** A crawl is minutes of rate-limited requests; this says one is in flight. */
+    running: boolean;
+    titles: number;
+    categories: string[];
+    fetched_at: number | null;
+}
+
 interface FetchOptions {
     baseUrl: string;
     apiKey: string;
@@ -116,6 +125,49 @@ export async function getRows(options: FetchOptions, perRail = 20): Promise<Expl
             notices: ["Could not reach the recommendation engine."]
         }
     );
+}
+
+export async function getCategoryIndex(
+    options: FetchOptions
+): Promise<CategoryIndexStatus | null> {
+    return get<CategoryIndexStatus>("/explore/categories", options);
+}
+
+/**
+ * Build the movie corpus's genre index from Adult Empire's categories.
+ *
+ * Returns as soon as the crawl has been started, not when it finishes: an
+ * Adult Empire product page carries no genre at all, so this reads the
+ * category listings instead, which is a few minutes of one-request-per-second
+ * courtesy crawling. Poll `getCategoryIndex` for progress.
+ */
+export async function syncCategoryIndex({
+    baseUrl,
+    apiKey,
+    fetch
+}: FetchOptions): Promise<{ ok: boolean; message: string }> {
+    try {
+        const response = await fetch(`${baseUrl}/api/v1/explore/categories/sync`, {
+            method: "POST",
+            headers: { "x-api-key": apiKey }
+        });
+
+        const body = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            return { ok: false, message: body.detail ?? `Failed (${response.status})` };
+        }
+
+        return {
+            ok: true,
+            message: body.running
+                ? "Already indexing; leave it running."
+                : "Indexing Adult Empire's categories. This takes a few minutes — reload to see progress."
+        };
+    } catch (err) {
+        logger.error(`category sync threw: ${err}`);
+        return { ok: false, message: "Could not reach the backend" };
+    }
 }
 
 export async function listIntents(options: FetchOptions): Promise<Intent[]> {

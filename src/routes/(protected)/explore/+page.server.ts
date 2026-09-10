@@ -1,6 +1,12 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
-import { getRows, getVocabulary, ingestVocabulary } from "$lib/recommendations";
+import {
+    getCategoryIndex,
+    getRows,
+    getVocabulary,
+    ingestVocabulary,
+    syncCategoryIndex
+} from "$lib/recommendations";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -28,6 +34,7 @@ export const load: PageServerLoad = async (event) => {
     */
     return {
         vocabulary: await getVocabulary(options),
+        categoryIndex: await getCategoryIndex(options),
         rows: getRows(options, 20)
     };
 };
@@ -42,6 +49,29 @@ export const actions: Actions = {
     */
     ingest: async (event) => {
         const result = await ingestVocabulary({
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        });
+
+        if (!result.ok) {
+            return fail(409, { message: result.message });
+        }
+
+        return { message: result.message };
+    },
+
+    /*
+        Build the movie corpus's genre index. Separate from the vocabulary
+        ingest above because they solve different halves of the same gap: the
+        vocabulary says what a tag *means*, this supplies the tags at all for
+        movies. An Adult Empire product page carries length, year, studio and
+        cast and no genre whatsoever, so the categories have to be read from
+        the other direction -- which is a few minutes of courtesy-delayed
+        crawling, and therefore runs in the background.
+    */
+    indexCategories: async (event) => {
+        const result = await syncCategoryIndex({
             baseUrl: event.locals.backendUrl,
             apiKey: event.locals.apiKey,
             fetch: event.fetch
