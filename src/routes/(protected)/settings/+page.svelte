@@ -295,14 +295,31 @@
                 "tracemalloc"
             ]
         },
-        { id: "tpdb", label: "TPDB", sections: ["tpdb", "indexer"] },
+        // One tab for metadata, not one per provider. `metadata` leads because
+        // it is the setting that decides which of the two below is consulted
+        // first -- reading the provider order and then the provider it points
+        // at is the order the user thinks in. Splitting TPDB and StashDB into
+        // separate tabs would also have left the order control with no
+        // obvious home on either of them.
+        {
+            id: "metadata",
+            label: "Metadata",
+            sections: ["metadata", "tpdb", "stashdb"]
+        },
         // Its own tab rather than a sub-section of TPDB. `content` holds the
         // brochure, the AVN corpus, user collections and the TPDB
         // subscriptions -- four independent things, and pages elsewhere point
         // users at "Settings -> Content", which was a dead end while it was
         // buried under TPDB.
         { id: "content", label: "Content", sections: ["content"] },
-        { id: "scraping", label: "Scraping", sections: ["scraping", "ranking"] },
+        // `indexer` moved here from the old TPDB tab. Its one field is a
+        // delay before a released title is scraped, which is scraping
+        // scheduling and has nothing to do with the metadata provider.
+        {
+            id: "scraping",
+            label: "Scraping",
+            sections: ["scraping", "indexer", "ranking"]
+        },
         { id: "downloaders", label: "Downloaders", sections: ["downloaders"] },
         // `jellyfin_server` sits beside `updaters` deliberately: they are the
         // two directions of the same integration. `updaters` tells a real
@@ -311,9 +328,14 @@
         {
             id: "library",
             label: "Library",
-            sections: ["filesystem", "stream", "updaters", "jellyfin_server"]
+            sections: [
+                "filesystem",
+                "stream",
+                "updaters",
+                "jellyfin_server",
+                "post_processing"
+            ]
         },
-        { id: "post", label: "Post-processing", sections: ["post_processing"] },
         // Its own tab rather than falling through to "Other". The schema
         // fields below are only half of it -- logging in and picking an exit
         // node are live actions against the daemon, so this tab also carries
@@ -353,8 +375,19 @@
     */
     const TAB_PARAM = "tab";
 
+    /*
+        Tab ids that used to exist and no longer do. Without these, a
+        bookmarked or shared ?tab= link silently lands on General -- the same
+        lost-your-place problem the TAB_PARAM above exists to prevent.
+    */
+    const RENAMED_TABS: Record<string, string> = {
+        tpdb: "metadata",
+        post: "library"
+    };
+
     function requestedTab(): string {
-        const id = page.url.searchParams.get(TAB_PARAM);
+        const raw = page.url.searchParams.get(TAB_PARAM);
+        const id = raw ? (RENAMED_TABS[raw] ?? raw) : raw;
         const known = [...TABS.map((tab) => tab.id), "other"];
         return id && known.includes(id) ? id : TABS[0].id;
     }
