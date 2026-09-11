@@ -23,9 +23,12 @@ const logger = createScopedLogger("home");
  * assumes a TPDB uuid and would 404 on exactly the titles that are not yet in
  * the library -- which is every title the engine recommends.
  */
-function heroItem(item: Recommendation): TMDBNowPlayingItem {
+function heroItem(item: Recommendation, index: number): TMDBNowPlayingItem {
     return {
-        id: item.entry_id ?? 0,
+        // The carousel keys on `id`. A scene result has no entry id, so every
+        // one of them would key as 0 and Svelte would fail on the duplicate;
+        // the index is the fallback that keeps them distinct.
+        id: item.entry_id ?? -(index + 1),
         media_type: item.kind === "scene" ? "tv" : "movie",
         title: item.title,
         backdrop_path: null,

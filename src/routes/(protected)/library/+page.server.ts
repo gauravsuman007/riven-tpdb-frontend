@@ -36,6 +36,8 @@ interface RivenLibraryItem {
      * `rating-badge.svelte` is where that is turned back into "no rating".
      */
     rating?: number | null;
+    /** The studio. Named `site_name` upstream, where a scene site is the unit. */
+    site_name?: string | null;
 }
 
 function getItemType(type: string): ItemType {
@@ -99,6 +101,10 @@ function transformItems(items: RivenLibraryItem[]) {
                     riven_id: Number(item.id),
                     state: item.state ?? null,
                     rating: item.rating ?? null,
+                    // Carried for "group by studio", which has nothing to
+                    // group on without it -- every title would read as
+                    // "Unknown studio".
+                    site_name: item.site_name ?? null,
                     badge: stateBadge(item.state)
                 };
             }
@@ -117,6 +123,7 @@ function transformItems(items: RivenLibraryItem[]) {
                 riven_id: Number(item.id),
                 state: item.state ?? null,
                 rating: item.rating ?? null,
+                site_name: item.site_name ?? null,
                 // The card renders whatever `badge` it is handed; deriving it
                 // here keeps the state vocabulary in one place.
                 badge: stateBadge(item.state)
