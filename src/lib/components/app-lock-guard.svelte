@@ -96,6 +96,15 @@
         ).filter((element) => !element.paused && !element.ended);
     }
 
+    /**
+     * What the lock paused, so unlocking can start it again.
+     *
+     * Only what THIS component stopped. Anything the viewer had already
+     * paused before the screen locked stays paused -- resuming it would be
+     * the lock screen starting a film nobody asked it to.
+     */
+    let interrupted: HTMLMediaElement[] = [];
+
     function lock(): void {
         if (locked) return;
 
@@ -121,7 +130,8 @@
             (ExoPlayer, MX) is a different process with its own lifecycle and
             is deliberately left alone.
         */
-        for (const element of playingMedia()) element.pause();
+        interrupted = playingMedia();
+        for (const element of interrupted) element.pause();
     }
 
     function unlocked(): void {
@@ -130,6 +140,27 @@
         digits = "";
         message = "";
         persist(Date.now());
+
+        /*
+            Pick the film back up where it stopped.
+
+            The overlay never navigates, so the element still holds its own
+            position and its buffer -- there is nothing to seek to and
+            nothing to reload, only a play() to make. Without this, entering
+            the right code left a paused picture and no obvious reason why,
+            which reads as the unlock not having worked.
+
+            A rejected play() is ignored on purpose: some engines refuse one
+            that is not close enough to a real gesture, and the viewer is
+            then left with the controls they would have used anyway.
+        */
+        const resume = interrupted;
+        interrupted = [];
+
+        for (const element of resume) {
+            const attempt = element.play();
+            if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
+        }
     }
 
     function lockIfStale(): void {
