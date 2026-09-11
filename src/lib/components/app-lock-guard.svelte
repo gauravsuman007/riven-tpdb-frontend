@@ -392,8 +392,16 @@
     .app-lock--on {
         position: fixed;
         inset: 0;
-        /* Above everything, including the video overlay player. */
-        z-index: 2147483647;
+        /*
+            Above everything, including the video overlay player -- but ONE
+            below the maximum, deliberately. The multiplexer's back-to-apps
+            button sits at 2147483647 while the screen is locked (see the
+            cover stylesheet in `hooks.server.ts`), and it has to stay
+            pressable: it is the only way off a locked app on a television.
+            Equal z-indexes would leave the winner to DOM order, and both
+            elements are appended to <body> by scripts that race.
+        */
+        z-index: 2147483646;
         display: flex;
         align-items: center;
         justify-content: center;

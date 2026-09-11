@@ -200,7 +200,17 @@
 
         if (itemId !== undefined) {
             try {
-                const response = await fetch(`/api/stream/${itemId}/direct`);
+                /*
+                    `partQuery` is not optional here, and leaving it off was
+                    the whole multi-part bug: every other stream URL on this
+                    component carries the part, but the CDN hand-off did not.
+                    The backend defaults a missing `part` to 0, so a playlist
+                    of six scenes offered the viewer six entries and played
+                    the first one six times -- and only when direct play was
+                    available, which is why it looked like the player ignoring
+                    the track list rather than a URL missing a parameter.
+                */
+                const response = await fetch(`/api/stream/${itemId}/direct${partQuery}`);
                 const offer: { url?: string | null; reason?: string | null } =
                     await response.json();
 

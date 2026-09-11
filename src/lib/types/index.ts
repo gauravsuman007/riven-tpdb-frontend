@@ -14,6 +14,12 @@ export interface Stream {
     leechers?: number | null;
     size?: number | null;
     indexer?: string | null;
+    // True for a release the adult matcher REJECTED, returned only when a
+    // manual scrape asked to see them (`include_filtered`). Still pickable:
+    // the point is to let someone overrule a filter they can see.
+    filtered?: boolean;
+    // What the matcher weighed when it turned the release down.
+    filter_reason?: string | null;
     [key: string]: unknown;
 }
 

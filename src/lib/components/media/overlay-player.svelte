@@ -965,7 +965,29 @@
                 */
                 const response = await fetch(`/api/stream/${target.itemId}/external_url`);
 
-                if (response.ok) url = (await response.json()).url ?? null;
+                if (response.ok) {
+                    const payload = await response.json();
+
+                    url = payload.url ?? null;
+
+                    /*
+                        A MULTI-FILE release must go over as the playlist URL,
+                        not as an item id.
+
+                        Both native bridges address a video by Jellyfin id,
+                        and an id names one stream -- the backend defaults it
+                        to part 0. So handing the id across for a six-scene
+                        compilation started the external player on scene one
+                        with no way to reach the rest, which is exactly what
+                        was reported. `/Videos/{guid}/playlist.m3u` is the one
+                        form that can carry the whole release, and it already
+                        embeds a play-session token per entry, so dropping to
+                        openExternal() here costs nothing but the chooser --
+                        which `.m3u` earns a place in the same way `.mp4`
+                        does (see external_url/+server.ts).
+                    */
+                    if ((payload.parts ?? 1) > 1 && url) itemId = null;
+                }
             }
 
             /*

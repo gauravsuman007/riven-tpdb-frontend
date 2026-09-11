@@ -30,8 +30,15 @@
     {#if showCheckbox}
         <Checkbox checked={isSelected} onCheckedChange={() => onSelect(magnet)} class="mt-4" />
     {/if}
+    <!--
+        A filtered-out release is dimmed and outlined, never hidden and never
+        disabled: it was shown because someone asked to see it, and the reason
+        to show it is so they can pick it anyway.
+    -->
     <Card.Root
-        class="border-border hover:border-primary flex-1 cursor-pointer transition-all hover:shadow-md"
+        class="border-border hover:border-primary flex-1 cursor-pointer transition-all hover:shadow-md {stream.filtered
+            ? 'border-dashed opacity-60 hover:opacity-100'
+            : ''}"
         onclick={() => onScrape(magnet)}>
         <Card.Content class="px-4 py-3">
             <div class="flex flex-col gap-2">
@@ -43,6 +50,24 @@
                         Rank: {stream.rank}
                     </Badge>
                 </div>
+
+                {#if stream.filtered}
+                    <!--
+                        The evidence the matcher weighed, verbatim. A bare
+                        "filtered" label would leave the viewer exactly as
+                        unable to judge the call as an empty list did.
+                    -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" class="border-destructive text-destructive">
+                            Filtered out
+                        </Badge>
+                        {#if stream.filter_reason}
+                            <span class="text-muted-foreground text-xs">
+                                {stream.filter_reason}
+                            </span>
+                        {/if}
+                    </div>
+                {/if}
 
                 <div class="flex flex-wrap gap-2">
                     {#if stream.parsed_data.resolution}

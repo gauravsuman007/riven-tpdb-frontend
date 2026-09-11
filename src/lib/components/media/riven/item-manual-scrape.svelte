@@ -253,6 +253,20 @@
     // from a scraper that ran fine and found nothing. Cleared at the start of
     // each new scrape.
     let scraperErrors = $state<{ service: string; message: string }[]>([]);
+
+    /*
+        Show the releases the adult matcher turned down, alongside the ones it
+        kept and ranked on the same scale.
+
+        A manual scrape already bypasses every other filter, so the matcher is
+        the only thing left that can drop a candidate -- and an empty pick list
+        gave no way to tell "nothing was found" from "seventeen were found and
+        discarded". Off by default: the filter is right far more often than
+        not, and the accepted releases are what someone is normally choosing
+        between. Re-scrapes when toggled, because the rejected set is built
+        server-side and is not in the results already on screen.
+    */
+    let showFiltered = $state(false);
     let eventSourceRef = $state<EventSource | null>(null);
 
     const categoryIcons: Record<string, typeof Monitor> = {
@@ -267,6 +281,26 @@
 
     // Track which categories are expanded (all collapsed by default)
     let expandedCategories = $state(new SvelteSet<string>());
+
+    /**
+     * Rank order, with rejected releases below every accepted one.
+     *
+     * Rank alone would interleave them, and a rejected release can outscore an
+     * accepted one -- the two numbers measure different things once the
+     * matcher has had its say. Keeping the groups apart is what makes the list
+     * readable as "these, and then the ones that were filtered out".
+     */
+    function byRankAcceptedFirst(
+        a: { stream: Stream },
+        b: { stream: Stream }
+    ): number {
+        const left = a.stream.filtered ? 1 : 0;
+        const right = b.stream.filtered ? 1 : 0;
+
+        if (left !== right) return left - right;
+
+        return b.stream.rank - a.stream.rank;
+    }
 
     let filteredStreams = $derived.by(() => {
         let result = streams;
@@ -869,6 +903,8 @@
             params.set("custom_imdb_id", customImdbId);
         }
 
+        if (showFiltered) params.set("include_filtered", "true");
+
         // Add ranking overrides
         const rankingOverrides = getRankingOverrides();
 
@@ -926,9 +962,7 @@
                                 })
                             );
 
-                            streams = streamArray.sort(
-                                (a, b) => (b.stream as Stream).rank - (a.stream as Stream).rank
-                            );
+                            streams = streamArray.sort(byRankAcceptedFirst);
                         }
                     } else if (data.event === "complete") {
                         streamingProgress = {
@@ -949,9 +983,7 @@
                                 })
                             );
 
-                            streams = streamArray.sort(
-                                (a, b) => (b.stream as Stream).rank - (a.stream as Stream).rank
-                            );
+                            streams = streamArray.sort(byRankAcceptedFirst);
                         }
 
                         eventSource.close();
@@ -1671,6 +1703,25 @@
                                     class="pl-9"
                                     bind:value={searchQuery} />
                             </div>
+
+                            <!--
+                                Re-runs the scrape rather than filtering what is
+                                on screen: the rejected releases are decided
+                                server-side and were never sent.
+                            -->
+                            <label
+                                class="text-muted-foreground flex items-center gap-2 text-xs select-none">
+                                <input
+                                    type="checkbox"
+                                    class="accent-primary h-3.5 w-3.5"
+                                    checked={showFiltered}
+                                    disabled={loading}
+                                    onchange={(event) => {
+                                        showFiltered = event.currentTarget.checked;
+                                        handleFetchStreams();
+                                    }} />
+                                Show filtered-out releases, with their rank
+                            </label>
                         </div>
                     {/if}
 

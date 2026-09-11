@@ -270,7 +270,25 @@ const handleTVDBCookie: Handle = async ({ event, resolve }) => {
  * losing the session. An overlay never navigates, so the page -- and the
  * client's connection to it -- stays exactly where it was.
  */
-const APP_LOCK_HEAD = `<style id="app-lock-style">html[data-app-locked] body>*:not(#app-lock-overlay){visibility:hidden!important}html[data-app-locked]{background:#0b0b0f!important}</style><script>(function(){try{var s=JSON.parse(localStorage.getItem("riven.applock")||"null");if(!s||!s.enabled)return;var idle=Date.now()-(s.lastActive||0);if(idle<Math.max(1,s.timeoutMinutes||10)*60000)return;document.documentElement.setAttribute("data-app-locked","1")}catch(e){}})()<\/script>`;
+/*
+    `#mux-launcher` is exempt from the cover, and that is not cosmetic.
+
+    The multiplexer proxy injects one button -- back to the app picker --
+    straight into <body> of every page it serves (see `inject.ts` in
+    jellyfin-client-multiplexer). The cover rule below hides `body > *`, so
+    the lock took the only way out of this app with it: someone who could not
+    remember the PIN was stranded, on a television, with no keyboard and no
+    other control on screen. "Sign out instead" is not the same thing -- it
+    ends the session rather than switching apps.
+
+    Leaving it reachable gives nothing away. The button navigates AWAY from
+    the locked app; it shows no content, and coming back re-locks, because the
+    stamp this reads is still stale. The z-index is raised past the overlay in
+    the same breath -- being visible under an opaque cover is not being
+    visible -- and the overlay drops one below the maximum to make room, which
+    still leaves it above every other layer in the app.
+*/
+const APP_LOCK_HEAD = `<style id="app-lock-style">html[data-app-locked] body>*:not(#app-lock-overlay):not(#mux-launcher){visibility:hidden!important}html[data-app-locked] #mux-launcher{visibility:visible!important;z-index:2147483647!important;opacity:1!important}html[data-app-locked]{background:#0b0b0f!important}</style><script>(function(){try{var s=JSON.parse(localStorage.getItem("riven.applock")||"null");if(!s||!s.enabled)return;var idle=Date.now()-(s.lastActive||0);if(idle<Math.max(1,s.timeoutMinutes||10)*60000)return;document.documentElement.setAttribute("data-app-locked","1")}catch(e){}})()<\/script>`;
 
 const injectAppLockCover: Handle = async ({ event, resolve }) => {
     /*
