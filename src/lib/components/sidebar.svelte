@@ -18,6 +18,7 @@
     import Compass from "@lucide/svelte/icons/compass";
     import User from "@lucide/svelte/icons/user";
     import { getContext } from "svelte";
+    import { NAV_ITEMS } from "$lib/tv/manifest";
     import Tooltip from "./tooltip.svelte";
     import ThemeSwitcher from "./theme-switcher.svelte";
     import ShellExit from "$lib/components/shell-exit.svelte";
@@ -25,16 +26,31 @@
     import { cubicOut } from "svelte/easing";
     import type { createSidebarStore } from "$lib/stores/global.svelte";
 
-    const navItems = [
-        { href: "/", icon: Home, label: "Home" },
-        { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-        { href: "/library", icon: Library, label: "Library" },
-        { href: "/explore", icon: Compass, label: "Explore" },
-        { href: "/search", icon: Search, label: "Search" },
-        { href: "/auth", icon: User, label: "Profile" },
-        { href: "/settings", icon: Settings, label: "Settings" },
-        { href: "/logs", icon: FileClock, label: "Logs" }
-    ] as const;
+    /*
+        The entries come from `$lib/tv/manifest`, which `riven-tv` also reads
+        over `/api/tv/shell` -- the television cannot run this bundle and
+        draws its own nav. Only the icons stay here: they are components,
+        not data, and nothing on the other side could render one.
+
+        Order, labels and destinations are the manifest's. Add an entry
+        there and give it an icon below.
+    */
+    const icons: Record<string, typeof Home> = {
+        home: Home,
+        dashboard: LayoutDashboard,
+        library: Library,
+        explore: Compass,
+        search: Search,
+        profile: User,
+        settings: Settings,
+        logs: FileClock
+    };
+
+    const navItems = NAV_ITEMS.map((item) => ({
+        href: item.href,
+        icon: icons[item.key] ?? Mountain,
+        label: item.label
+    }));
 
     let { user } = $props();
 

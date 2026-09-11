@@ -92,6 +92,36 @@ npx openapi-typescript@7 "http://<backend>:8089/openapi.json" -o src/lib/provide
    its size: new files cannot conflict, and the fork's worst files are the
    handful where upstream lines were replaced in place.
 
+## The television reads a manifest, not this app's markup
+
+`riven-tv` renders the same shell -- sidebar, home rows, palette -- over
+this app's API, because it cannot run this app: the target is an LG C9, so
+Chromium 53, where the bundle's dynamic `import()` (63) and the stylesheet's
+`oklch()` (111), `@layer` (99) and grid (57) are all discarded in silence.
+
+Two renderers drift, and the drift is quiet -- a row added here was simply
+absent there until somebody remembered to add it twice. So the shell is
+described once, as data:
+
+| File | What it is |
+|---|---|
+| `src/lib/tv/manifest.ts` | The rows and the nav. **Edit this to change either.** |
+| `src/lib/tv/theme.ts` | Reads `themes/darkmatter.css` and converts `oklch()` to hex |
+| `src/routes/(protected)/api/tv/shell/+server.ts` | Serves the above to the television |
+
+`+page.svelte` and `sidebar.svelte` render from the manifest too, so there is
+one list and not two. Adding, removing, retitling or reordering a row or a
+nav entry needs no release of `riven-tv`.
+
+**What still is not automatic:** a genuinely new *destination*. The
+television skips a nav entry it has no page for, so `/collections` with
+`tv: true` is silently absent there until that page is written on that side.
+Set `tv: false` on anything it should not offer, rather than deleting the
+entry -- the same reasoning as rule 4.
+
+All four files are additions or edits to files with no upstream history
+since the merge base, so none of this costs anything at merge time.
+
 ## Two traps specific to this codebase
 
 **`openapi-fetch` needs literal path strings.** Writing
@@ -105,9 +135,9 @@ plain native submit would fall back to the lossy DOM path.
 ## Before committing
 
 ```bash
-pnpm run check     # holds at the upstream baseline: 73 errors, 24 files
+pnpm run check     # holds at the upstream baseline: 74 errors, 23 files
 pnpm run build
 ```
 
-The 73 errors are inherited from upstream. That number is the baseline — it
+The 74 errors are inherited from upstream. That number is the baseline — it
 should not grow.
