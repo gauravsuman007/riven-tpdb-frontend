@@ -32,6 +32,9 @@ export interface Addon {
      *  never as "up to date", which is a different claim. */
     update_available: boolean | null;
     nav: AddonNav | null;
+    /** Named places in the HOST's pages this add-on fills with a section
+     *  of its own, e.g. ["details"]. See `addon-slots.ts`. */
+    slots: string[];
     settings_schema: Record<string, unknown> | null;
     settings: Record<string, unknown> | null;
     tables: number;
@@ -116,3 +119,18 @@ export function formatBytes(bytes: number): string {
     const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
+
+/*
+    The tube scrapers are an ADD-ON, so their API lives under the add-on
+    prefix rather than at a host route. This constant is the one place that
+    knows the key, so the day it is installed under a different folder name
+    there is a single line to change -- and so a grep for the old
+    `/api/v1/direct` finds nothing left behind.
+
+    These callers stay in the host because they are the HOST's player
+    infrastructure -- minting a URL an external app can open, and filling in
+    the overlay's description. They call the add-on; they are not part of it.
+    If the add-on is not installed the backend answers 404 and each of these
+    degrades the way it already does for an unreachable backend.
+*/
+export const TUBE_API = "/api/v1/x/tubescraper";

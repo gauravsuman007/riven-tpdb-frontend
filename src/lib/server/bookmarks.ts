@@ -17,6 +17,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { directVideoBookmark } from "$lib/server/schema";
 import { createScopedLogger } from "$lib/logger";
+import { TUBE_API } from "$lib/addons";
 
 const logger = createScopedLogger("bookmarks");
 
@@ -211,7 +212,7 @@ export async function resolveBest(
 
     try {
         const response = await fetch(
-            `${backendUrl}/api/v1/direct/sources?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+            `${backendUrl}${TUBE_API}/sources?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
             { headers: { "x-api-key": apiKey }, signal: controller.signal }
         );
 
@@ -280,7 +281,7 @@ async function probeStream(
 
     try {
         const response = await fetch(
-            `${backendUrl}/api/v1/direct/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+            `${backendUrl}${TUBE_API}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
             {
                 // 0-1 rather than 0-0: a couple of CDNs answer a single-byte
                 // range with 200 and the whole file, which would mean
@@ -301,7 +302,7 @@ async function probeStream(
             // not parseable, and a playlist is small enough that reading all
             // of it is cheaper than the request that asked for part of it.
             const full = await fetch(
-                `${backendUrl}/api/v1/direct/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+                `${backendUrl}${TUBE_API}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
                 { headers: { "x-api-key": apiKey }, signal: controller.signal }
             );
 

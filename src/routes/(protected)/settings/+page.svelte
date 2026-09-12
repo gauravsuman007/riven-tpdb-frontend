@@ -23,8 +23,8 @@
     import CheckIcon from "@lucide/svelte/icons/check";
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
-    import PluginControl from "$lib/components/settings/plugin-control.svelte";
     import AddonControl from "$lib/components/settings/addon-control.svelte";
+    import AddonSlot from "$lib/components/addon-slot.svelte";
     import AppLockSettings from "$lib/components/app-lock-settings.svelte";
     import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
 
@@ -559,7 +559,6 @@
                         {/if}
 
                         {#if tab.id === "plugins"}
-                            <PluginControl />
                             <!--
                                 Add-ons live beside the scraper plugins
                                 because they are the same kind of thing to
@@ -591,6 +590,20 @@
                                 </div>
                                 <IndexerPicker />
                             </div>
+                        {/if}
+
+                        <!--
+                            An add-on's tab renders its generated form AND
+                            anything it contributes to the "settings" slot.
+                            The generated form can only express values to
+                            save; an add-on whose configuration includes
+                            actions against a live registry -- which scrapers
+                            are loaded right now, in what order -- needs the
+                            same escape hatch the VPN tab has, and gets it
+                            without this app knowing which add-on it is.
+                        -->
+                        {#if tab.id.startsWith("addon:")}
+                            <AddonSlot name="settings" only={tab.id.slice("addon:".length)} />
                         {/if}
 
                         {#each tab.sections as section (String(section))}

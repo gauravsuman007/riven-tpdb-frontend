@@ -14,7 +14,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
     import PlayIcon from "@lucide/svelte/icons/play";
-    import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import AddonSlot from "$lib/components/addon-slot.svelte";
     import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
     import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
@@ -140,7 +140,7 @@
                 variant="outline"
                 size="default" />
 
-            <DirectSearch title={item.title} itemId={item.id} />
+            <AddonSlot name="details" props={{ title: item.title, itemId: item.id }} />
         </div>
     </div>
 </PageShell>

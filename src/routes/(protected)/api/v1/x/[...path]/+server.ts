@@ -34,7 +34,15 @@ const FORWARD_RESPONSE = [
     "cache-control",
     "etag",
     "last-modified",
-    "content-disposition"
+    "content-disposition",
+    // Server-sent events. An add-on streaming progress (a per-site search
+    // reporting each site as it lands) needs both: without the content type
+    // EventSource rejects the response, and without x-accel-buffering a
+    // buffering reverse proxy added later would hold every frame back and
+    // deliver them together at the end -- which is precisely the behaviour
+    // streaming existed to avoid, and which looks like a slow backend.
+    "x-accel-buffering",
+    "connection"
 ];
 
 const passthrough = async (

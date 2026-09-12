@@ -15,7 +15,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
-    import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import AddonSlot from "$lib/components/addon-slot.svelte";
     import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import { describeState } from "$lib/utils/item-state";
     import { liveState } from "$lib/utils/live-state.svelte";
@@ -180,7 +180,7 @@
                         onClosed={leaveIfResolved} />
 
                     <!-- Direct site search matches on the title alone. -->
-                    <DirectSearch title={entry.title} itemId={libraryState?.riven_id ?? null} />
+                    <AddonSlot name="details" props={{ title: entry.title, itemId: libraryState?.riven_id ?? null }} />
 
                     <!--
                         Adding this title to a collection makes the backend look

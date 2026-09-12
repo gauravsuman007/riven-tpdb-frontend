@@ -2,6 +2,7 @@ import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { env } from "$env/dynamic/private";
 import { resolveDirectToken } from "$lib/server/direct-tokens";
+import { TUBE_API } from "$lib/addons";
 
 /**
  * A direct-scrape video, addressed so another Android app can actually open it.
@@ -26,7 +27,7 @@ import { resolveDirectToken } from "$lib/server/direct-tokens";
  *
  * Returns null whenever it must be proxied instead -- the backend decides,
  * because only it knows what the resolved source requires (see
- * `/api/v1/direct/handoff`). Never throws: an unreachable or unhappy backend
+ * `${TUBE_API}/handoff`). Never throws: an unreachable or unhappy backend
  * means "proxy it", which is the behaviour that always works.
  */
 async function upstreamUrl(
@@ -35,7 +36,7 @@ async function upstreamUrl(
 ): Promise<string | null> {
     try {
         const target =
-            `${env.BACKEND_URL}/api/v1/direct/handoff` +
+            `${env.BACKEND_URL}${TUBE_API}/handoff` +
             `?site=${encodeURIComponent(grant.site)}` +
             `&video_id=${encodeURIComponent(grant.videoId)}` +
             `&index=${encodeURIComponent(grant.index ?? "0")}`;
@@ -94,7 +95,7 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
     }
 
     const target =
-        `${env.BACKEND_URL}/api/v1/direct/stream` +
+        `${env.BACKEND_URL}${TUBE_API}/stream` +
         `?site=${encodeURIComponent(grant.site)}` +
         `&video_id=${encodeURIComponent(grant.videoId)}` +
         `&index=${encodeURIComponent(grant.index ?? "0")}`;

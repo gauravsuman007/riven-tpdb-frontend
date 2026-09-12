@@ -13,7 +13,7 @@
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import * as Collapsible from "$lib/components/ui/collapsible/index.js";
-    import DirectSearch from "$lib/components/media/riven/direct-search.svelte";
+    import AddonSlot from "$lib/components/addon-slot.svelte";
     import AddToCollection from "$lib/components/media/riven/add-to-collection.svelte";
     import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
     import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
@@ -272,7 +272,7 @@
                     to add something new; watching direct is for when you just
                     want to stream now.
                 -->
-                <DirectSearch title={item.title} itemId={libraryState?.riven_id} />
+                <AddonSlot name="details" props={{ title: item.title, itemId: libraryState?.riven_id ?? null }} />
 
                 {#if collected}
                     <p class="text-muted-foreground text-xs">

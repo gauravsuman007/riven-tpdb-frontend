@@ -22,6 +22,7 @@
     import TrashIcon from "@lucide/svelte/icons/trash-2";
     import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
     import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+    import { resetAddonSlots } from "$lib/addon-slots";
     import {
         listAddons,
         rescanAddons,
@@ -71,6 +72,15 @@
 
         data = result.addons;
         failure = null;
+
+        /*
+            Every mutation on this page comes through here -- install, update,
+            enable, disable, remove, rescan -- which makes it the one place
+            that has to tell the slot cache its list is stale. Without this,
+            disabling an add-on leaves its section on every title's page until
+            the next full reload, which reads as "the toggle did nothing".
+        */
+        resetAddonSlots();
         return true;
     }
 
