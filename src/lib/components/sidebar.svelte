@@ -17,6 +17,7 @@
     import Library from "@lucide/svelte/icons/library";
     import Compass from "@lucide/svelte/icons/compass";
     import User from "@lucide/svelte/icons/user";
+    import Users from "@lucide/svelte/icons/users";
     import { getContext } from "svelte";
     import { NAV_ITEMS } from "$lib/tv/manifest";
     import Tooltip from "./tooltip.svelte";
@@ -41,6 +42,7 @@
         library: Library,
         explore: Compass,
         search: Search,
+        onlyfans: Users,
         profile: User,
         settings: Settings,
         logs: FileClock

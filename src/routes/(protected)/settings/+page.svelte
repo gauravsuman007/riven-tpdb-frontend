@@ -24,6 +24,7 @@
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
     import PluginControl from "$lib/components/settings/plugin-control.svelte";
+    import OnlyFansControl from "$lib/components/settings/onlyfans-control.svelte";
     import AppLockSettings from "$lib/components/app-lock-settings.svelte";
     import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
 
@@ -401,7 +402,13 @@
         // Its own tab, not a sub-section of Scraping: enabling/disabling a
         // scraper is a live toggle against the plugin registry, same reason
         // the VPN tab carries a control panel alongside its generated form.
-        { id: "plugins", label: "Plugins", sections: ["direct_scraping"] }
+        { id: "plugins", label: "Plugins", sections: ["direct_scraping"] },
+        // Its own tab rather than a section of Content, and its own top-level
+        // settings key to make that possible. Half of it is a live registry of
+        // performer-index scrapers in their own folder -- a separate registry
+        // from the Plugins tab above, so that a scraper answering "who does
+        // this site carry" never appears in the direct-play site list.
+        { id: "onlyfans", label: "OnlyFans", sections: ["onlyfans"] }
     ] as const;
 
     /**
@@ -530,6 +537,16 @@
 
                         {#if tab.id === "plugins"}
                             <PluginControl />
+                        {/if}
+
+                        <!--
+                            Scraper toggles, folder import and a manual index
+                            rebuild: live actions against a registry and a
+                            crawler, none of which the generated form can
+                            express.
+                        -->
+                        {#if tab.id === "onlyfans"}
+                            <OnlyFansControl />
                         {/if}
 
                         <!-- Renders only inside the Jellyfin WebView shell. -->

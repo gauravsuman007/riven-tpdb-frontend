@@ -115,6 +115,9 @@ export const NAV_ITEMS: TvNavItem[] = [
     { key: "library", label: "Library", href: "/library", tv: true },
     { key: "explore", label: "Explore", href: "/explore", tv: true },
     { key: "search", label: "Search", href: "/search", tv: true },
+    // tv: false -- the account grid and its per-site lazy loading depend on
+    // scroll observers and live fetches the TV shell cannot drive.
+    { key: "onlyfans", label: "OnlyFans", href: "/onlyfans", tv: false },
     { key: "profile", label: "Profile", href: "/auth", tv: false },
     { key: "settings", label: "Settings", href: "/settings", tv: false },
     { key: "logs", label: "Logs", href: "/logs", tv: false }
