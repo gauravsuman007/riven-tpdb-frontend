@@ -53,10 +53,35 @@ async function upstreamUrl(
     }
 }
 
-export const GET: RequestHandler = async ({ params, request, fetch }) => {
+export const GET: RequestHandler = async ({ params, request, fetch, url }) => {
     const grant = resolveDirectToken(params.token);
 
     if (!grant) error(404, "This link has expired");
+
+    /*
+        The same video as a one-entry playlist.
+
+        This is how a DESKTOP browser hands a video to another application.
+        No desktop media player registers a URL scheme a page can rely on,
+        but every desktop OS opens a downloaded `.m3u` in whatever the
+        default player is -- the one mechanism that works on Windows, macOS
+        and Linux without installing anything. It is served from the same
+        grant as the video, so it carries the same authorisation and expires
+        with it.
+    */
+    if (params.file.endsWith(".m3u")) {
+        const label = params.file.slice(0, -".m3u".length);
+        const href = grant.path
+            ? new URL(grant.path, url.origin).href
+            : new URL(`/direct-play/${params.token}/${label}.mp4`, url.origin).href;
+
+        return new Response(`#EXTM3U\n#EXTINF:-1,${grant.title || "Video"}\n${href}\n`, {
+            headers: {
+                "content-type": "audio/x-mpegurl",
+                "cache-control": "no-store"
+            }
+        });
+    }
 
     /*
         A PATH grant stands for a URL on this origin rather than a video on a

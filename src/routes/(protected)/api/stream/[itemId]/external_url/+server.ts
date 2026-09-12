@@ -165,5 +165,17 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
     const handoffId =
         parts > 1 ? toDirectGuid(mintPathToken(path, info.title || "Video", "m3u")) : null;
 
-    return json({ url: streamUrl, parts, itemId: handoffId });
+    /*
+        The playlist form, for a desktop browser: no desktop player registers
+        a URL scheme a page can count on, but a downloaded `.m3u` opens in
+        whatever the default player is on all three desktop systems. It
+        carries the same play-session token as the stream URL, and for a
+        multi-file release it is the same playlist the native hand-off uses.
+    */
+    const m3uUrl = new URL(
+        `/Videos/${toGuid(itemId)}/playlist.m3u?playSessionId=${token}`,
+        url.origin
+    ).href;
+
+    return json({ url: streamUrl, parts, itemId: handoffId, m3uUrl });
 };

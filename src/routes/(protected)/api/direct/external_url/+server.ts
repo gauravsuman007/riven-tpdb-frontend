@@ -60,6 +60,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     */
     return json({
         itemId: toDirectGuid(token),
-        url: new URL(`/direct-play/${token}/${label}.mp4`, url.origin).href
+        url: new URL(`/direct-play/${token}/${label}.mp4`, url.origin).href,
+        // The playlist form of the same grant, which is how a desktop
+        // browser hands a video to the machine's default player.
+        m3uUrl: new URL(`/direct-play/${token}/${label}.m3u`, url.origin).href
     });
 };

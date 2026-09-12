@@ -216,7 +216,7 @@ class PlayerStore {
                     addon: options.addon
                 });
 
-                if ((await handOff(handoff)) === "opened") return;
+                if ((await handOff({ ...handoff, title })) === "opened") return;
 
                 // Nothing opened. Falling through to the in-page player is
                 // better than a dead tap.

@@ -29,7 +29,12 @@
     import { onDestroy } from "svelte";
     import { toGuid } from "$lib/utils/jellyfin-ids";
     import { player } from "$lib/stores/player.svelte";
-    import { directHandoffTarget, handOff } from "$lib/player/external";
+    import {
+        directHandoffTarget,
+        handOff,
+        takeOption,
+        type HandoffOption
+    } from "$lib/player/external";
     import { toast } from "svelte-sonner";
     import VideoPlayer from "./video-player.svelte";
     import XIcon from "@lucide/svelte/icons/x";
@@ -773,11 +778,39 @@
         so keying this on `target` is both correct and the latest possible
         moment to ask.
     */
+    /*
+        Always available now, native shell or not.
+
+        This used to be `!!window.RivenNative?.openExternal`, so in every
+        plain browser -- Firefox on Android, Safari, any desktop -- the
+        button was hidden, and where it was shown without a bridge it could
+        only report "No app available to open this video". A browser has its
+        own routes across (see `$lib/player/external`), so there is nothing
+        left to gate on.
+    */
     $effect(() => {
         if (!target) return;
 
-        canOpenExternal = !!window.RivenNative?.openExternal;
+        canOpenExternal = true;
     });
+
+    /**
+     * The choices offered when the platform will not choose for us.
+     *
+     * Android shows its own chooser, so this stays empty there. iOS cannot
+     * enumerate installed apps at all, and no desktop player registers a
+     * scheme a page can count on, so on those the list is ours to present.
+     */
+    let externalChoices = $state<HandoffOption[]>([]);
+
+    function chooseExternal(option: HandoffOption) {
+        const leaving = takeOption(option);
+
+        externalChoices = [];
+
+        if (option.id === "copy") toast.success("Link copied");
+        if (leaving) handedOff();
+    }
 
     /**
      * Hand-off succeeded: stop here and get out of the way.
@@ -808,6 +841,8 @@
 
         try {
             let url: string | null = null;
+            /* The playlist form of the same video, for a desktop browser. */
+            let m3uUrl: string | null = null;
             /*
                 The Jellyfin item id to hand the native player. A library item
                 already has one; a direct-scrape video has one minted for it.
@@ -838,6 +873,7 @@
 
                 url = handoff.url;
                 itemId = handoff.itemId;
+                m3uUrl = handoff.m3uUrl;
             } else {
                 /*
                     A library item already HAS a Jellyfin id -- the same one
@@ -862,6 +898,7 @@
                     const payload = await response.json();
 
                     url = payload.url ?? null;
+                    m3uUrl = payload.m3uUrl ?? null;
 
                     /*
                         A MULTI-FILE release travels as the PLAYLIST, but
@@ -900,9 +937,12 @@
             // `$lib/player/external`, shared with the store so the button and
             // the client's default-player path cannot diverge.
             const outcome = await handOff(
-                { itemId, url },
+                { itemId, url, m3uUrl, title: target.title },
                 {
                     onFailure: (message) => toast.error(message),
+                    // A plain browser on a platform with no chooser of its
+                    // own: the list comes back here to be shown.
+                    onChoices: (choices) => (externalChoices = choices),
                     pause: () => {
                         try {
                             video?.pause();
@@ -1450,15 +1490,39 @@
                         {/if}
                     </button>
 
-                    <button
-                        type="button"
-                        onclick={openInExternal}
-                        title="Open in external player"
-                        aria-label="Open in external player"
-                        class="rounded-lg p-1.5 text-white/90 hover:bg-white/10 hover:text-white"
-                        class:hidden={!canOpenExternal}>
-                        <ShareIcon class="size-5" />
-                    </button>
+                    <div class="relative">
+                        <button
+                            type="button"
+                            onclick={openInExternal}
+                            title="Open in external player"
+                            aria-label="Open in external player"
+                            class="rounded-lg p-1.5 text-white/90 hover:bg-white/10 hover:text-white"
+                            class:hidden={!canOpenExternal}>
+                            <ShareIcon class="size-5" />
+                        </button>
+
+                        <!--
+                            Shown only where the platform has no chooser of
+                            its own: iOS, which cannot be asked which players
+                            are installed, and the desktop, where no player
+                            registers a scheme a page can rely on. Android
+                            never gets here -- it shows the real Android
+                            chooser instead.
+                        -->
+                        {#if externalChoices.length}
+                            <div
+                                class="absolute bottom-full left-0 z-50 mb-2 min-w-44 overflow-hidden rounded-lg border border-white/10 bg-neutral-900/95 py-1 shadow-xl backdrop-blur">
+                                {#each externalChoices as choice (choice.id)}
+                                    <button
+                                        type="button"
+                                        onclick={() => chooseExternal(choice)}
+                                        class="block w-full px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 hover:text-white">
+                                        {choice.label}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
 
                     <button
                         type="button"
