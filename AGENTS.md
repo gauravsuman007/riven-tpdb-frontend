@@ -402,3 +402,39 @@ secure context and the server is reached over plain http on the LAN, so the
 copy path needs the deprecated selection/`execCommand` form. Optional
 chaining there is worse than nothing: it copies silently nothing and still
 reports success.
+
+## An add-on's stylesheet loses to our own CSS reset
+
+`postcss.config.js` downlevels this app's Tailwind v4 output for LG webOS,
+targeting `chrome >= 94` — below the 99 that `@layer` needs. postcss-preset-env
+does not drop the layers, it emulates their ordering with **specificity**,
+rewriting every rule in `@layer base` behind four `:not(#\#)` compounds.
+`:not()` takes the specificity of its argument and `#\#` is an id, so the whole
+of Tailwind's preflight — subject `*` — lands at **(4,0,0)**.
+
+Add-on stylesheets are plain, class-level CSS served verbatim out of the
+add-on's own folder (`/api/v1/x/<key>/ui/addon.css`, linked from
+`routes/(protected)/x/[addon]/[...rest]/+page.svelte`). Every one of their
+rules loses to that reset on every property the reset sets — padding, margin,
+border, a button's background, a heading's font-size — while colours,
+`border-radius` and anything else preflight does not touch still apply.
+
+**So the symptom is not a blank page, it is a half-styled one**, and it reads
+exactly like a stylesheet that failed to load. The OnlyFans add-on's performer
+page was reported as "picture and text overlapping" while its CSS was being
+served `200` and parsed into 64 rules. Before blaming delivery, check a
+computed value: `getComputedStyle(document.querySelector(".ofx")).padding`
+returning `0px` against a rule that sets it is this bug and nothing else.
+
+**Do not fix it here.** Neither end of the obvious fix works:
+
+- Raising the PostCSS target un-downlevels the layers and returns webOS 23 to a
+  completely unstyled app, which is the failure `postcss.config.js` exists to
+  prevent.
+- Loading the add-on's stylesheet later, or in a layer, changes nothing —
+  specificity beats order, and the preflight is no longer really layered.
+
+The fix belongs in each add-on's build, which prefixes its own rules with the
+same construct to reach (4,n,m). Both shipped add-ons carry it as
+`ui/postcss.config.js`; copy that file into any new one. It is a build step,
+not a convention to remember while authoring.
