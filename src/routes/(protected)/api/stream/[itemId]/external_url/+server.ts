@@ -2,7 +2,8 @@ import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { jellyfinEnabled } from "$lib/server/jellyfin/config";
 import { issuePlaySession } from "$lib/server/jellyfin/play-sessions";
-import { toGuid } from "$lib/utils/jellyfin-ids";
+import { mintPathToken } from "$lib/server/direct-tokens";
+import { toDirectGuid, toGuid } from "$lib/utils/jellyfin-ids";
 
 /**
  * A URL for this library item that an external app can actually open.
@@ -61,22 +62,29 @@ async function containerFor(
  * title was played before playlists existed, which is right for all but the
  * handful of releases this feature is for.
  */
-async function partCount(
+async function partsInfo(
     fetcher: typeof fetch,
     backendUrl: string,
     apiKey: string,
     itemId: number
-) {
+): Promise<{ count: number; title: string }> {
     try {
         const response = await fetcher(`${backendUrl}/api/v1/stream/parts/${itemId}`, {
             headers: { "x-api-key": apiKey }
         });
 
-        if (!response.ok) return 1;
+        if (!response.ok) return { count: 1, title: "" };
 
-        return Math.max(1, ((await response.json())?.parts ?? []).length);
+        const payload = await response.json();
+
+        return {
+            count: Math.max(1, (payload?.parts ?? []).length),
+            // The release's own name, because it is what an external player
+            // has to label the whole playlist with.
+            title: String(payload?.title ?? "")
+        };
     } catch {
-        return 1;
+        return { count: 1, title: "" };
     }
 }
 
@@ -110,10 +118,11 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
         `/Videos/{id}/stream.{container}` is an existing route and serves the
         same bytes as `/stream`.
     */
-    const [container, parts] = await Promise.all([
+    const [container, info] = await Promise.all([
         containerFor(fetch, locals.backendUrl, locals.apiKey, itemId),
-        partCount(fetch, locals.backendUrl, locals.apiKey, itemId)
+        partsInfo(fetch, locals.backendUrl, locals.apiKey, itemId)
     ]);
+    const parts = info.count;
 
     // A multi-file release goes over as a PLAYLIST. Handing across one file
     // is what made a six-scene compilation play one scene in VLC exactly as
@@ -131,5 +140,30 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
     // resolve a relative path against.
     const streamUrl = new URL(path, url.origin).href;
 
-    return json({ url: streamUrl, parts });
+    /*
+        A playlist needs an ID of its own, and this is why.
+
+        The URL above is only reachable through `NativeInterface.openUrl`,
+        which fires `Intent(ACTION_VIEW, uri)` with NO MIME type. Android then
+        resolves an http URI by scheme, every browser matches, and a phone
+        with a default browser set opens it there without ever showing a
+        chooser -- which is exactly what was reported once multi-file releases
+        started going over as `.m3u`. The `.m3u` extension does not rescue it:
+        the pathPattern filters media players declare are an ADDITION to the
+        browsers already matching, not a replacement.
+
+        The bridge that does set a type -- `ExternalPlayer.initPlayer`, which
+        calls `setDataAndType(uri, "video/*")` -- addresses videos by Jellyfin
+        id and accepts nothing else. So the playlist is given one: a path
+        grant, whose `/Videos/{id}/stream` redirects to this URL. The single
+        file case has been travelling that path since it was fixed the same
+        way; this puts playlists on it too.
+
+        Single-file titles keep the real item id, which the player already has
+        a catalogue entry for.
+    */
+    const handoffId =
+        parts > 1 ? toDirectGuid(mintPathToken(path, info.title || "Video", "m3u")) : null;
+
+    return json({ url: streamUrl, parts, itemId: handoffId });
 };

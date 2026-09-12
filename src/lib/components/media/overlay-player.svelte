@@ -971,22 +971,27 @@
                     url = payload.url ?? null;
 
                     /*
-                        A MULTI-FILE release must go over as the playlist URL,
-                        not as an item id.
+                        A MULTI-FILE release travels as the PLAYLIST, but
+                        still by id.
 
-                        Both native bridges address a video by Jellyfin id,
-                        and an id names one stream -- the backend defaults it
-                        to part 0. So handing the id across for a six-scene
-                        compilation started the external player on scene one
-                        with no way to reach the rest, which is exactly what
-                        was reported. `/Videos/{guid}/playlist.m3u` is the one
-                        form that can carry the whole release, and it already
-                        embeds a play-session token per entry, so dropping to
-                        openExternal() here costs nothing but the chooser --
-                        which `.m3u` earns a place in the same way `.mp4`
-                        does (see external_url/+server.ts).
+                        The item's own id names one stream -- the backend
+                        defaults the part to 0 -- so handing it across for a
+                        six-scene compilation started the external player on
+                        scene one with no way to reach the rest.
+                        `/Videos/{guid}/playlist.m3u` is the one form that can
+                        carry the whole release.
+
+                        Dropping the id and passing that URL instead is what
+                        the previous attempt did, and it cost the chooser:
+                        openExternal() fires an intent with no MIME type, so
+                        Android matches the http scheme alone and the default
+                        browser opens it -- reported exactly that way, for
+                        playlists, after single files had been fixed by moving
+                        them ONTO the id path. So the server mints an id that
+                        stands for the playlist URL, and it goes over the same
+                        bridge as everything else.
                     */
-                    if ((payload.parts ?? 1) > 1 && url) itemId = null;
+                    if (payload.itemId) itemId = payload.itemId;
                 }
             }
 

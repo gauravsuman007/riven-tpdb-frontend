@@ -38,7 +38,7 @@ async function upstreamUrl(
             `${env.BACKEND_URL}/api/v1/direct/handoff` +
             `?site=${encodeURIComponent(grant.site)}` +
             `&video_id=${encodeURIComponent(grant.videoId)}` +
-            `&index=${encodeURIComponent(grant.index)}`;
+            `&index=${encodeURIComponent(grant.index ?? "0")}`;
 
         const response = await fetcher(target, {
             headers: { "x-api-key": env.BACKEND_API_KEY ?? "" }
@@ -58,6 +58,15 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
     if (!grant) error(404, "This link has expired");
 
     /*
+        A PATH grant stands for a URL on this origin rather than a video on a
+        streaming site, and is served by the Jellyfin stream redirect, never
+        here. Refused rather than coerced: an absent `site` would otherwise
+        reach the backend as the literal string "undefined" and come back as
+        an opaque 404 from somewhere much further away than this line.
+    */
+    if (!grant.site || !grant.videoId) error(404, "Not a direct-play link");
+
+    /*
         Send the player to the CDN when it can go there itself.
 
         Proxying costs two extra hops -- player to here, here to the backend,
@@ -74,7 +83,11 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
         the VPN -- in which case nothing is handed out and the proxy below
         does its original job.
     */
-    const direct = await upstreamUrl(fetch, grant);
+    const direct = await upstreamUrl(fetch, {
+        site: grant.site,
+        videoId: grant.videoId,
+        index: grant.index ?? "0"
+    });
 
     if (direct) {
         return new Response(null, { status: 302, headers: { location: direct } });
@@ -84,7 +97,7 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
         `${env.BACKEND_URL}/api/v1/direct/stream` +
         `?site=${encodeURIComponent(grant.site)}` +
         `&video_id=${encodeURIComponent(grant.videoId)}` +
-        `&index=${encodeURIComponent(grant.index)}`;
+        `&index=${encodeURIComponent(grant.index ?? "0")}`;
 
     const headers: HeadersInit = { "x-api-key": env.BACKEND_API_KEY ?? "" };
     const range = request.headers.get("range");

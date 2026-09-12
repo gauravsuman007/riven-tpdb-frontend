@@ -922,7 +922,7 @@ function markPlayed(guid: string, played: boolean): Response {
  * It is deliberately NOT surfaced in /Items listings, so it never appears as
  * a library row that would 404 the moment its token expired.
  */
-function directItemDto(guid: string, title: string): Json {
+function directItemDto(guid: string, title: string, container = "mp4"): Json {
     return {
         Id: guid,
         ServerId: SERVER_ID,
@@ -934,12 +934,12 @@ function directItemDto(guid: string, title: string): Json {
         ParentId: LIBRARY_ID,
         RunTimeTicks: null,
         UserData: { PlaybackPositionTicks: 0, Played: false, PlayCount: 0 },
-        MediaSources: [directSourceDto(guid, title)]
+        MediaSources: [directSourceDto(guid, title, container)]
     };
 }
 
-function directSourceDto(guid: string, title: string): Json {
-    const source = mediaSourceDto(guid, title || "Video", "mp4", null);
+function directSourceDto(guid: string, title: string, container = "mp4"): Json {
+    const source = mediaSourceDto(guid, title || "Video", container, null);
 
     /*
         Direct play only, and never transcoded. We do not have the file -- it
@@ -980,7 +980,20 @@ function directStreamRedirect(guid: string): Response | null {
     // a link handed to an external app, so no session check applies here.
     return new Response(null, {
         status: 302,
-        headers: { location: directStreamPath(token, grant.title) }
+        headers: {
+            /*
+                A PATH grant already carries the URL to send the player to --
+                a multi-file release's `playlist.m3u`, which is the only form
+                that can name a whole release. It reaches the player this way,
+                by id, rather than as a bare URL, because only the id bridge
+                sets a MIME type on the Android intent; a URL handed to
+                `openUrl` matches the http scheme alone and the phone's
+                default browser wins, with no chooser. That was the reported
+                symptom, for playlists specifically, after single files had
+                already been fixed the same way.
+            */
+            location: grant.path ?? directStreamPath(token, grant.title)
+        }
     });
 }
 
@@ -1002,7 +1015,7 @@ async function itemDetailResponse(event: Ctx, guid: string): Promise<Response> {
     if (directToken !== null) {
         const grant = resolveDirectToken(directToken);
         if (!grant) return notFound();
-        return json(directItemDto(guid, grant.title));
+        return json(directItemDto(guid, grant.title, grant.container ?? "mp4"));
     }
 
     const rivenId = fromGuid(guid);
@@ -1035,7 +1048,7 @@ async function playbackInfoResponse(event: Ctx, guid: string): Promise<Response>
         if (!grant) return notFound();
 
         return json({
-            MediaSources: [directSourceDto(guid, grant.title)],
+            MediaSources: [directSourceDto(guid, grant.title, grant.container ?? "mp4")],
             PlaySessionId: randomUUID().replace(/-/g, "")
         });
     }
