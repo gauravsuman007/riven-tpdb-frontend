@@ -21,8 +21,67 @@ import type { RequestHandler } from "./$types";
 import { error, json } from "@sveltejs/kit";
 import { HOME_ROWS, NAV_ITEMS } from "$lib/tv/manifest";
 import { themeTokens } from "$lib/tv/theme";
+import { listAddons } from "$lib/addons";
 
-export const GET: RequestHandler = async ({ locals }) => {
+/*
+    WHY ADD-ONS ARE LISTED HERE AND NOT DISCOVERED OVER THERE.
+
+    `riven-tv` has no API key and no route to the backend; it reaches
+    everything through this app with the viewer's own cookies. It could ask
+    `/api/v1/addons` itself, but that answer is the settings page's -- every
+    add-on including the disabled and the broken, with its schema, its saved
+    settings and its byte count -- and the television needs none of it and
+    must not act on most of it.
+
+    So the filtering happens on this side, where "installed", "enabled" and
+    "working" are already understood, and what crosses is the short answer:
+    the add-ons a television may actually draw, and which of the two shapes
+    each one offers.
+
+    A NEW ADD-ON THEREFORE COSTS NO RELEASE OF EITHER SURFACE. It declares
+    `AddonTv` in its manifest, and it appears on the television on that set's
+    next page load -- the same property the rows above already have.
+*/
+async function tvAddons(fetch: typeof globalThis.fetch) {
+    const result = await listAddons(fetch);
+
+    // Never an error. An add-on listing that cannot be read is a television
+    // with no add-on sections on it, which is exactly how a set behaved
+    // before any of this existed -- not a screen that fails to render.
+    if ("error" in result) return [];
+
+    return result.addons.addons
+        /*
+            `nav` is NOT required. An add-on with no page of its own has none
+            -- the tube scraper is exactly that, a section on a title rather
+            than a screen -- and requiring it here would have silently
+            excluded the one add-on the television most needs.
+        */
+        .filter((addon) => addon.state === "ok" && addon.tv)
+        .map((addon) => ({
+            key: addon.key,
+            label: addon.nav?.label ?? addon.name,
+            /*
+                The lucide name the add-on declared. The other surface has no
+                icon font and no sprite -- it hand-draws a small set inline --
+                so this is a request, not a guarantee: a name it has not
+                drawn falls back to the same mountain the sidebar here uses.
+            */
+            icon: addon.nav?.icon ?? "puzzle",
+            /*
+                What the OTHER surface calls it. `riven-tv` writes its own
+                path -- it has a session in front of every URL and this app
+                does not -- so this is the identity of the destination, not a
+                link to follow.
+            */
+            href: addon.nav?.href ?? `/x/${addon.key}`,
+            browse: Boolean(addon.tv?.browse),
+            title: Boolean(addon.tv?.title)
+        }))
+        .filter((addon) => addon.browse || addon.title);
+}
+
+export const GET: RequestHandler = async ({ locals, fetch }) => {
     /*
         The same gate as every other route in this directory. The television
         forwards the viewer's cookies, so a signed-out set is signed out
@@ -34,6 +93,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 
     return json({
         version: 1,
+        /*
+            ADDITIVE, and `version` deliberately stays 1. The other side
+            refuses a version it does not understand and falls back to a
+            hard-coded shell, so bumping this to announce a new field would
+            take the whole manifest away from every television running an
+            older build -- to tell it about a feature it could not use
+            anyway. An unknown field is ignored there; a wrong version is not.
+        */
+        addons: await tvAddons(fetch),
         nav: NAV_ITEMS.filter((item) => item.tv).map(({ key, label, href }) => ({
             key,
             label,

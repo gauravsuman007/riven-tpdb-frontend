@@ -15,6 +15,15 @@ export interface AddonNav {
     tv: boolean;
 }
 
+/** What the television surface may draw for an add-on. See `AddonTv` in the
+ *  backend's `program/addons/contract.py`. Null means no TV presence. */
+export interface AddonTv {
+    /** Serves `tv/browse`, `tv/detail` and `tv/play`: a screen of its own. */
+    browse: boolean;
+    /** Serves `tv/title`: a section inside the television's title page. */
+    title: boolean;
+}
+
 export interface Addon {
     key: string;
     name: string;
@@ -32,6 +41,7 @@ export interface Addon {
      *  never as "up to date", which is a different claim. */
     update_available: boolean | null;
     nav: AddonNav | null;
+    tv: AddonTv | null;
     /** Named places in the HOST's pages this add-on fills with a section
      *  of its own, e.g. ["details"]. See `addon-slots.ts`. */
     slots: string[];
