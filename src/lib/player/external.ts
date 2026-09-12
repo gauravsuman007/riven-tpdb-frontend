@@ -219,7 +219,7 @@ export async function handOff(
 export function takeOption(option: HandoffOption): boolean {
     if (option.id === "copy") {
         // Only meaningful with a URL, and the copy option is built beside one.
-        void navigator.clipboard?.writeText(option.href ?? "");
+        copy(option.href ?? "");
         return false;
     }
 
@@ -437,4 +437,43 @@ export function browserOptions(
     options.push({ id: "copy", label: "Copy link", href: url });
 
     return options;
+}
+
+/**
+ * Put a link on the clipboard, over plain HTTP as well as HTTPS.
+ *
+ * `navigator.clipboard` exists ONLY in a secure context, and this server is
+ * reached over plain http on the LAN -- so on the deployment this feature was
+ * written for, the modern API is simply undefined. Optional chaining would
+ * have made that silent: nothing copied, and a "Link copied" toast anyway.
+ * The selection-and-execCommand form is deprecated and still the only one
+ * that works there.
+ */
+function copy(text: string): void {
+    if (!text) return;
+
+    if (window.isSecureContext && navigator.clipboard) {
+        void navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const field = document.createElement("textarea");
+
+    field.value = text;
+    // Off-screen rather than hidden: a field that is not rendered cannot be
+    // selected, and selection is what execCommand copies.
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.top = "-1000px";
+
+    document.body.appendChild(field);
+    field.select();
+
+    try {
+        document.execCommand("copy");
+    } catch {
+        /* Nothing else to try; the link is still on screen to read. */
+    }
+
+    field.remove();
 }
