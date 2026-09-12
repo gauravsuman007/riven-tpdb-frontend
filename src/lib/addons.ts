@@ -27,6 +27,10 @@ export interface Addon {
     error: string | null;
     source: string | null;
     revision: string | null;
+    /** True when the remote is ahead of what is installed. `null` means the
+     *  check has not run, or ran and could not tell -- rendered as nothing,
+     *  never as "up to date", which is a different claim. */
+    update_available: boolean | null;
     nav: AddonNav | null;
     settings_schema: Record<string, unknown> | null;
     settings: Record<string, unknown> | null;
@@ -84,6 +88,10 @@ export const installAddon = (url: string, ref?: string, token?: string) =>
     });
 
 export const updateAddon = (key: string) => call(`/${key}/update`, { method: "POST" });
+
+/** Ask each add-on's git remote whether it has moved on. One network round
+ *  trip per add-on, which is why it is a button and not part of listing. */
+export const checkAddonUpdates = () => call("/check-updates", { method: "POST" });
 
 export const setAddonEnabled = (key: string, enabled: boolean) =>
     call(`/${key}/enabled?enabled=${enabled}`, { method: "POST" });

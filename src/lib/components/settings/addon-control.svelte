@@ -25,6 +25,7 @@
     import {
         listAddons,
         rescanAddons,
+        checkAddonUpdates,
         installAddon,
         updateAddon,
         setAddonEnabled,
@@ -79,6 +80,26 @@
     }
 
     onMount(refresh);
+
+    /*
+        Deliberately a button rather than something listing does on its own:
+        it is one network round trip per add-on, to whatever git host each one
+        came from, and making the settings page wait on all of them is how a
+        single unreachable remote makes the whole page look broken.
+    */
+    async function checkUpdates() {
+        busy = "?";
+        notice = null;
+
+        if (apply(await checkAddonUpdates())) {
+            const behind = (data?.addons ?? []).filter((a) => a.update_available);
+            notice = behind.length
+                ? `Update available for ${behind.map((a) => a.name).join(", ")}.`
+                : "Everything that can be checked is up to date.";
+        }
+
+        busy = null;
+    }
 
     async function rescan() {
         busy = "*";
@@ -149,12 +170,30 @@
                 {/if}
             </p>
         </div>
-        <Button type="button" variant="outline" size="sm" disabled={busy !== null} onclick={rescan}>
-            <RefreshCwIcon
-                class="mr-2 size-4 {busy === '*' ? 'animate-spin' : ''}"
-                aria-hidden="true" />
-            Rescan
-        </Button>
+        <div class="flex shrink-0 gap-2">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy !== null}
+                onclick={checkUpdates}>
+                <ArrowUpIcon
+                    class="mr-2 size-4 {busy === '?' ? 'animate-pulse' : ''}"
+                    aria-hidden="true" />
+                Check for updates
+            </Button>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy !== null}
+                onclick={rescan}>
+                <RefreshCwIcon
+                    class="mr-2 size-4 {busy === '*' ? 'animate-spin' : ''}"
+                    aria-hidden="true" />
+                Rescan
+            </Button>
+        </div>
     </div>
 
     <!-- Install from a git URL -->
@@ -175,11 +214,7 @@
                 type="password"
                 placeholder="token (private repos)"
                 class="border-border/60 bg-background w-44 rounded-md border px-3 py-1.5 font-mono text-xs" />
-            <Button
-                type="button"
-                size="sm"
-                disabled={installing || !url.trim()}
-                onclick={install}>
+            <Button type="button" size="sm" disabled={installing || !url.trim()} onclick={install}>
                 <DownloadIcon
                     class="mr-2 size-4 {installing ? 'animate-pulse' : ''}"
                     aria-hidden="true" />
@@ -218,7 +253,8 @@
         {/if}
 
         {#each data?.addons ?? [] as addon (addon.key)}
-            <div class="border-border/60 bg-background/40 flex flex-col gap-2 rounded-md border p-3">
+            <div
+                class="border-border/60 bg-background/40 flex flex-col gap-2 rounded-md border p-3">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
                         <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
@@ -229,6 +265,12 @@
                             <span class="font-mono text-[11px] {STATE_STYLE[addon.state] ?? ''}">
                                 {addon.state}
                             </span>
+                            {#if addon.update_available}
+                                <span
+                                    class="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] text-amber-400">
+                                    update available
+                                </span>
+                            {/if}
                         </p>
                         {#if addon.description}
                             <p class="text-muted-foreground mt-0.5 text-xs">{addon.description}</p>
@@ -246,9 +288,10 @@
                         {#if addon.source}
                             <Button
                                 type="button"
-                                variant="ghost"
+                                variant={addon.update_available ? "default" : "ghost"}
                                 size="sm"
                                 disabled={busy !== null}
+                                title="Pull the latest version, scrapers included"
                                 onclick={() => update(addon)}>
                                 <ArrowUpIcon class="size-4" aria-hidden="true" />
                             </Button>
@@ -333,11 +376,8 @@
             </label>
 
             <div class="mt-5 flex justify-end gap-2">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => (removing = null)}>Cancel</Button>
+                <Button type="button" variant="ghost" size="sm" onclick={() => (removing = null)}
+                    >Cancel</Button>
                 <Button
                     type="button"
                     variant={removing.purge ? "destructive" : "default"}
