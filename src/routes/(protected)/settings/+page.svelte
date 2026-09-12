@@ -24,7 +24,7 @@
     import SaveIcon from "@lucide/svelte/icons/save";
     import VpnControl from "$lib/components/settings/vpn-control.svelte";
     import PluginControl from "$lib/components/settings/plugin-control.svelte";
-    import OnlyFansControl from "$lib/components/settings/onlyfans-control.svelte";
+    import AddonControl from "$lib/components/settings/addon-control.svelte";
     import AppLockSettings from "$lib/components/app-lock-settings.svelte";
     import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
 
@@ -402,14 +402,29 @@
         // Its own tab, not a sub-section of Scraping: enabling/disabling a
         // scraper is a live toggle against the plugin registry, same reason
         // the VPN tab carries a control panel alongside its generated form.
-        { id: "plugins", label: "Plugins", sections: ["direct_scraping"] },
-        // Its own tab rather than a section of Content, and its own top-level
-        // settings key to make that possible. Half of it is a live registry of
-        // performer-index scrapers in their own folder -- a separate registry
-        // from the Plugins tab above, so that a scraper answering "who does
-        // this site carry" never appears in the direct-play site list.
-        { id: "onlyfans", label: "OnlyFans", sections: ["onlyfans"] }
+        { id: "plugins", label: "Plugins", sections: ["direct_scraping"] }
     ] as const;
+
+    /*
+        One tab per installed add-on, built from what the backend reports
+        rather than from anything written here. The backend splices each
+        add-on's own JSON Schema into `addons`, so the generated form below
+        renders and saves it with no add-on-specific code at all -- which is
+        the whole reason an add-on can be installed from a git URL and be
+        configurable a moment later.
+
+        Sections are paths, not names, because an add-on's settings live at
+        ["addons", key] rather than at the top level.
+    */
+    const addonTabs = $derived(
+        (data.addons ?? [])
+            .filter((addon) => addon.state === "ok" && addon.settings_schema)
+            .map((addon) => ({
+                id: `addon:${addon.key}`,
+                label: addon.name || addon.key,
+                sections: [["addons", addon.key]] as (string | string[])[]
+            }))
+    );
 
     /**
      * Any top-level schema key not claimed by a tab above still has to render,
@@ -420,14 +435,22 @@
         const schema = (data as any)?.form?.schema;
         const keys: string[] = Object.keys(schema?.properties ?? {});
         const claimed = new Set(TABS.flatMap((tab) => tab.sections as readonly string[]));
+        // `addons` is claimed by the per-add-on tabs above, which render the
+        // sub-paths individually. Without this it would also land in "Other"
+        // as one undifferentiated object editor.
+        claimed.add("addons");
+        claimed.add("addons_dir");
+        claimed.add("addons_disabled");
         return keys.filter((key) => !claimed.has(key));
     });
 
-    const tabs = $derived(
-        extraSections.length > 0
-            ? [...TABS, { id: "other", label: "Other", sections: extraSections }]
-            : [...TABS]
-    );
+    const tabs = $derived([
+        ...TABS,
+        ...addonTabs,
+        ...(extraSections.length > 0
+            ? [{ id: "other", label: "Other", sections: extraSections }]
+            : [])
+    ]);
 
     /*
         Which tab is open lives in the URL, not just in component state, so a
@@ -537,16 +560,15 @@
 
                         {#if tab.id === "plugins"}
                             <PluginControl />
-                        {/if}
-
-                        <!--
-                            Scraper toggles, folder import and a manual index
-                            rebuild: live actions against a registry and a
-                            crawler, none of which the generated form can
-                            express.
-                        -->
-                        {#if tab.id === "onlyfans"}
-                            <OnlyFansControl />
+                            <!--
+                                Add-ons live beside the scraper plugins
+                                because they are the same kind of thing to
+                                operate: code dropped into a folder that the
+                                backend loads and reports on. The difference is
+                                scope -- a plugin adds a site, an add-on adds a
+                                page, an API and a database schema of its own.
+                            -->
+                            <AddonControl />
                         {/if}
 
                         <!-- Renders only inside the Jellyfin WebView shell. -->
@@ -571,11 +593,15 @@
                             </div>
                         {/if}
 
-                        {#each tab.sections as section (section)}
+                        {#each tab.sections as section (String(section))}
                             <!-- The schema is fetched from the backend at
                                  runtime, so section names cannot be checked
-                                 against a literal union at compile time. -->
-                            <Field {form} path={[section] as never} />
+                                 against a literal union at compile time.
+                                 A section may be a nested path: an add-on's
+                                 settings live at ["addons", key]. -->
+                            <Field
+                                {form}
+                                path={(Array.isArray(section) ? section : [section]) as never} />
                         {/each}
                     </div>
                 {/each}

@@ -18,6 +18,12 @@
     import Compass from "@lucide/svelte/icons/compass";
     import User from "@lucide/svelte/icons/user";
     import Users from "@lucide/svelte/icons/users";
+    import Puzzle from "@lucide/svelte/icons/puzzle";
+    import Film from "@lucide/svelte/icons/film";
+    import Image from "@lucide/svelte/icons/image";
+    import Music from "@lucide/svelte/icons/music";
+    import Star from "@lucide/svelte/icons/star";
+    import type { AddonNav } from "$lib/addons";
     import { getContext } from "svelte";
     import { NAV_ITEMS } from "$lib/tv/manifest";
     import Tooltip from "./tooltip.svelte";
@@ -42,19 +48,49 @@
         library: Library,
         explore: Compass,
         search: Search,
-        onlyfans: Users,
         profile: User,
         settings: Settings,
-        logs: FileClock
+        logs: FileClock,
+        // Below this line the keys are lucide icon names rather than host nav
+        // keys: an add-on names its icon, and these are the ones it can have.
+        // Anything else falls back to the puzzle piece.
+        users: Users,
+        puzzle: Puzzle,
+        film: Film,
+        image: Image,
+        music: Music,
+        star: Star
     };
 
-    const navItems = NAV_ITEMS.map((item) => ({
-        href: item.href,
-        icon: icons[item.key] ?? Mountain,
-        label: item.label
-    }));
+    // `user` stays untyped, as it was: the layout hands over the session
+    // object and annotating it here would only restate that shape badly.
+    let { user, addons = [] }: { user: any; addons?: AddonNav[] } = $props();
 
-    let { user } = $props();
+    /*
+        Host entries first, then one per installed add-on. An add-on's entry
+        is DATA -- label, icon name and href, read from /api/v1/addons -- so
+        installing one puts it in the sidebar without this file changing.
+        Only the icon needs resolving here, because an icon is a component and
+        nothing on the API side could send one; an unrecognised name falls
+        back rather than leaving a hole where the add-on should be.
+    */
+    const navItems = $derived([
+        ...NAV_ITEMS.map((item) => ({
+            href: item.href,
+            icon: icons[item.key] ?? Mountain,
+            label: item.label
+        })),
+        ...addons.map((addon) => ({
+            // Cast: an add-on's href is `/x/<key>` and is only known at
+            // runtime, so it cannot be a member of SvelteKit's generated
+            // union of literal routes. The route itself is real -- it is
+            // `/x/[addon]/[...rest]` -- and `resolve` passes an unknown path
+            // through unchanged.
+            href: addon.href as (typeof NAV_ITEMS)[number]["href"],
+            icon: icons[addon.icon] ?? Puzzle,
+            label: addon.label
+        }))
+    ]);
 
     /*
         Prefix, not equality. Explore is a hub with children (/explore/awards,

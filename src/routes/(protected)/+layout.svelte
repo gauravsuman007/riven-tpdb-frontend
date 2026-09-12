@@ -78,7 +78,7 @@
 
 <div
     class="bg-background relative grid h-dvh w-screen grid-cols-1 overflow-hidden md:grid-cols-[auto_1fr]">
-    <Sidebar user={data.user} />
+    <Sidebar user={data.user} addons={data.addonNav ?? []} />
     <main class="relative overflow-hidden">
         <div
             bind:this={mainContent}

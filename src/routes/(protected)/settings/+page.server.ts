@@ -4,6 +4,7 @@ import providers from "$lib/providers";
 import type { InitialFormData } from "@sjsf/sveltekit";
 import { createFormHandler } from "@sjsf/sveltekit/server";
 import * as defaults from "$lib/components/settings/form-defaults";
+import { listAddons, type Addon } from "$lib/addons";
 
 const getSchema = async (baseUrl: string, apiKey: string, fetch: typeof globalThis.fetch) => {
     const settingsSchema = await providers.riven.GET("/api/v1/settings/schema", {
@@ -33,7 +34,26 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
         error(500, "Failed to load settings");
     }
 
+    /*
+        Only used to decide which add-on tabs to show. The forms themselves
+        come from the settings schema, into which the backend has already
+        spliced each add-on's own schema -- so an add-on's settings save
+        through exactly the same path as everything else here.
+
+        A failure costs the tabs, not the page: the rest of settings must stay
+        editable when the add-on listing cannot be read.
+    */
+    let addons: Addon[] = [];
+
+    try {
+        const result = await listAddons(fetch);
+        if ("addons" in result) addons = result.addons.addons;
+    } catch {
+        addons = [];
+    }
+
     return {
+        addons,
         form: {
             schema: await getSchema(locals.backendUrl, locals.apiKey, fetch),
             initialValue: allSettings.data
