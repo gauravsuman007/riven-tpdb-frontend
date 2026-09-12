@@ -76,11 +76,11 @@ async function call(
 export const listAddons = (f?: typeof globalThis.fetch) => call("", undefined, f);
 export const rescanAddons = () => call("/rescan", { method: "POST" });
 
-export const installAddon = (url: string, ref?: string) =>
+export const installAddon = (url: string, ref?: string, token?: string) =>
     call("/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, ref: ref?.trim() || null })
+        body: JSON.stringify({ url, ref: ref?.trim() || null, token: token?.trim() || null })
     });
 
 export const updateAddon = (key: string) => call(`/${key}/update`, { method: "POST" });

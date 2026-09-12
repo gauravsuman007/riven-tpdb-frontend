@@ -40,6 +40,12 @@
     let busy = $state<string | null>(null);
     let url = $state("");
     let ref = $state("");
+    /*
+        Only for a private repository, and only for this one install: it is
+        sent, used as a per-command git header and forgotten. The persistent
+        answer is the `addons_git_token` setting, which this falls back to.
+    */
+    let token = $state("");
     let installing = $state(false);
 
     /*
@@ -87,10 +93,11 @@
         installing = true;
         notice = null;
 
-        if (apply(await installAddon(url, ref))) {
+        if (apply(await installAddon(url, ref, token))) {
             notice = "Installed. Its page and settings are available now.";
             url = "";
             ref = "";
+            token = "";
         }
 
         installing = false;
@@ -163,6 +170,11 @@
                 bind:value={ref}
                 placeholder="branch or tag (optional)"
                 class="border-border/60 bg-background w-40 rounded-md border px-3 py-1.5 font-mono text-xs" />
+            <input
+                bind:value={token}
+                type="password"
+                placeholder="token (private repos)"
+                class="border-border/60 bg-background w-44 rounded-md border px-3 py-1.5 font-mono text-xs" />
             <Button
                 type="button"
                 size="sm"
