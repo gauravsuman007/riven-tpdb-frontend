@@ -345,3 +345,28 @@ entry is not a TMDB record:
 - **It is addressed by entry id.** The hero's link assumed a TPDB uuid, which
   404s on exactly the titles that are not in the library yet -- which is every
   title the engine recommends. Items carry their own `href`.
+
+## Handing a video to another application
+
+One path, in `$lib/player/external`, used by both callers: the overlay's
+"open in external player" button and the store, which takes over when the
+client's DEFAULT player is an external app. They had separate copies and the
+store's was the old one.
+
+- **By ID, never by URL.** `openExternal(url)` fires `ACTION_VIEW` with no
+  MIME type, and on modern Android an http URI with no type is a WEB intent:
+  media players are not candidates at all and the default browser opens the
+  video with no chooser. `ExternalPlayer.initPlayer()` sets
+  `setDataAndType(uri, "video/*")` and takes a Jellyfin id -- which is why
+  scraped videos and multi-file playlists get ids minted for them
+  (`direct-tokens.ts`). The URL form is the last resort, for a shell with
+  `openUrl` and no player bridge.
+- **A site key does not identify a video on its own any more.** Two add-ons
+  serve scraped sites and each answers only for its own, so the owning add-on
+  is recorded on the grant at mint time and `/direct-play` asks that one.
+  Getting it wrong is a 404 that looks exactly like an expired link.
+- **The add-on never sends its own key.** `hostBridge(key)` in
+  `$lib/addon-host` fills it in from the mount point, so an add-on cannot
+  forget to. A page add-on and a slot add-on get the same bridge -- they did
+  not, and OnlyFans (a page) consequently rendered a bare `<video>` of its
+  own with no hand-off, no bookmarking and no resume.
