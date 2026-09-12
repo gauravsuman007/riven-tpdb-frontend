@@ -29,6 +29,7 @@
     import { onDestroy } from "svelte";
     import { toGuid } from "$lib/utils/jellyfin-ids";
     import { player } from "$lib/stores/player.svelte";
+    import { directHandoffTarget, handOff } from "$lib/player/external";
     import { toast } from "svelte-sonner";
     import VideoPlayer from "./video-player.svelte";
     import XIcon from "@lucide/svelte/icons/x";
@@ -800,115 +801,6 @@
 
     let openingExternal = $state(false);
 
-    /**
-     * Wait for evidence that another app actually came to the front.
-     *
-     * Needed because none of the native entry points can tell us. Both go
-     * through ExternalPlayer.initPlayer(), which resolves the item through
-     * PlaybackInfo on a coroutine and reports every failure -- bad play
-     * options, network failure, unsupported content -- with an Android Toast
-     * and no callback at all (ExternalPlayer.kt). A JS return value therefore
-     * says nothing about whether a player opened.
-     *
-     * What IS observable is this page losing the foreground. If a chooser or
-     * a player appears, the WebView is hidden within a moment; if
-     * initPlayer() failed, it never is.
-     */
-    function awaitForeground(timeoutMs = 5000): Promise<boolean> {
-        return new Promise((resolve) => {
-            if (typeof document === "undefined") return resolve(false);
-            if (document.hidden) return resolve(true);
-
-            let settled = false;
-
-            const finish = (ok: boolean) => {
-                if (settled) return;
-                settled = true;
-                document.removeEventListener("visibilitychange", onVisibility);
-                window.removeEventListener("riven:external-player", onReport);
-                clearTimeout(timer);
-                resolve(ok);
-            };
-
-            const onVisibility = () => {
-                if (document.hidden) finish(true);
-            };
-            // The external player reporting back is proof it ran, and arrives
-            // sooner than a visibility change on some shells.
-            const onReport = () => finish(true);
-            const timer = setTimeout(() => finish(false), timeoutMs);
-
-            document.addEventListener("visibilitychange", onVisibility);
-            window.addEventListener("riven:external-player", onReport);
-        });
-    }
-
-    /**
-     * Try one native hand-off, and close ONLY if it really happened.
-     *
-     * The player used to close the instant the bridge existed, which is why
-     * tapping this reportedly "just closed the player without doing
-     * anything": every failure downstream of that -- no credentials, a
-     * PlaybackInfo that 404s, a dead provider link -- happened after the
-     * overlay was already gone, with nothing on screen to say so.
-     */
-    async function bridgeHandoff(method: "openInExternalPlayer" | "playDirect", itemId: string) {
-        const bridge = window.RivenNative?.[method];
-
-        if (!bridge) return false;
-
-        // Paused before the wait, not after: two players pulling the same
-        // stream is the thing to avoid, and the wait is seconds long.
-        try {
-            video?.pause();
-        } catch {
-            /* Nothing to pause. */
-        }
-
-        /*
-            Three outcomes, not two.
-
-            "declined" is the bridge saying it is not the right route at all
-            -- playDirect() when no native player is the default -- and the
-            caller should simply try the next one. "failed" is the bridge
-            taking the call and then not being able to complete it, which is
-            the credential exchange going wrong and worth telling someone
-            about. Collapsing the two meant either a silent failure or a
-            spurious error on every ordinary fall-through.
-        */
-        const outcome = await new Promise<"declined" | "failed" | "accepted">((resolve) => {
-            let called: boolean;
-
-            try {
-                called = !!bridge.call(window.RivenNative, itemId, (ok: boolean) =>
-                    resolve(ok ? "accepted" : "failed")
-                );
-            } catch {
-                called = false;
-            }
-
-            if (!called) resolve("declined");
-        });
-
-        if (outcome === "declined") return false;
-
-        if (outcome === "failed") {
-            toast.error("Could not authenticate the hand-off to an external player");
-            return true;
-        }
-
-        if (await awaitForeground()) {
-            handedOff();
-            return true;
-        }
-
-        // The bridge took it and nothing opened. Stay put and say so -- the
-        // video is paused where it was, so play resumes it.
-        toast.error("The external player did not open. Check the client's player settings.");
-
-        return true;
-    }
-
     async function openInExternal() {
         if (!target || openingExternal) return;
 
@@ -932,19 +824,20 @@
                     -- between them, exactly why this used to open a download
                     in a browser instead of a player chooser. Mint one that
                     carries its own token and ends in .mp4.
-                */
-                const query = new URLSearchParams({
-                    site: target.site ?? "",
-                    videoId: target.videoId ?? "",
-                    title: target.title ?? "video"
-                });
-                const response = await fetch(`/api/direct/external_url?${query}`);
 
-                if (response.ok) {
-                    const payload = await response.json();
-                    url = payload.url ?? null;
-                    itemId = payload.itemId ?? null;
-                }
+                    `addon` names which add-on owns the site key: the minted
+                    link has to be resolved by the scraper that produced the
+                    video, and there is more than one of those now.
+                */
+                const handoff = await directHandoffTarget({
+                    site: target.site,
+                    videoId: target.videoId,
+                    title: target.title,
+                    addon: target.addon
+                });
+
+                url = handoff.url;
+                itemId = handoff.itemId;
             } else {
                 /*
                     A library item already HAS a Jellyfin id -- the same one
@@ -1003,44 +896,24 @@
                 was the web player -- which is exactly when someone reaches
                 for it.
             */
-            /*
-                By ID first, URL only as a fallback.
+            // How that hand-off is attempted -- by id, then by URL -- is in
+            // `$lib/player/external`, shared with the store so the button and
+            // the client's default-player path cannot diverge.
+            const outcome = await handOff(
+                { itemId, url },
+                {
+                    onFailure: (message) => toast.error(message),
+                    pause: () => {
+                        try {
+                            video?.pause();
+                        } catch {
+                            /* Nothing to pause. */
+                        }
+                    }
+                }
+            );
 
-                openUrl() cannot produce a media-player chooser at all: it
-                fires Intent(ACTION_VIEW, uri) with no MIME type, so Android
-                resolves the http URL by scheme and hands it to a browser --
-                reported exactly that way, as the video opening in the browser
-                with no chooser. playDirect() goes through
-                ExternalPlayer.initPlayer(), which sets the "video/*" type
-                that makes the chooser appear, and it addresses videos by id.
-
-                The URL path stays for plain browsers and for any shell that
-                exposes openUrl but no player bridge, where it is still the
-                best available behaviour.
-            */
-            /*
-                The external hand-off first, and NOT gated on the client's
-                default player: ExternalPlayer.initPlayer() has no isEnabled()
-                check, so it works even when the web player is selected --
-                which is the only time this button is on screen at all.
-            */
-            if (itemId && (await bridgeHandoff("openInExternalPlayer", itemId))) return;
-
-            // Then whichever native player is the default, for a shell that
-            // has a player bridge but no external one.
-            if (itemId && (await bridgeHandoff("playDirect", itemId))) return;
-
-            if (!url) {
-                toast.error("Could not build a link for an external player");
-                return;
-            }
-
-            if (!window.RivenNative?.openExternal(url)) {
-                toast.error("No app available to open this video");
-                return;
-            }
-
-            handedOff();
+            if (outcome === "opened") handedOff();
         } finally {
             openingExternal = false;
         }
@@ -1142,7 +1015,9 @@
         metaLoading = true;
         try {
             const response = await fetch(
-                `/api/direct/meta?site=${encodeURIComponent(directTarget.site)}&videoId=${encodeURIComponent(directTarget.videoId)}`
+                `/api/direct/meta?site=${encodeURIComponent(directTarget.site)}` +
+                    `&videoId=${encodeURIComponent(directTarget.videoId)}` +
+                    `&addon=${encodeURIComponent(directTarget.addon ?? "")}`
             );
             if (!response.ok) return;
             const data = await response.json();

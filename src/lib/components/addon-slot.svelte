@@ -2,7 +2,7 @@
     import { onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import { addonAsset } from "$lib/addons";
-    import { player } from "$lib/stores/player.svelte";
+    import { hostBridge, type HostBridge } from "$lib/addon-host";
     import { slotted } from "$lib/addon-slots";
 
     /*
@@ -30,41 +30,11 @@
     }) => Mounted | void;
 
     /*
-        What the host lends a slot beyond its own API.
-
-        Kept to almost nothing on purpose. Anything reachable over HTTP the
-        add-on should fetch for itself -- bookmarks and VPN status are
-        same-origin endpoints, and routing them through a bridge would mean
-        this app had to grow a method every time an add-on wanted a URL it
-        could already have asked for.
-
-        The player is the exception, and the reason the bridge exists at all:
-        it is in-page reactive state owned by this app's Svelte runtime, and
-        the add-on's bundle carries a different one. There is no way to hand
-        that across except as a function call.
+        The host bridge is built per add-on in `$lib/addon-host`, not here, so
+        a page add-on and a slot add-on are lent exactly the same thing -- and
+        so the add-on's key travels with every play, which is what lets the
+        player find the add-on that can resolve the video later.
     */
-    type HostBridge = {
-        /** Open a scraped video in the host's player, with everything the
-         *  player needs to offer an external app, a bookmark, or a quality
-         *  choice. Mirrors `player.openDirect`. */
-        play: (options: {
-            src: string;
-            title: string;
-            mimeType?: string;
-            poster?: string;
-            site?: string;
-            videoId?: string;
-            contextTitle?: string;
-            duration?: number | null;
-            resolution?: string | null;
-            size?: number | null;
-        }) => void;
-    };
-
-    const bridge: HostBridge = {
-        play: (options) => player.openDirect(options)
-    };
-
     let {
         name,
         only = null,
@@ -157,7 +127,7 @@
                     api: `/api/v1/x/${addon.key}`,
                     props,
                     navigate: (to) => goto(to),
-                    host: bridge
+                    host: hostBridge(addon.key)
                 });
 
                 if (mounted) mounts.push(mounted);

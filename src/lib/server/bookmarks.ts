@@ -17,7 +17,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { directVideoBookmark } from "$lib/server/schema";
 import { createScopedLogger } from "$lib/logger";
-import { TUBE_API } from "$lib/addons";
+import { addonApi } from "$lib/addons";
 
 const logger = createScopedLogger("bookmarks");
 
@@ -205,14 +205,19 @@ export async function resolveBest(
     site: string,
     videoId: string,
     backendUrl: string,
-    apiKey: string
+    apiKey: string,
+    /** Which add-on scraped the site. Defaults to the tube scraper, which
+     *  owned every site key before a second add-on served any. */
+    addon = ""
 ): Promise<ResolvedMeta | null> {
+    const api = addonApi(addon);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
 
     try {
         const response = await fetch(
-            `${backendUrl}${TUBE_API}/sources?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+            `${backendUrl}${api}/sources?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
             { headers: { "x-api-key": apiKey }, signal: controller.signal }
         );
 
@@ -233,7 +238,7 @@ export async function resolveBest(
         // two-byte request and answers it for nearly all of them, so it is
         // worth doing whenever the scraper came up short.
         if (resolution === null || size === null) {
-            const probed = await probeStream(site, videoId, backendUrl, apiKey);
+            const probed = await probeStream(site, videoId, backendUrl, apiKey, api);
 
             resolution ??= probed.resolution;
             size ??= probed.size;
@@ -269,7 +274,8 @@ async function probeStream(
     site: string,
     videoId: string,
     backendUrl: string,
-    apiKey: string
+    apiKey: string,
+    api: string
 ): Promise<ResolvedMeta> {
     const none: ResolvedMeta = { resolution: null, size: null };
 
@@ -281,7 +287,7 @@ async function probeStream(
 
     try {
         const response = await fetch(
-            `${backendUrl}${TUBE_API}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+            `${backendUrl}${api}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
             {
                 // 0-1 rather than 0-0: a couple of CDNs answer a single-byte
                 // range with 200 and the whole file, which would mean
@@ -302,7 +308,7 @@ async function probeStream(
             // not parseable, and a playlist is small enough that reading all
             // of it is cheaper than the request that asked for part of it.
             const full = await fetch(
-                `${backendUrl}${TUBE_API}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
+                `${backendUrl}${api}/stream?site=${encodeURIComponent(site)}&video_id=${encodeURIComponent(videoId)}`,
                 { headers: { "x-api-key": apiKey }, signal: controller.signal }
             );
 

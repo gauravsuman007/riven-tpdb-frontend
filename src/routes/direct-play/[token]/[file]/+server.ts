@@ -2,7 +2,7 @@ import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { env } from "$env/dynamic/private";
 import { resolveDirectToken } from "$lib/server/direct-tokens";
-import { TUBE_API } from "$lib/addons";
+import { addonApi } from "$lib/addons";
 
 /**
  * A direct-scrape video, addressed so another Android app can actually open it.
@@ -27,16 +27,16 @@ import { TUBE_API } from "$lib/addons";
  *
  * Returns null whenever it must be proxied instead -- the backend decides,
  * because only it knows what the resolved source requires (see
- * `${TUBE_API}/handoff`). Never throws: an unreachable or unhappy backend
+ * the add-on's `/handoff`). Never throws: an unreachable or unhappy backend
  * means "proxy it", which is the behaviour that always works.
  */
 async function upstreamUrl(
     fetcher: typeof fetch,
-    grant: { site: string; videoId: string; index: string }
+    grant: { site: string; videoId: string; index: string; addon: string }
 ): Promise<string | null> {
     try {
         const target =
-            `${env.BACKEND_URL}${TUBE_API}/handoff` +
+            `${env.BACKEND_URL}${addonApi(grant.addon)}/handoff` +
             `?site=${encodeURIComponent(grant.site)}` +
             `&video_id=${encodeURIComponent(grant.videoId)}` +
             `&index=${encodeURIComponent(grant.index ?? "0")}`;
@@ -87,7 +87,10 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
     const direct = await upstreamUrl(fetch, {
         site: grant.site,
         videoId: grant.videoId,
-        index: grant.index ?? "0"
+        index: grant.index ?? "0",
+        // Whichever add-on scraped it. Two of them serve sites now, and each
+        // answers only for its own -- asking the wrong one 404s.
+        addon: grant.addon ?? ""
     });
 
     if (direct) {
@@ -95,7 +98,7 @@ export const GET: RequestHandler = async ({ params, request, fetch }) => {
     }
 
     const target =
-        `${env.BACKEND_URL}${TUBE_API}/stream` +
+        `${env.BACKEND_URL}${addonApi(grant.addon)}/stream` +
         `?site=${encodeURIComponent(grant.site)}` +
         `&video_id=${encodeURIComponent(grant.videoId)}` +
         `&index=${encodeURIComponent(grant.index ?? "0")}`;

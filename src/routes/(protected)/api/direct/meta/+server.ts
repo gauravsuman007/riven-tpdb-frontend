@@ -18,7 +18,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     if (!site || !videoId) error(400, "site and videoId are required");
 
-    const result = await resolveBest(site, videoId, locals.backendUrl, locals.apiKey);
+    const result = await resolveBest(
+        site,
+        videoId,
+        locals.backendUrl,
+        locals.apiKey,
+        // Which add-on scraped it. An absent one means the tube scraper, so
+        // an older client that does not send it behaves as it always did.
+        url.searchParams.get("addon") ?? ""
+    );
 
     return json(result ?? { resolution: null, size: null });
 };

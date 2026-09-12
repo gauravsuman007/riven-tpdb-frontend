@@ -121,16 +121,36 @@ export function formatBytes(bytes: number): string {
 }
 
 /*
-    The tube scrapers are an ADD-ON, so their API lives under the add-on
-    prefix rather than at a host route. This constant is the one place that
-    knows the key, so the day it is installed under a different folder name
-    there is a single line to change -- and so a grep for the old
-    `/api/v1/direct` finds nothing left behind.
+    SCRAPED VIDEOS BELONG TO AN ADD-ON, so their API lives under the add-on
+    prefix rather than at a host route -- and there is more than one add-on
+    serving them, so the prefix is derived from a key rather than fixed.
 
-    These callers stay in the host because they are the HOST's player
+    The host keeps these callers because they are the HOST's player
     infrastructure -- minting a URL an external app can open, and filling in
-    the overlay's description. They call the add-on; they are not part of it.
-    If the add-on is not installed the backend answers 404 and each of these
-    degrades the way it already does for an unreachable backend.
+    the overlay's description. They call an add-on; they are not part of one.
+    If the named add-on is not installed the backend answers 404 and each of
+    these degrades the way it already does for an unreachable backend.
 */
-export const TUBE_API = "/api/v1/x/tubescraper";
+
+/** The default owner of a site key, for a caller that does not name one.
+ *
+ *  Every site key came from the tube scraper before there was a second
+ *  add-on serving them, so an unqualified request means that one. */
+export const DEFAULT_SCRAPER_ADDON = "tubescraper";
+
+/**
+ * The API prefix for one add-on, from its key.
+ *
+ * The key is a folder name on the backend (see the add-on framework), so it
+ * is validated rather than trusted: this builds a URL the server then fetches
+ * with the backend API key, and a key carrying `..` or a slash would reach
+ * somewhere else entirely. An invalid one falls back to the default rather
+ * than throwing -- the caller is a player hand-off, and refusing the whole
+ * request over a malformed query parameter would turn a wrong guess into a
+ * dead button.
+ */
+export function addonApi(key: string | null | undefined): string {
+    const clean = /^[a-z0-9_-]{1,40}$/.test(key ?? "") ? key : DEFAULT_SCRAPER_ADDON;
+
+    return `/api/v1/x/${clean}`;
+}

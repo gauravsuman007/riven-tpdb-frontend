@@ -1,4 +1,5 @@
 import { toGuid } from "$lib/utils/jellyfin-ids";
+import { directHandoffTarget, handOff } from "$lib/player/external";
 
 /**
  * Global overlay-player state.
@@ -73,6 +74,16 @@ interface DirectTarget {
      */
     site?: string;
     videoId?: string;
+    /**
+     * Which add-on owns that site key.
+     *
+     * Two add-ons serve scraped sites now, each answering only for its own,
+     * so "site + videoId" no longer identifies a video on its own: the
+     * external-player link and the on-demand resolution lookup both have to
+     * know where to ask. Filled in by the add-on bridge from the mount
+     * point's own key, never by the add-on.
+     */
+    addon?: string;
     /** Context the bookmark should be scoped to -- see schema/bookmarks.ts. */
     contextTitle?: string;
     duration?: number | null;
@@ -173,62 +184,43 @@ class PlayerStore {
         poster?: string;
         site?: string;
         videoId?: string;
+        addon?: string;
         contextTitle?: string;
         duration?: number | null;
         resolution?: string | null;
         size?: number | null;
     }) {
-        const { src, title, mimeType = "video/mp4", poster } = options;
+        const { src, title, mimeType = "video/mp4" } = options;
 
-        // External player chosen: hand over the scraped URL itself. Nothing
-        // about it is Jellyfin-shaped -- it is the site's own media URL --
-        // so the player has no session to carry and no reason to come back
-        // to us. `openExternal` returns false if the shell cannot do it, in
-        // which case fall through rather than leaving the tap dead.
+        /*
+            The client's DEFAULT player is an external app, so this video goes
+            straight there rather than into the overlay.
+
+            Handed over BY ID, through the same path the overlay's button
+            uses. Handing over the URL instead -- what this did -- fires an
+            intent with no MIME type, which on modern Android is a web intent:
+            media players are not candidates for it at all and the default
+            browser opens the video with no chooser. Reported exactly that
+            way.
+
+            Async, so the in-page fallback cannot run first: the await is
+            inside an immediately-invoked async function and this returns
+            straight after scheduling it.
+        */
         if (window.RivenNative?.externalPlayerSelected?.() && options.site && options.videoId) {
-            /*
-                Minted rather than handing over `src` directly. That URL is
-                cookie-authenticated and extensionless, so another app can
-                neither fetch it nor be matched to it by Android's intent
-                resolver -- which sent it to the browser as a download. The
-                minted one carries its own token and ends in .mp4.
-
-                Async, so the in-page fallbacks below cannot run first: the
-                await is inside an immediately-invoked async function and this
-                returns straight after scheduling it.
-            */
-            const query = new URLSearchParams({
-                site: options.site,
-                videoId: options.videoId,
-                title: title || "video"
-            });
-
             void (async () => {
-                try {
-                    const response = await fetch(`/api/direct/external_url?${query}`);
-
-                    if (response.ok) {
-                        const { url } = await response.json();
-
-                        if (url && window.RivenNative?.openExternal(url)) return;
-                    }
-                } catch {
-                    // Fall through to the in-page player below.
-                }
-
-                this.current = {
-                    kind: "direct",
-                    src,
-                    mimeType,
-                    title,
-                    poster,
+                const handoff = await directHandoffTarget({
                     site: options.site,
                     videoId: options.videoId,
-                    contextTitle: options.contextTitle,
-                    duration: options.duration,
-                    resolution: options.resolution,
-                    size: options.size
-                };
+                    title,
+                    addon: options.addon
+                });
+
+                if ((await handOff(handoff)) === "opened") return;
+
+                // Nothing opened. Falling through to the in-page player is
+                // better than a dead tap.
+                this.current = this.directTarget(options);
             })();
 
             return;
@@ -238,14 +230,22 @@ class PlayerStore {
             playDirectNative(src, mimeType);
             return;
         }
-        this.current = {
+
+        this.current = this.directTarget(options);
+    }
+
+    /** The overlay's view of one scraped video. One place, because the two
+     *  callers above must not be able to disagree about which fields travel. */
+    private directTarget(options: Parameters<PlayerStore["openDirect"]>[0]): DirectTarget {
+        return {
             kind: "direct",
-            src,
-            mimeType,
-            title,
-            poster,
+            src: options.src,
+            mimeType: options.mimeType ?? "video/mp4",
+            title: options.title,
+            poster: posterUrl(options.poster),
             site: options.site,
             videoId: options.videoId,
+            addon: options.addon,
             contextTitle: options.contextTitle,
             duration: options.duration,
             resolution: options.resolution,

@@ -40,6 +40,17 @@ interface Grant {
     site?: string;
     videoId?: string;
     index?: string;
+    /**
+     * Which add-on resolves that site key.
+     *
+     * Recorded on the grant rather than looked up later because the token
+     * outlives the page that minted it: `/direct-play` is fetched by another
+     * application, with nothing to hand but the token, and asking the wrong
+     * add-on for a video returns a 404 that looks exactly like an expired
+     * link. Absent means the tube scraper, which owned every site key before
+     * there was a second add-on serving them.
+     */
+    addon?: string;
     /** A path on this origin, for a grant that stands for a URL. */
     path?: string;
     /** Container extension to advertise, so the client builds a URL that
@@ -65,7 +76,13 @@ function prune(now: number): void {
     }
 }
 
-export function mintDirectToken(site: string, videoId: string, index = "0", title = ""): string {
+export function mintDirectToken(
+    site: string,
+    videoId: string,
+    index = "0",
+    title = "",
+    addon = ""
+): string {
     const now = Date.now();
     prune(now);
 
@@ -78,7 +95,7 @@ export function mintDirectToken(site: string, videoId: string, index = "0", titl
     */
     const token = randomBytes(RESERVED_BODY_HEX / 2).toString("hex");
 
-    grants.set(token, { site, videoId, index, title, expiresAt: now + TTL_MS });
+    grants.set(token, { site, videoId, index, title, addon, expiresAt: now + TTL_MS });
 
     return token;
 }

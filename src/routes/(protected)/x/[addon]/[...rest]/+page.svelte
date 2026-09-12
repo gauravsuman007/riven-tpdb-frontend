@@ -3,6 +3,7 @@
     import { page } from "$app/state";
     import { goto } from "$app/navigation";
     import { addonAsset } from "$lib/addons";
+    import { hostBridge, type HostBridge } from "$lib/addon-host";
     import PageShell from "$lib/components/page-shell.svelte";
     import type { PageData } from "./$types";
 
@@ -41,6 +42,17 @@
         /** Host navigation, so a link inside the add-on keeps the SPA intact
          *  rather than reloading the whole application. */
         navigate: (to: string) => void;
+        /*
+            The same bridge a slot add-on is given.
+
+            A page used not to get one, and the cost was visible: the OnlyFans
+            add-on, being a page, had no way to reach the host's player and
+            rendered a bare `<video>` of its own -- no external hand-off, no
+            bookmarking, no resume, and inside the Android shell a video
+            element with nowhere to go but the browser. A page and a section
+            are lent the same thing now.
+        */
+        host: HostBridge;
     }) => Mounted | void;
 
     let mounted: Mounted | null = null;
@@ -65,7 +77,8 @@
                     target,
                     path: rest,
                     api: `/api/v1/x/${addon}`,
-                    navigate: (to) => goto(to)
+                    navigate: (to) => goto(to),
+                    host: hostBridge(addon)
                 }) as Mounted) ?? null;
             loadedKey = addon;
         } catch (cause) {

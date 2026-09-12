@@ -19,7 +19,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     if (!site || !videoId) error(400, "site and videoId are required");
 
     const title = url.searchParams.get("title") ?? "";
-    const token = mintDirectToken(site, videoId, url.searchParams.get("index") ?? "0", title);
+
+    /*
+        Which add-on owns the site key, recorded on the grant so `/direct-play`
+        can ask the right one. Passed through as given: `addonApi()` is what
+        validates it, at the point the URL is actually built.
+    */
+    const token = mintDirectToken(
+        site,
+        videoId,
+        url.searchParams.get("index") ?? "0",
+        title,
+        url.searchParams.get("addon") ?? ""
+    );
 
     /*
         The filename is cosmetic to us and load-bearing to Android: the
