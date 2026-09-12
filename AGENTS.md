@@ -370,3 +370,35 @@ store's was the old one.
   forget to. A page add-on and a slot add-on get the same bridge -- they did
   not, and OnlyFans (a page) consequently rendered a bare `<video>` of its
   own with no hand-off, no bookmarking and no resume.
+
+### From a plain browser
+
+Everything above needs `window.RivenNative`, which exists only inside the
+Android shell. In Firefox on Android, Safari or any desktop browser it is
+undefined, so the chain used to end at "No app available to open this video"
+-- and the button was hidden outright, because it was gated on that bridge.
+
+A browser cannot launch another application directly, and what it *can* do
+differs per platform, so `browserOptions()` has one strategy each. Do not try
+to unify them; there is no shared mechanism.
+
+- **Android -- `intent://`.** The only way a page can set a MIME TYPE, which
+  is exactly the difference the native bridge turns on. Both Chrome and
+  Firefox honour it, and it carries `S.browser_fallback_url` so an unhandled
+  intent returns to the page. `;` and `#` in the URL are percent-encoded:
+  they are the Intent syntax's own separators, and one of them would truncate
+  the intent. No menu of ours here -- Android shows the real chooser.
+- **iOS -- a specific player's scheme** (VLC, Infuse, Outplayer). No chooser
+  exists and installed apps cannot be enumerated, so picking an absent one
+  does nothing. "Copy link" is always in the list for that reason.
+- **Desktop -- a downloaded one-entry `.m3u`.** No desktop player registers a
+  scheme a page can rely on, but Windows, macOS and Linux all open a playlist
+  in the default media player. Both `external_url` endpoints return `m3uUrl`,
+  and `/direct-play/{token}/{name}.m3u` is served from the same grant as the
+  video -- same authorisation, same expiry.
+
+**`navigator.clipboard` is undefined on this deployment.** It requires a
+secure context and the server is reached over plain http on the LAN, so the
+copy path needs the deprecated selection/`execCommand` form. Optional
+chaining there is worse than nothing: it copies silently nothing and still
+reports success.
