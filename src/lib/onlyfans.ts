@@ -29,6 +29,7 @@ export interface OnlyFansAccount {
     source_count: number;
     saved: boolean;
     sites: string[];
+    is_verified: boolean;
 }
 
 export interface OnlyFansAccountSource {
@@ -41,6 +42,23 @@ export interface OnlyFansAccountSource {
 
 export interface OnlyFansAccountDetail extends OnlyFansAccount {
     sources: OnlyFansAccountSource[];
+
+    /*
+        From the performer's own onlyfans.com profile. All optional and all
+        independent: the backend guesses at their username and most of the
+        index has not been reached yet, so the page has to look finished
+        without any of them.
+    */
+    of_username: string | null;
+    of_url: string | null;
+    header_url: string | null;
+    website: string | null;
+    location: string | null;
+    posts_count: number | null;
+    photos_count: number | null;
+    videos_count: number | null;
+    likes_count: number | null;
+    subscribe_price: number | null;
 }
 
 export interface AccountPage {
@@ -282,6 +300,7 @@ export interface OnlyFansSyncStatus {
     sites: OnlyFansSyncRun[];
     accounts: number;
     accounts_with_avatar: number;
+    accounts_with_profile: number;
 }
 
 export function syncStatus(): Promise<OnlyFansSyncStatus | null> {
@@ -314,6 +333,38 @@ export async function startSync(
 
             return {
                 error: typeof detail === "string" ? detail : `Sync failed (${response.status})`
+            };
+        }
+
+        return { status: (await response.json()) as OnlyFansSyncStatus };
+    } catch {
+        return { error: "Could not reach the server" };
+    }
+}
+
+/*
+    Run a profile/artwork batch now.
+
+    Deliberately returns the index totals rather than the batch's result: the
+    batch is minutes of paced requests against onlyfans.com, and the question
+    the page is asking -- how many accounts have a picture and a profile --
+    is one the status poller already answers while it runs.
+*/
+export async function startEnrich(): Promise<
+    { status: OnlyFansSyncStatus } | { error: string }
+> {
+    try {
+        const response = await fetch("/api/v1/onlyfans/enrich", { method: "POST" });
+
+        if (!response.ok) {
+            const detail = await response
+                .json()
+                .then((body) => body?.detail)
+                .catch(() => null);
+
+            return {
+                error:
+                    typeof detail === "string" ? detail : `Enrichment failed (${response.status})`
             };
         }
 

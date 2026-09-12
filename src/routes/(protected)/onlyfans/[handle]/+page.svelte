@@ -4,6 +4,10 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import SiteSection from "$lib/components/onlyfans/site-section.svelte";
     import XIcon from "@lucide/svelte/icons/x";
+    import BadgeCheckIcon from "@lucide/svelte/icons/badge-check";
+    import MapPinIcon from "@lucide/svelte/icons/map-pin";
+    import LinkIcon from "@lucide/svelte/icons/link";
+    import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
     import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
     import {
@@ -20,6 +24,22 @@
     const account = $derived(data.account);
 
     let mode = $state<"videos" | "images">("videos");
+
+    /*
+        Counts from the performer's own profile. Built as a list and filtered
+        rather than rendered one #if at a time, so that an account with two of
+        the five shows two neat figures instead of the gaps between them.
+    */
+    const stats = $derived(
+        [
+            { label: "photos", value: account.photos_count },
+            { label: "videos", value: account.videos_count },
+            { label: "posts", value: account.posts_count },
+            { label: "likes", value: account.likes_count }
+        ]
+            .filter((stat): stat is { label: string; value: number } => stat.value != null)
+            .map((stat) => ({ label: stat.label, value: stat.value.toLocaleString() }))
+    );
 
     /*
         Which sites have been opened. A section is only mounted once its button
@@ -99,25 +119,90 @@
     </div>
 
     <div class="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-8 px-4 md:px-16">
-        <header class="flex flex-wrap items-center gap-5">
+        <header class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+            <!--
+                The banner is the performer's own onlyfans.com header and is
+                absent far more often than not, so it is a layer behind the
+                header rather than a slot in it: when there is none the block
+                closes up instead of leaving a hole.
+            -->
+            {#if account.header_url}
+                <div class="relative h-32 w-full md:h-44">
+                    <PosterImage src={account.header_url} alt="" />
+                    <div
+                        class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent">
+                    </div>
+                </div>
+            {/if}
+
             <div
-                class="relative size-24 shrink-0 overflow-hidden rounded-full border border-white/15 bg-zinc-900">
-                {#if account.avatar_url}
-                    <PosterImage src={account.avatar_url} alt={account.display_name} />
-                {/if}
-            </div>
-            <div class="min-w-0">
-                <h1
-                    class="font-serif text-4xl font-medium tracking-tight text-white/90 md:text-5xl">
-                    {account.display_name}
-                </h1>
-                <p class="font-mono text-xs text-zinc-500">
-                    {account.source_count}
-                    {account.source_count === 1 ? "site" : "sites"} · {account.handle}
-                </p>
-                {#if account.bio}
-                    <p class="mt-2 max-w-2xl text-sm text-zinc-400">{account.bio}</p>
-                {/if}
+                class="flex flex-wrap items-start gap-5 p-5 {account.header_url
+                    ? '-mt-12 relative'
+                    : ''}">
+                <div
+                    class="relative size-24 shrink-0 overflow-hidden rounded-full border border-white/15 bg-zinc-900">
+                    {#if account.avatar_url}
+                        <PosterImage src={account.avatar_url} alt={account.display_name} />
+                    {/if}
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h1
+                        class="flex items-center gap-2 font-serif text-4xl font-medium tracking-tight text-white/90 md:text-5xl">
+                        {account.display_name}
+                        {#if account.is_verified}
+                            <BadgeCheckIcon class="size-5 shrink-0 text-sky-400" />
+                        {/if}
+                    </h1>
+                    <p class="font-mono text-xs text-zinc-500">
+                        {account.source_count}
+                        {account.source_count === 1 ? "site" : "sites"} · {account.handle}
+                    </p>
+                    {#if account.bio}
+                        <p class="mt-2 max-w-2xl text-sm whitespace-pre-line text-zinc-400">
+                            {account.bio}
+                        </p>
+                    {/if}
+
+                    {#if stats.length}
+                        <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+                            {#each stats as stat (stat.label)}
+                                <span class="text-xs text-zinc-500">
+                                    <span class="font-mono text-zinc-300">{stat.value}</span>
+                                    {stat.label}
+                                </span>
+                            {/each}
+                        </div>
+                    {/if}
+
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
+                        {#if account.location}
+                            <span class="flex items-center gap-1 text-zinc-500">
+                                <MapPinIcon class="size-3.5" />
+                                {account.location}
+                            </span>
+                        {/if}
+                        {#if account.website}
+                            <a
+                                href={account.website}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                class="flex items-center gap-1 text-zinc-400 hover:text-white">
+                                <LinkIcon class="size-3.5" />
+                                {account.website.replace(/^https?:\/\//, "")}
+                            </a>
+                        {/if}
+                        {#if account.of_url}
+                            <a
+                                href={account.of_url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                class="flex items-center gap-1 text-sky-400 hover:text-sky-300">
+                                <ExternalLinkIcon class="size-3.5" />
+                                onlyfans.com/{account.of_username}
+                            </a>
+                        {/if}
+                    </div>
+                </div>
             </div>
         </header>
 

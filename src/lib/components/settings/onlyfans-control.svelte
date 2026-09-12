@@ -22,12 +22,14 @@
     import UsersIcon from "@lucide/svelte/icons/users";
     import UploadIcon from "@lucide/svelte/icons/upload";
     import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+    import SparklesIcon from "@lucide/svelte/icons/sparkles";
     import {
         getPlugins,
         rescanPlugins,
         setPluginEnabled,
         importPlugins,
         startSync,
+        startEnrich,
         syncStatus,
         type OnlyFansPlugins,
         type OnlyFansSyncStatus,
@@ -45,6 +47,7 @@
     let fileInput = $state<HTMLInputElement | null>(null);
     let runs = $state<OnlyFansSyncStatus | null>(null);
     let startingSite = $state<string | null>(null);
+    let enriching = $state(false);
 
     async function refresh() {
         const next = await getPlugins();
@@ -135,6 +138,30 @@
 
         startingSite = null;
         syncing = false;
+    }
+
+    /*
+        The other half of the job, and the one that fills the pictures. It is
+        separate from the sync on purpose: the sync finds out WHO exists and
+        is wide and fast, while this asks onlyfans.com about one account at a
+        time and is paced, so running it takes minutes and says nothing until
+        the totals above move.
+    */
+    async function enrich() {
+        enriching = true;
+        notice = null;
+
+        const result = await startEnrich();
+
+        if ("error" in result) {
+            failure = result.error;
+        } else {
+            runs = result.status;
+            failure = null;
+            notice = "Fetching profiles — the counts above fill in as it runs.";
+        }
+
+        enriching = false;
     }
 
     // A file copied onto the server has no event to announce itself, so this
@@ -309,23 +336,37 @@
                 <p class="text-muted-foreground text-xs">
                     {#if runs}
                         {runs.accounts.toLocaleString()} accounts, {runs.accounts_with_avatar.toLocaleString()}
-                        with a picture. Rebuilt weekly on the schedule above.
+                        with a picture, {runs.accounts_with_profile.toLocaleString()} matched to an
+                        onlyfans.com profile. Rebuilt weekly on the schedule above.
                     {:else}
                         Rebuilt weekly on the schedule above.
                     {/if}
                 </p>
             </div>
-            <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={syncing || anyRunning}
-                onclick={() => sync()}>
-                <RefreshCwIcon
-                    class="mr-2 size-4 {syncing || anyRunning ? 'animate-spin' : ''}"
-                    aria-hidden="true" />
-                Sync every site
-            </Button>
+            <div class="flex flex-wrap items-center gap-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={enriching}
+                    onclick={enrich}>
+                    <SparklesIcon
+                        class="mr-2 size-4 {enriching ? 'animate-pulse' : ''}"
+                        aria-hidden="true" />
+                    Fetch profiles
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={syncing || anyRunning}
+                    onclick={() => sync()}>
+                    <RefreshCwIcon
+                        class="mr-2 size-4 {syncing || anyRunning ? 'animate-spin' : ''}"
+                        aria-hidden="true" />
+                    Sync every site
+                </Button>
+            </div>
         </div>
 
         <!--
