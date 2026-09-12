@@ -138,6 +138,15 @@ history if it's ever relevant again.
   -- only `isEnabled()` reads the player preference. So
   `RivenNative.openInExternalPlayer()` works even when the client's default is
   the web player, which is the only time that button is on screen.
+  - **This applies to a playlist too, and it was re-learned the hard way.**
+    A multi-file release goes over as `/Videos/{id}/playlist.m3u`, and the
+    first attempt handed that URL across by dropping the item id -- which put
+    it straight back on `openUrl` and opened a browser. `.m3u` does not earn
+    a place in the chooser any more than `.mp4` did. A direct-play grant may
+    therefore stand for a PATH on this origin (`mintPathToken`), and
+    `/Videos/{id}/stream` redirects to it, so the playlist travels the typed
+    bridge like everything else. Verified end to end: the minted id 302s to
+    the playlist and all five entries carry their `part`.
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
