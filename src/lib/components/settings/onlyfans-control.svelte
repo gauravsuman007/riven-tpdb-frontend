@@ -27,8 +27,10 @@
         rescanPlugins,
         setPluginEnabled,
         importPlugins,
-        syncAccounts,
+        startSync,
+        syncStatus,
         type OnlyFansPlugins,
+        type OnlyFansSyncStatus,
         type ImportResult
     } from "$lib/onlyfans";
 
@@ -41,6 +43,8 @@
     let notice = $state<string | null>(null);
     let imported = $state<ImportResult[]>([]);
     let fileInput = $state<HTMLInputElement | null>(null);
+    let runs = $state<OnlyFansSyncStatus | null>(null);
+    let startingSite = $state<string | null>(null);
 
     async function refresh() {
         const next = await getPlugins();
@@ -98,27 +102,74 @@
         importing = false;
     }
 
-    async function sync() {
+    async function refreshRuns() {
+        const next = await syncStatus();
+        if (next) runs = next;
+    }
+
+    /**
+     * Start a walk, for one site or (with no argument) for every configured
+     * one.
+     *
+     * The button does not wait for the result. A full walk is several hundred
+     * requests and minutes of work, so the endpoint starts it and answers with
+     * the status; progress arrives through the poller below, which is the only
+     * thing that can report it while it happens.
+     */
+    async function sync(site?: string) {
+        startingSite = site ?? "*";
         syncing = true;
         notice = null;
-        const result = await syncAccounts();
 
-        if (result) {
-            notice = `Indexed ${result.accounts} account${result.accounts === 1 ? "" : "s"}.`;
-            failure = null;
+        const result = await startSync(site ? [site] : undefined);
+
+        if ("error" in result) {
+            failure = result.error;
         } else {
-            failure = "Sync failed. Is the OnlyFans index enabled above?";
+            runs = result.status;
+            failure = null;
+            notice = site
+                ? `Indexing ${site}…`
+                : "Indexing every enabled site — this takes a few minutes.";
         }
+
+        startingSite = null;
         syncing = false;
     }
 
     // A file copied onto the server has no event to announce itself, so this
     // notices one the same way the Plugins tab does: by asking again. Cheap --
-    // a handful of files on local disk.
-    const poller = setInterval(refresh, 5000);
+    // a handful of files on local disk. The run status rides the same timer
+    // because it is the progress readout for a walk that can last minutes.
+    const poller = setInterval(() => {
+        refresh();
+        refreshRuns();
+    }, 5000);
     onDestroy(() => clearInterval(poller));
 
     refresh();
+    refreshRuns();
+
+    /** "4 minutes ago", or null when there is no timestamp to describe. */
+    function ago(value: string | null): string | null {
+        if (!value) return null;
+
+        const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
+
+        if (seconds < 60) return "just now";
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    const STATE_STYLE: Record<string, string> = {
+        running: "text-sky-400",
+        ok: "text-emerald-400",
+        failed: "text-destructive",
+        never: "text-muted-foreground"
+    };
+
+    const anyRunning = $derived(runs?.sites.some((run) => run.state === "running") ?? false);
 
     const scrapers = $derived(status?.scrapers ?? []);
     const broken = $derived(Object.entries(status?.errors ?? {}));
@@ -251,17 +302,106 @@
         {/each}
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
-        <div class="min-w-0">
-            <p class="text-sm font-medium">Rebuild the account index</p>
-            <p class="text-muted-foreground text-xs">
-                Normally weekly, on the schedule above. This runs it now — a full crawl of every
-                enabled site, so it takes a while.
-            </p>
+    <div class="flex flex-col gap-3 border-t border-white/10 pt-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <p class="text-sm font-medium">Account index</p>
+                <p class="text-muted-foreground text-xs">
+                    {#if runs}
+                        {runs.accounts.toLocaleString()} accounts, {runs.accounts_with_avatar.toLocaleString()}
+                        with a picture. Rebuilt weekly on the schedule above.
+                    {:else}
+                        Rebuilt weekly on the schedule above.
+                    {/if}
+                </p>
+            </div>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={syncing || anyRunning}
+                onclick={() => sync()}>
+                <RefreshCwIcon
+                    class="mr-2 size-4 {syncing || anyRunning ? 'animate-spin' : ''}"
+                    aria-hidden="true" />
+                Sync every site
+            </Button>
         </div>
-        <Button type="button" variant="outline" size="sm" disabled={syncing} onclick={sync}>
-            <RefreshCwIcon class="mr-2 size-4 {syncing ? 'animate-spin' : ''}" aria-hidden="true" />
-            Sync now
-        </Button>
+
+        <!--
+            One row per configured site, not per installed scraper: a site
+            named in the settings but with no scraper in the folder is the
+            case worth showing, and it would simply be absent from a list
+            built the other way round.
+        -->
+        {#each runs?.sites ?? [] as run (run.site)}
+            <div
+                class="border-border/60 bg-background/60 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <div class="min-w-0 flex-1">
+                    <p class="flex items-center gap-2 text-sm font-medium">
+                        <span class="truncate">{run.site}</span>
+                        <span class="text-[11px] font-normal {STATE_STYLE[run.state] ?? ''}">
+                            {#if run.state === "running"}
+                                indexing…
+                            {:else if run.state === "never"}
+                                not indexed yet
+                            {:else if run.state === "failed"}
+                                failed
+                            {:else}
+                                done {ago(run.finished_at) ?? ""}
+                            {/if}
+                        </span>
+                    </p>
+
+                    <p class="text-muted-foreground text-xs">
+                        {#if !run.available}
+                            <!--
+                                A configured site with no scraper behind it
+                                would otherwise sit at "not indexed yet"
+                                looking like it was merely waiting its turn.
+                            -->
+                            No scraper installed for this site — import one above.
+                        {:else if run.state === "never"}
+                            Never walked. Press Index to build it now.
+                        {:else}
+                            <!--
+                                A count of pages, never a percentage: these
+                                indexes publish no length and end by 404ing
+                                the page after the last one, so there is
+                                nothing honest to divide by.
+                            -->
+                            {run.pages.toLocaleString()} page{run.pages === 1 ? "" : "s"},
+                            {run.accounts_seen.toLocaleString()} account{run.accounts_seen === 1
+                                ? ""
+                                : "s"}
+                            {#if run.state !== "running"}
+                                · {run.accounts_new.toLocaleString()} new
+                            {/if}
+                            {#if run.state === "running" && run.started_at}
+                                · started {ago(run.started_at)}
+                            {/if}
+                        {/if}
+                    </p>
+
+                    {#if run.error}
+                        <p class="text-destructive mt-0.5 truncate text-xs" title={run.error}>
+                            {run.error}
+                        </p>
+                    {/if}
+                </div>
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!run.available || run.state === "running" || startingSite !== null}
+                    onclick={() => sync(run.site)}>
+                    <RefreshCwIcon
+                        class="mr-2 size-4 {run.state === 'running' ? 'animate-spin' : ''}"
+                        aria-hidden="true" />
+                    Index
+                </Button>
+            </div>
+        {/each}
     </div>
 </div>

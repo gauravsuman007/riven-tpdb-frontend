@@ -264,6 +264,61 @@ export async function importPlugins(
     }
 }
 
-export function syncAccounts(): Promise<{ accounts: number } | null> {
-    return browserPost<{ accounts: number }>("/sync");
+export interface OnlyFansSyncRun {
+    site: string;
+    /** "running" | "ok" | "failed" | "never" */
+    state: string;
+    started_at: string | null;
+    finished_at: string | null;
+    pages: number;
+    accounts_seen: number;
+    accounts_new: number;
+    error: string | null;
+    available: boolean;
+}
+
+export interface OnlyFansSyncStatus {
+    running: boolean;
+    sites: OnlyFansSyncRun[];
+    accounts: number;
+    accounts_with_avatar: number;
+}
+
+export function syncStatus(): Promise<OnlyFansSyncStatus | null> {
+    return browserGet<OnlyFansSyncStatus>("/sync/status");
+}
+
+/**
+ * Start an index walk, for one site or for all of them.
+ *
+ * Returns the reason on failure rather than null, unlike the other helpers
+ * here: the interesting case is a 409 saying the site is already being walked,
+ * and "sync failed" would describe that as a fault when it is the endpoint
+ * refusing to run two walks over one index.
+ */
+export async function startSync(
+    sites?: string[]
+): Promise<{ status: OnlyFansSyncStatus } | { error: string }> {
+    const query = (sites ?? []).map((s) => `sites=${encodeURIComponent(s)}`).join("&");
+
+    try {
+        const response = await fetch(`/api/v1/onlyfans/sync${query ? `?${query}` : ""}`, {
+            method: "POST"
+        });
+
+        if (!response.ok) {
+            const detail = await response
+                .json()
+                .then((body) => body?.detail)
+                .catch(() => null);
+
+            return {
+                error: typeof detail === "string" ? detail : `Sync failed (${response.status})`
+            };
+        }
+
+        return { status: (await response.json()) as OnlyFansSyncStatus };
+    } catch {
+        return { error: "Could not reach the server" };
+    }
 }
