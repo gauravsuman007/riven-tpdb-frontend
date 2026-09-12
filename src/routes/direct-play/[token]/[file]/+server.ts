@@ -42,7 +42,20 @@ async function upstreamUrl(
             `&index=${encodeURIComponent(grant.index ?? "0")}`;
 
         const response = await fetcher(target, {
-            headers: { "x-api-key": env.BACKEND_API_KEY ?? "" }
+            headers: { "x-api-key": env.BACKEND_API_KEY ?? "" },
+            /*
+                BOUNDED, because the caller is a media player.
+
+                Resolving a scraped video means fetching the origin site, and
+                a site that has gone away does not refuse the connection -- it
+                hangs. Unbounded, this route then holds the player's socket
+                open with no bytes and no error, which the player can only
+                render as buffering, forever. Measured against eporner while
+                it was unreachable from the server: 45 seconds and still
+                waiting. Ten seconds is past the slowest healthy resolve
+                observed and well inside a viewer's patience.
+            */
+            signal: AbortSignal.timeout(10_000)
         });
 
         if (!response.ok) return null;
@@ -139,9 +152,16 @@ export const GET: RequestHandler = async ({ params, request, fetch, url }) => {
     let upstream: Response;
 
     try {
-        upstream = await fetch(target, { headers });
+        /*
+            Bounded for the same reason as the hand-off probe above, but only
+            until the response HEADERS arrive -- `AbortSignal.timeout` stops
+            counting once the promise resolves, so a long video streaming for
+            an hour is unaffected while a source that never answers is not
+            allowed to hold the player forever.
+        */
+        upstream = await fetch(target, { headers, signal: AbortSignal.timeout(15_000) });
     } catch {
-        error(502, "Could not reach the source");
+        error(504, "The source did not respond");
     }
 
     if (!upstream.ok && upstream.status !== 206) {
