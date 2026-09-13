@@ -408,11 +408,19 @@
             these are already drawn, and a failure in one says so where it
             happened instead of taking the page with it.
         -->
-        {#await Promise.all([data.studios, data.studioSuggestions]) then [studios, suggestions]}
+        {#await Promise.all([data.studios, data.studioSuggestions])}
+            <!--
+                A placeholder of the row's own height, so the ranked rails
+                above do not jump down by 240px when these land a moment later.
+            -->
+            <div class="h-[220px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]"></div>
+        {:then [studios, suggestions]}
             <StudioRow {studios} {suggestions} action="?/saveStudio" />
         {/await}
 
-        {#await Promise.all([data.shelves, data.brochure]) then [shelves, brochure]}
+        {#await Promise.all([data.shelves, data.brochure])}
+            <div class="h-[320px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]"></div>
+        {:then [shelves, brochure]}
             {#if shelves.length}
                 <div class="flex flex-col gap-12 pb-20">
                     <div class="flex flex-wrap items-center gap-2 text-zinc-300">
