@@ -1,7 +1,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
 import { getBrochure, getBrochureStatus, setBrochureEnabled } from "$lib/collections";
-import { listStudios } from "$lib/studios";
+import { listStudios, setStudioSaved } from "$lib/studios";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -34,6 +34,33 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+    /*
+        Follow or unfollow one studio from the row itself, same as on Explore.
+        The row is a shared component and posts to this name on either page,
+        so both have to answer to it.
+    */
+    saveStudio: async (event) => {
+        const data = await event.request.formData();
+        const studioId = Number(data.get("studioId"));
+        const saved = data.get("saved") === "true";
+
+        if (!Number.isFinite(studioId)) {
+            return fail(400, { message: "Missing studio id" });
+        }
+
+        const result = await setStudioSaved(studioId, saved, {
+            baseUrl: event.locals.backendUrl,
+            apiKey: event.locals.apiKey,
+            fetch: event.fetch
+        });
+
+        if (!result.ok) {
+            return fail(409, { message: result.message });
+        }
+
+        return { message: result.message };
+    },
+
     /*
         One switch, two effects, and both are needed. The backend saves the
         setting (so Settings -> Content -> Brochure agrees with this page, and

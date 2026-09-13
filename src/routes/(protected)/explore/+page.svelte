@@ -20,10 +20,13 @@
     import RailControls from "$lib/components/rail-controls.svelte";
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
+    import ShelfRow from "$lib/components/explore/shelf-row.svelte";
+    import StudioRow from "$lib/components/explore/studio-row.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import RatingBadge from "$lib/components/media/rating-badge.svelte";
     import CheckIcon from "@lucide/svelte/icons/check";
     import InfoIcon from "@lucide/svelte/icons/info";
+    import BookOpenIcon from "@lucide/svelte/icons/book-open";
     import SparklesIcon from "@lucide/svelte/icons/sparkles";
     import TagsIcon from "@lucide/svelte/icons/tags";
 
@@ -249,6 +252,10 @@
                             AVN winners
                         </Button>
                     </div>
+                    <p class="max-w-lg font-mono text-xs text-zinc-500">
+                        The Adult Empire shelves below are not ranked — they are the storefront's
+                        own ordering, mirrored locally, and they work before any of this does.
+                    </p>
                 </div>
             {/if}
 
@@ -387,6 +394,74 @@
             <p class="py-24 text-center text-zinc-300">
                 Could not reach the recommendation engine.
             </p>
+        {/await}
+
+        <!--
+            THE CATALOGUE ITSELF, under the rails computed from it.
+
+            Below rather than above because the ranked rails are the answer to
+            "what should I watch" and these are the raw material -- but on the
+            same page, because a reader who does not like the answer wants the
+            material, not a tab.
+
+            Each row awaits on its own. The rails can still be ranking while
+            these are already drawn, and a failure in one says so where it
+            happened instead of taking the page with it.
+        -->
+        {#await Promise.all([data.studios, data.studioSuggestions]) then [studios, suggestions]}
+            <StudioRow {studios} {suggestions} action="?/saveStudio" />
+        {/await}
+
+        {#await Promise.all([data.shelves, data.brochure]) then [shelves, brochure]}
+            {#if shelves.length}
+                <div class="flex flex-col gap-12 pb-20">
+                    <div class="flex flex-wrap items-center gap-2 text-zinc-300">
+                        <span class="font-mono text-xs tracking-widest uppercase">
+                            Adult Empire
+                        </span>
+                        <span class="h-px w-8 bg-zinc-700"></span>
+                        <span class="font-mono text-sm">
+                            {shelves
+                                .reduce((sum, shelf) => sum + shelf.total, 0)
+                                .toLocaleString()} ranked titles · not in your library
+                        </span>
+                    </div>
+
+                    {#each shelves as shelf (shelf.key)}
+                        <ShelfRow {shelf} />
+                    {/each}
+                </div>
+            {:else if !brochure.enabled}
+                <!--
+                    Switched off rather than empty, which are different facts
+                    and want different buttons. Turning it on is the brochure
+                    tab's job -- it is the page that explains what the sync
+                    costs -- so this points there rather than duplicating the
+                    switch and its explanation.
+                -->
+                <div
+                    class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+                    <div class="flex items-center gap-2 text-sm text-white/90">
+                        <BookOpenIcon class="size-4" aria-hidden="true" />
+                        Adult Empire's listings have not been switched on.
+                    </div>
+                    <p class="max-w-2xl font-mono text-xs text-zinc-400">
+                        All-time bestsellers, current bestsellers, trending and new releases, as
+                        rows you can browse — and the studio directory that the row above is
+                        picked from. Nothing is downloaded; a title enters your library only when
+                        you request it.
+                    </p>
+                    <Button href={resolve("/explore/brochure")} size="sm" variant="secondary">
+                        <BookOpenIcon class="mr-2 size-4" aria-hidden="true" />
+                        Set up the brochure
+                    </Button>
+                </div>
+            {:else}
+                <p class="pb-20 font-mono text-sm text-zinc-400">
+                    The brochure is switched on but its first sync has not landed yet. Covers
+                    appear a shelf at a time.
+                </p>
+            {/if}
         {/await}
     </div>
 </PageShell>

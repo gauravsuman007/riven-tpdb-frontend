@@ -19,6 +19,8 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import BookOpenIcon from "@lucide/svelte/icons/book-open";
     import PageShell from "$lib/components/page-shell.svelte";
+    import ShelfRow from "$lib/components/explore/shelf-row.svelte";
+    import StudioRow from "$lib/components/explore/studio-row.svelte";
     import StarIcon from "@lucide/svelte/icons/star";
     import CheckIcon from "@lucide/svelte/icons/check";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -104,188 +106,15 @@
         {:else}
             <div class="flex flex-col gap-12 pb-20">
                 <!--
-                    Studios the user follows, above the ranked shelves. This is
-                    the curated part of the page and it is short; the full
-                    hundred-studio directory lives on its own page behind
-                    "Browse all".
+                    Both rows are the shared components now, so this page and
+                    Explore cannot drift apart -- they were the same ninety
+                    lines of card markup twice, and any fix to one would have
+                    been made twice and made twice differently.
                 -->
-                <section class="flex flex-col gap-4">
-                    <div class="flex items-end justify-between gap-4">
-                        <div class="space-y-1">
-                            <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                Studios
-                            </h2>
-                            <p class="text-sm text-zinc-400">
-                                Top sellers and trending titles, per studio.
-                            </p>
-                        </div>
-                        <a
-                            href={resolve("/studios")}
-                            class="flex shrink-0 items-center gap-1.5 font-mono text-xs text-zinc-300 transition-colors hover:text-white">
-                            Browse all
-                            <ChevronRightIcon class="size-4" aria-hidden="true" />
-                        </a>
-                    </div>
-
-                    {#if data.studios.length}
-                        <ul
-                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                            {#each data.studios as studio (studio.id)}
-                                <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
-                                    <a
-                                        href={resolve(`/studios/${studio.id}`)}
-                                        class="group flex flex-col gap-2 focus-visible:outline-none">
-                                        <div
-                                            class="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-zinc-900 p-3 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
-                                            <!--
-                                                Adult Empire has no studio
-                                                artwork at all; the logo is
-                                                TPDB's and is missing for the
-                                                studios it does not carry, so
-                                                the name is a real fallback
-                                                rather than a placeholder.
-                                            -->
-                                            {#if studio.logo_path}
-                                                <img
-                                                    src={studio.logo_path}
-                                                    alt={studio.name}
-                                                    loading="lazy"
-                                                    class="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-105" />
-                                            {:else}
-                                                <span
-                                                    class="text-center font-serif text-sm text-white/80">
-                                                    {studio.name}
-                                                </span>
-                                            {/if}
-                                        </div>
-
-                                        <div class="space-y-0.5">
-                                            <p
-                                                class="truncate text-sm text-white/90 group-hover:text-white">
-                                                {studio.name}
-                                            </p>
-                                            {#if studio.title_count}
-                                                <p class="truncate font-mono text-xs text-zinc-400">
-                                                    {studio.title_count.toLocaleString()} titles
-                                                </p>
-                                            {/if}
-                                        </div>
-                                    </a>
-                                </li>
-                            {/each}
-                        </ul>
-                    {:else}
-                        <div
-                            class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/20 py-12 text-center">
-                            <BuildingIcon class="size-8 text-white/40" aria-hidden="true" />
-                            <p class="max-w-md text-sm text-zinc-300">
-                                No studios saved yet. Add some to see their top sellers and trending
-                                titles here.
-                            </p>
-                            <Button href={resolve("/studios")} variant="secondary" size="sm">
-                                <PlusIcon class="mr-2 size-4" aria-hidden="true" />
-                                Add studios
-                            </Button>
-                        </div>
-                    {/if}
-                </section>
+                <StudioRow studios={data.studios} action="?/saveStudio" />
 
                 {#each data.shelves as shelf (shelf.key)}
-                    <section class="flex flex-col gap-4">
-                        <div class="flex items-end justify-between gap-4">
-                            <div class="space-y-1">
-                                <h2
-                                    class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                    {shelf.name}
-                                </h2>
-                                {#if shelf.description}
-                                    <p class="text-sm text-zinc-400">{shelf.description}</p>
-                                {/if}
-                            </div>
-                            <span class="shrink-0 font-mono text-xs text-zinc-400">
-                                {shelf.total.toLocaleString()} titles
-                            </span>
-                        </div>
-
-                        <ul
-                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                            {#each shelf.entries as entry (entry.id)}
-                                <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
-                                    <a
-                                        href={entryHref(entry)}
-                                        class="group flex flex-col gap-2 focus-visible:outline-none">
-                                        <div
-                                            class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
-                                            {#if entry.poster_path}
-                                                <PosterImage
-                                                    src={entry.poster_path}
-                                                    alt={entry.title}
-                                                    class="transition-transform duration-500 group-hover:scale-105">
-                                                    {#snippet fallback()}
-                                                        <div
-                                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                            {entry.title}
-                                                        </div>
-                                                    {/snippet}
-                                                </PosterImage>
-                                            {:else}
-                                                <div
-                                                    class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                    {entry.title}
-                                                </div>
-                                            {/if}
-
-                                            {#if entry.rank}
-                                                <span
-                                                    class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-white">
-                                                    #{entry.rank}
-                                                </span>
-                                            {/if}
-
-                                            {#if entry.requested}
-                                                <span
-                                                    class="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-md bg-emerald-600/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
-                                                    <CheckIcon class="size-3" aria-hidden="true" />
-                                                    {entry.state ?? "In library"}
-                                                </span>
-                                            {/if}
-                                        </div>
-
-                                        <div class="space-y-0.5">
-                                            <p
-                                                class="truncate text-sm text-white/90 group-hover:text-white">
-                                                {entry.title}
-                                            </p>
-                                            <p
-                                                class="flex items-center gap-1.5 truncate font-mono text-xs text-zinc-400">
-                                                {#if entry.rating}
-                                                    <StarIcon
-                                                        class="size-3 fill-amber-400 text-amber-400"
-                                                        aria-hidden="true" />
-                                                    {entry.rating.toFixed(2)}
-                                                {/if}
-                                                {#if entry.year}
-                                                    <span>{entry.year}</span>
-                                                {/if}
-                                            </p>
-                                        </div>
-                                    </a>
-                                </li>
-                            {/each}
-
-                            {#if shelf.total > shelf.entries.length}
-                                <li
-                                    class="flex w-[150px] shrink-0 snap-start items-center md:w-[180px]">
-                                    <a
-                                        href={resolve(`/collections/${shelf.key}`)}
-                                        class="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/25 text-zinc-300 transition-colors hover:border-white/50 hover:text-white">
-                                        <ChevronRightIcon class="size-6" aria-hidden="true" />
-                                        <span class="font-mono text-xs">See all</span>
-                                    </a>
-                                </li>
-                            {/if}
-                        </ul>
-                    </section>
+                    <ShelfRow {shelf} />
                 {/each}
             </div>
         {/if}
