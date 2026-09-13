@@ -26,6 +26,17 @@ export interface Recommendation {
      * and therefore no request path yet.
      */
     entry_id: number | null;
+    /**
+     * The library item this title names, when the library holds one.
+     *
+     * Matched by title, not by id: a catalogue entry only ever links to a
+     * media item when it was requested THROUGH Riven, and a self-sourced
+     * storefront row never resolves a TPDB id either -- so a title already in
+     * the library is recommended again with nowhere useful to click. These
+     * two fields are what a card opens in preference to the entry page.
+     */
+    library_item_id: number | null;
+    library_tpdb_id: string | null;
     collection_key: string | null;
     external_source: string | null;
     external_id: string | null;

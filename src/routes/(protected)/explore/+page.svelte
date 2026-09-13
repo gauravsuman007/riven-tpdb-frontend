@@ -109,11 +109,32 @@
     }
 
     /*
-        A scene has no entry to open. Linking it anywhere would be a lie about
-        what the app can do with it, so the card is inert -- deliberately, and
-        the rail says why.
+        THE LIBRARY WINS.
+
+        A rail item is a catalogue entry, and `entryHref` sends one without a
+        TPDB id to the storefront listing it came from. That is right for a
+        title nobody owns and wrong for one already in the library: Adult
+        Empire's self-sourced rows never resolve a TPDB id at all, so every
+        owned title among them opened a storefront page instead of itself.
+
+        So a library match, when the backend found one, is what the card
+        opens -- through the TPDB record where the library holds one and the
+        item's own page where it does not, which is exactly what the library
+        grid does with the same item.
+
+        A scene with neither has no entry to open. Linking it anywhere would
+        be a lie about what the app can do with it, so the card is inert --
+        deliberately, and the rail says why.
     */
     function href(item: Recommendation): string | undefined {
+        if (item.library_tpdb_id) {
+            return `/details/tpdb/${item.kind === "scene" ? "tv" : "movie"}/${item.library_tpdb_id}`;
+        }
+
+        if (item.library_item_id !== null) {
+            return `/details/riven/${item.library_item_id}`;
+        }
+
         if (item.entry_id === null) {
             return undefined;
         }
