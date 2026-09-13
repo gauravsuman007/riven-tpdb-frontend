@@ -260,6 +260,23 @@ export async function getRailLayout(
     }
 }
 
+/**
+ * Forget this page's arrangement, so it follows the app's defaults again.
+ *
+ * The way back from "everything off". An empty layout means "never
+ * arranged" and picks up rows added by later updates; a layout that exists
+ * with every row off is a decision and is honoured forever. Without this
+ * there is no route from the second state to the first.
+ */
+export async function resetRailLayout(page: RailPage): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/v1/rails/${page}`, { method: "DELETE" });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
 export async function saveRailLayout(page: RailPage, rails: RailPlacement[]): Promise<boolean> {
     try {
         const response = await fetch(`/api/v1/rails/${page}`, {

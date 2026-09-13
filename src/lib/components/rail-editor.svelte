@@ -21,7 +21,7 @@
 -->
 <script lang="ts">
     import type { RailDef, RailPage, RailPlacement } from "$lib/rails";
-    import { forEditing, saveRailLayout } from "$lib/rails";
+    import { forEditing, resetRailLayout, saveRailLayout } from "$lib/rails";
     import { Button } from "$lib/components/ui/button/index.js";
     import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
     import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
@@ -68,6 +68,21 @@
         draft = draft.map((entry, at) =>
             at === index ? { ...entry, enabled: !entry.enabled } : entry
         );
+    }
+
+    /** Back to the app's own defaults, including rows added since. */
+    async function reset() {
+        saving = true;
+        error = null;
+
+        if (await resetRailLayout(page)) {
+            onsaved?.([]);
+            open = false;
+        } else {
+            error = "Could not reset the layout.";
+        }
+
+        saving = false;
     }
 
     async function save() {
@@ -177,13 +192,35 @@
             <p class="font-mono text-xs text-amber-400">{error}</p>
         {/if}
 
-        <div class="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" class="rounded-full" onclick={() => (open = false)}>
-                Cancel
+        <div class="flex items-center justify-between gap-2">
+            <!--
+                Not "turn everything off". An empty layout means "never
+                arranged", so the page follows the app again and picks up rows
+                added by later updates; every row switched off is a different
+                state and stays that way. Without this there is no route from
+                the second back to the first.
+            -->
+            <Button
+                size="sm"
+                variant="ghost"
+                class="rounded-full text-xs"
+                disabled={saving}
+                onclick={reset}>
+                Reset to default
             </Button>
-            <Button size="sm" class="rounded-full" disabled={saving} onclick={save}>
-                {saving ? "Saving…" : "Save"}
-            </Button>
+
+            <div class="flex gap-2">
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    class="rounded-full"
+                    onclick={() => (open = false)}>
+                    Cancel
+                </Button>
+                <Button size="sm" class="rounded-full" disabled={saving} onclick={save}>
+                    {saving ? "Saving…" : "Save"}
+                </Button>
+            </div>
         </div>
     </div>
 {/if}
