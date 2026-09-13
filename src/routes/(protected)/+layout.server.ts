@@ -1,6 +1,7 @@
 import type { LayoutServerLoad } from "./$types";
 import { getLockState } from "$lib/server/app-lock";
 import { listAddons, type AddonNav } from "$lib/addons";
+import { getHiddenNav } from "$lib/server/nav-prefs";
 
 export const load = (async ({ locals, fetch }) => {
     const lock = locals.user
@@ -29,6 +30,13 @@ export const load = (async ({ locals, fetch }) => {
     return {
         user: locals.user,
         addonNav,
+        /*
+            Loaded server-side rather than fetched by the sidebar, so a
+            hidden entry is never rendered and then removed a frame later --
+            which is what a client-side preference looks like on a slow
+            first paint.
+        */
+        navHidden: locals.user ? getHiddenNav(locals.user.id) : [],
         /*
             Only what the client guard needs to run its own idle clock. Never
             the PIN or its hash: the guard covers the screen, and the PIN is

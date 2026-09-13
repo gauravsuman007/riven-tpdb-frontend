@@ -43,6 +43,13 @@
       "when": 1788084161728,
       "tag": "0005_app_lock_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789315405655,
+      "tag": "0006_nav_prefs",
+      "breakpoints": true
     }
   ]
 }

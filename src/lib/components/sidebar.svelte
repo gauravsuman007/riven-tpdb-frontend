@@ -64,7 +64,20 @@
 
     // `user` stays untyped, as it was: the layout hands over the session
     // object and annotating it here would only restate that shape badly.
-    let { user, addons = [] }: { user: any; addons?: AddonNav[] } = $props();
+    let {
+        user,
+        addons = [],
+        hidden = []
+    }: { user: any; addons?: AddonNav[]; hidden?: string[] } = $props();
+
+    /*
+        The entries this viewer has turned off, by key -- a manifest key for a
+        host entry, an href for an add-on's. Chosen on the General settings
+        tab and stored per user; see `$lib/nav.ts`. Home and Settings are not
+        removable and the server refuses to store them as hidden, so no guard
+        is needed here.
+    */
+    const hiddenKeys = $derived(new Set(hidden));
 
     /*
         Host entries first, then one per installed add-on. An add-on's entry
@@ -75,21 +88,23 @@
         back rather than leaving a hole where the add-on should be.
     */
     const navItems = $derived([
-        ...NAV_ITEMS.map((item) => ({
+        ...NAV_ITEMS.filter((item) => !hiddenKeys.has(item.key)).map((item) => ({
             href: item.href,
             icon: icons[item.key] ?? Mountain,
             label: item.label
         })),
-        ...addons.map((addon) => ({
-            // Cast: an add-on's href is `/x/<key>` and is only known at
-            // runtime, so it cannot be a member of SvelteKit's generated
-            // union of literal routes. The route itself is real -- it is
-            // `/x/[addon]/[...rest]` -- and `resolve` passes an unknown path
-            // through unchanged.
-            href: addon.href as (typeof NAV_ITEMS)[number]["href"],
-            icon: icons[addon.icon] ?? Puzzle,
-            label: addon.label
-        }))
+        ...addons
+            .filter((addon) => !hiddenKeys.has(addon.href))
+            .map((addon) => ({
+                // Cast: an add-on's href is `/x/<key>` and is only known at
+                // runtime, so it cannot be a member of SvelteKit's generated
+                // union of literal routes. The route itself is real -- it is
+                // `/x/[addon]/[...rest]` -- and `resolve` passes an unknown path
+                // through unchanged.
+                href: addon.href as (typeof NAV_ITEMS)[number]["href"],
+                icon: icons[addon.icon] ?? Puzzle,
+                label: addon.label
+            }))
     ]);
 
     /*
@@ -158,7 +173,12 @@
         {#if user}
             <Tooltip>
                 {#snippet trigger()}
-                    <a href={resolve("/auth")} class="cursor-pointer" aria-label="Profile">
+                    <!-- The profile is a settings tab now; /auth only
+                         redirects here, so link straight at the tab. -->
+                    <a
+                        href="{resolve('/settings')}?tab=profile"
+                        class="cursor-pointer"
+                        aria-label="Profile">
                         <Avatar.Root>
                             {#if user.image}
                                 <Avatar.Image src={user.image} alt={user.name} />
@@ -223,13 +243,12 @@
     <!-- Pop-out Menu -->
     <div
         transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
-        class="fixed right-4 z-50 flex w-72 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl md:hidden"
-        style="bottom: calc(6rem + env(safe-area-inset-bottom))">
+        class="fixed right-4 bottom-24 z-50 flex w-72 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl md:hidden">
         <div class="p-3">
             {#if user}
                 <div class="mb-4 flex items-center justify-between px-2">
                     <a
-                        href={resolve("/auth")}
+                        href="{resolve('/settings')}?tab=profile"
                         class="flex items-center gap-3"
                         onclick={() => SidebarStore.toggle()}>
                         <Avatar.Root class="size-8">
@@ -277,14 +296,6 @@
             {/if}
 
             <nav class="flex flex-col gap-1" aria-label="Mobile Navigation">
-                <!--
-                    Also here, not only in the desktop sidebar. That one is
-                    `hidden md:flex`, so on a phone -- which is exactly where
-                    the Jellyfin client runs -- the escape control was never
-                    rendered, which is why it could not be found.
-                -->
-                <ShellExit labelled class="mb-1 w-full justify-start" />
-
                 {#each navItems as item (item.href)}
                     <a
                         href={resolve(item.href)}

@@ -5,6 +5,8 @@ import type { InitialFormData } from "@sjsf/sveltekit";
 import { createFormHandler } from "@sjsf/sveltekit/server";
 import * as defaults from "$lib/components/settings/form-defaults";
 import { listAddons, type Addon } from "$lib/addons";
+import { loadDashboard } from "$lib/server/dashboard";
+import { loadProfile, profileActions } from "$lib/server/profile";
 
 const getSchema = async (baseUrl: string, apiKey: string, fetch: typeof globalThis.fetch) => {
     const settingsSchema = await providers.riven.GET("/api/v1/settings/schema", {
@@ -21,7 +23,9 @@ const getSchema = async (baseUrl: string, apiKey: string, fetch: typeof globalTh
     return settingsSchema.data;
 };
 
-export const load: PageServerLoad = async ({ fetch, locals }) => {
+export const load: PageServerLoad = async (event) => {
+    const { fetch, locals } = event;
+
     const allSettings = await providers.riven.GET("/api/v1/settings/get/all", {
         baseUrl: locals.backendUrl,
         headers: {
@@ -53,6 +57,16 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
     }
 
     return {
+        /*
+            The dashboard and the profile are tabs on this page rather than
+            pages of their own, so their data is loaded here too.
+
+            `loadDashboard` returns unawaited promises and is NOT awaited: the
+            settings form must not wait on a debrid round trip to paint. See
+            `$lib/server/dashboard.ts`.
+        */
+        ...loadDashboard(event),
+        ...(await loadProfile(event)),
         addons,
         form: {
             schema: await getSchema(locals.backendUrl, locals.apiKey, fetch),
@@ -87,8 +101,17 @@ function infraFailure(message: string) {
     });
 }
 
+/*
+    A NAMED action, not the default one, and that is forced rather than
+    chosen: the profile's four form actions below are named, and SvelteKit
+    refuses a route that mixes named actions with a default. The settings
+    form posts here explicitly -- see the `action` in `<Form attributes>` in
+    `+page.svelte`, which is what the sjsf request task reads off the <form>
+    element.
+*/
 export const actions = {
-    default: async ({ request, fetch, locals }) => {
+    ...profileActions,
+    settings: async ({ request, fetch, locals }) => {
         // The autosave watcher retries on the next edit regardless, but a
         // dropped edit with no explanation reads as "autosave is broken" --
         // which is exactly the report that prompted this. A transient
@@ -115,7 +138,9 @@ export const actions = {
         try {
             [form] = await handleForm(request.signal, await request.formData());
         } catch {
-            return infraFailure("Could not read the submitted settings. Your edit was not saved -- try again.");
+            return infraFailure(
+                "Could not read the submitted settings. Your edit was not saved -- try again."
+            );
         }
 
         if (!form.isValid) {

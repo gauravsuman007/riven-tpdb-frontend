@@ -104,8 +104,8 @@ history if it's ever relevant again.
   carried a token this app has never heard of. On-device (Jellyfin Android
   2.7.1, adb logcat):
 
-        E/MediaSourceResolver: Failed to load media source 0000...035e
-        InvalidStatusException: Invalid HTTP status in response: 401
+          E/MediaSourceResolver: Failed to load media source 0000...035e
+          InvalidStatusException: Invalid HTTP status in response: 401
 
     ExoPlayer and the external player failed identically because both resolve
     the media source through the same `ApiClient` before they diverge. The
@@ -138,15 +138,15 @@ history if it's ever relevant again.
   -- only `isEnabled()` reads the player preference. So
   `RivenNative.openInExternalPlayer()` works even when the client's default is
   the web player, which is the only time that button is on screen.
-  - **This applies to a playlist too, and it was re-learned the hard way.**
-    A multi-file release goes over as `/Videos/{id}/playlist.m3u`, and the
-    first attempt handed that URL across by dropping the item id -- which put
-    it straight back on `openUrl` and opened a browser. `.m3u` does not earn
-    a place in the chooser any more than `.mp4` did. A direct-play grant may
-    therefore stand for a PATH on this origin (`mintPathToken`), and
-    `/Videos/{id}/stream` redirects to it, so the playlist travels the typed
-    bridge like everything else. Verified end to end: the minted id 302s to
-    the playlist and all five entries carry their `part`.
+    - **This applies to a playlist too, and it was re-learned the hard way.**
+      A multi-file release goes over as `/Videos/{id}/playlist.m3u`, and the
+      first attempt handed that URL across by dropping the item id -- which put
+      it straight back on `openUrl` and opened a browser. `.m3u` does not earn
+      a place in the chooser any more than `.mp4` did. A direct-play grant may
+      therefore stand for a PATH on this origin (`mintPathToken`), and
+      `/Videos/{id}/stream` redirects to it, so the playlist travels the typed
+      bridge like everything else. Verified end to end: the minted id 302s to
+      the playlist and all five entries carry their `part`.
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
@@ -378,7 +378,7 @@ Android shell. In Firefox on Android, Safari or any desktop browser it is
 undefined, so the chain used to end at "No app available to open this video"
 -- and the button was hidden outright, because it was gated on that bridge.
 
-A browser cannot launch another application directly, and what it *can* do
+A browser cannot launch another application directly, and what it _can_ do
 differs per platform, so `browserOptions()` has one strategy each. Do not try
 to unify them; there is no shared mechanism.
 
@@ -438,3 +438,53 @@ The fix belongs in each add-on's build, which prefixes its own rules with the
 same construct to reach (4,n,m). Both shipped add-ons carry it as
 `ui/postcss.config.js`; copy that file into any new one. It is a build step,
 not a convention to remember while authoring.
+
+## Settings is a hub: the dashboard and the profile are tabs on it
+
+`/dashboard` and `/auth` are not pages any more. Both are tabs on `/settings`
+and both paths `308` to `/settings?tab=dashboard` / `?tab=profile`, which is
+why the old routes still have a `+page.svelte`: SvelteKit will not register a
+route without one, and those two files are comments and nothing else.
+
+The pieces, and why they are where they are:
+
+- **`$lib/server/dashboard.ts`** and **`$lib/server/profile.ts`** hold the two
+  loaders, and the second also holds the profile's four form actions. They
+  are modules rather than inlined into the settings loader because neither has
+  anything to do with the backend settings form they now share a page with.
+- **`$lib/components/settings/{dashboard,profile}-panel.svelte`** hold the
+  markup. A component under `$lib` cannot read a route's generated `./$types`,
+  so `$lib/dashboard.ts` states the dashboard's data shape for both sides.
+- **The settings form action is NAMED (`?/settings`), not the default one, and
+  that is forced.** SvelteKit refuses a route that mixes a default action with
+  named ones, and the profile's four are named because its forms post with a
+  relative `action="?/passwordChange"`. The name is set in the `<Form
+attributes>` of `settings/+page.svelte`: the sjsf request task reads the
+  action off the `<form>` element, so that is the only place it can go.
+- **The two panels render OUTSIDE the settings `<Form>`, and are unmounted
+  when closed.** Outside, because the profile renders `<form>` elements of its
+  own and a browser drops a nested one. Unmounted, unlike the generated form's
+  own panels — those must stay in the DOM because their fields are part of the
+  submitted payload, and these two have nothing to submit.
+
+## Hiding sidebar entries
+
+A per-user frontend preference: `nav_prefs` in the frontend DB, read by
+`(protected)/+layout.server.ts` and written through `/api/nav`. The control is
+`$lib/components/settings/sidebar-visibility.svelte`, on the General tab
+beside the app PIN, for the same reason that one is there — it is this app's
+own fact, not something in the backend's settings schema.
+
+- **The HIDDEN set is stored, never the visible one.** Otherwise every entry
+  added by an update — a new page, a newly installed add-on — is invisible to
+  exactly the people who have arranged their sidebar, and looks like the
+  update not having landed. Same rule `$lib/rails.ts` follows for rows.
+- **Home and Settings cannot be hidden, and the SERVER enforces it**
+  (`setHiddenNav` strips them). Settings is the only route back to the control
+  that edits this list, so one malformed POST could otherwise leave the
+  sidebar with no way to repair itself.
+- **It is loaded server-side, not fetched by the sidebar.** A hidden entry
+  that renders and then disappears a frame later is what a client-fetched
+  preference looks like on a slow first paint.
+- A key nothing offers today is kept rather than pruned, so an add-on switched
+  off for an afternoon does not come back with its entry silently re-shown.

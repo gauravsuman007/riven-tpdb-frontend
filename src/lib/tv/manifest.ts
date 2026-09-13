@@ -102,20 +102,24 @@ export interface TvNavItem {
      * that side. Reordering, retitling and removing are seamless; adding a
      * screen is not, and no manifest can make it so.
      *
-     * The four that are false are form-heavy administrative screens. Each
+     * The two that are false are form-heavy administrative screens. Each
      * is worse to operate with a remote than with the phone already in the
-     * room, and three of them can change the library.
+     * room, and both of them can change the library.
      */
     tv: boolean;
 }
 
+/*
+    The dashboard and the profile are NOT here, and their absence is
+    deliberate: they are tabs on the settings page rather than destinations of
+    their own (`/dashboard` and `/auth` redirect to them). Both were `tv:
+    false`, so the television loses nothing by their going.
+*/
 export const NAV_ITEMS: TvNavItem[] = [
     { key: "home", label: "Home", href: "/", tv: true },
-    { key: "dashboard", label: "Dashboard", href: "/dashboard", tv: false },
     { key: "library", label: "Library", href: "/library", tv: true },
     { key: "explore", label: "Explore", href: "/explore", tv: true },
     { key: "search", label: "Search", href: "/search", tv: true },
-    { key: "profile", label: "Profile", href: "/auth", tv: false },
     { key: "settings", label: "Settings", href: "/settings", tv: false },
     { key: "logs", label: "Logs", href: "/logs", tv: false }
 ];

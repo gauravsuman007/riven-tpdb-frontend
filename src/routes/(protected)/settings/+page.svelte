@@ -27,6 +27,9 @@
     import AddonSlot from "$lib/components/addon-slot.svelte";
     import AppLockSettings from "$lib/components/app-lock-settings.svelte";
     import NativeClientControl from "$lib/components/settings/native-client-control.svelte";
+    import DashboardPanel from "$lib/components/settings/dashboard-panel.svelte";
+    import ProfilePanel from "$lib/components/settings/profile-panel.svelte";
+    import SidebarVisibility from "$lib/components/settings/sidebar-visibility.svelte";
 
     setShadcnContext();
 
@@ -97,8 +100,7 @@
                 // validated result, which is the authoritative "what is now
                 // stored".
                 const stored =
-                    (result as any)?.data?.form?.data ??
-                    (page.data as any)?.form?.initialValue;
+                    (result as any)?.data?.form?.data ?? (page.data as any)?.form?.initialValue;
 
                 if (stored) setValue(form, structuredClone(stored));
 
@@ -336,6 +338,29 @@
      * is not rendered would be dropped from the payload -- switching tabs must
      * not silently discard the settings on the tabs you did not open.
      */
+    /*
+        The two tabs that are NOT the settings form.
+
+        The dashboard and the profile used to be pages of their own. They are
+        tabs here now, and they are kept apart from `TABS` below because they
+        are a different kind of thing entirely: every entry in `TABS` is a
+        top-level key of the backend's settings schema, rendered and saved by
+        the one generated form. These two have no schema section, load their
+        own data, and -- in the profile's case -- carry <form> elements of
+        their own, which is why they are rendered OUTSIDE the settings form
+        rather than as panels within it. Nesting a <form> in a <form> is not
+        valid HTML and the browser drops the inner one.
+
+        They lead the tab bar: they are what someone opens settings to look
+        at, as opposed to what they open it to change.
+    */
+    const LOCAL_TABS = [
+        { id: "dashboard", label: "Dashboard" },
+        { id: "profile", label: "Profile" }
+    ] as const;
+
+    const isLocalTab = (id: string) => LOCAL_TABS.some((tab) => tab.id === id);
+
     const TABS = [
         {
             id: "general",
@@ -386,13 +411,7 @@
         {
             id: "library",
             label: "Library",
-            sections: [
-                "filesystem",
-                "stream",
-                "updaters",
-                "jellyfin_server",
-                "post_processing"
-            ]
+            sections: ["filesystem", "stream", "updaters", "jellyfin_server", "post_processing"]
         },
         // Its own tab rather than falling through to "Other". The schema
         // fields below are only half of it -- logging in and picking an exit
@@ -444,13 +463,26 @@
         return keys.filter((key) => !claimed.has(key));
     });
 
-    const tabs = $derived([
+    /** Only the tabs the generated form renders a panel for. */
+    const formTabs = $derived([
         ...TABS,
         ...addonTabs,
         ...(extraSections.length > 0
             ? [{ id: "other", label: "Other", sections: extraSections }]
             : [])
     ]);
+
+    /*
+        Everything the tab bar offers, in the order it offers it.
+
+        General stays first because it is what opening Settings lands on --
+        the URL carries the open tab and `requestedTab()` falls back to
+        `TABS[0]`, so a bar whose first entry is never the one selected on
+        arrival would read as a bug. The two personal tabs come straight
+        after it, ahead of the rest of the backend configuration and well
+        clear of however many tabs the installed add-ons contribute.
+    */
+    const tabs = $derived([formTabs[0], ...LOCAL_TABS, ...formTabs.slice(1)]);
 
     /*
         Which tab is open lives in the URL, not just in component state, so a
@@ -475,7 +507,11 @@
     function requestedTab(): string {
         const raw = page.url.searchParams.get(TAB_PARAM);
         const id = raw ? (RENAMED_TABS[raw] ?? raw) : raw;
-        const known = [...TABS.map((tab) => tab.id), "other"];
+        const known: string[] = [
+            ...LOCAL_TABS.map((tab) => tab.id),
+            ...TABS.map((tab) => tab.id),
+            "other"
+        ];
         return id && known.includes(id) ? id : TABS[0].id;
     }
 
@@ -522,9 +558,35 @@
             {/each}
         </div>
 
-        <div class="settings-form" bind:this={formHost}>
+        <!--
+            Siblings of the settings form, not panels inside it: the profile
+            renders <form> elements of its own, and a nested <form> is
+            dropped by the browser. Unmounted when closed rather than hidden,
+            unlike the form's own panels -- those must stay in the DOM
+            because their fields are part of the submitted payload, whereas
+            these two have nothing to submit and the dashboard's charts are
+            not worth drawing for a tab nobody is looking at.
+        -->
+        {#if active === "dashboard"}
+            <div id="settings-panel-dashboard" role="tabpanel">
+                <DashboardPanel {data} />
+            </div>
+        {/if}
+
+        {#if active === "profile"}
+            <div id="settings-panel-profile" role="tabpanel">
+                <ProfilePanel {data} />
+            </div>
+        {/if}
+
+        <div class="settings-form" class:hidden={isLocalTab(active)} bind:this={formHost}>
             <!--
-                Nothing but `method` goes in `attributes`. These are spread
+                Nothing but `method` and `action` goes in `attributes`.
+                (`action` names the settings action, which had to become a
+                named one when the profile's own actions joined this route;
+                see +page.server.ts. The sjsf request task reads it off the
+                <form> element, so this is where it has to be set.)
+                These are spread
                 onto the <form> element and would override the integration's
                 own `onsubmit`, which is what calls preventDefault and posts
                 the form value as JSON. Overriding it makes the browser submit
@@ -533,12 +595,12 @@
                 save fails with a full page reload that looks exactly like the
                 form quietly resetting itself.
             -->
-            <Form attributes={{ method: "POST" }}>
+            <Form attributes={{ method: "POST", action: "?/settings" }}>
                 <!-- Carries the id prefix the server needs to parse the
                      submitted FormData; BasicForm renders this internally. -->
                 <HiddenIdPrefixInput {form} />
 
-                {#each tabs as tab (tab.id)}
+                {#each formTabs as tab (tab.id)}
                     <div
                         id="settings-panel-{tab.id}"
                         role="tabpanel"
@@ -573,9 +635,10 @@
                         <!-- Renders only inside the Jellyfin WebView shell. -->
                         {#if tab.id === "general"}
                             <NativeClientControl />
-                            <!-- A per-user FRONTEND setting, so it is not part
-                                 of the backend-schema form above. -->
+                            <!-- Per-user FRONTEND settings, so neither is
+                                 part of the backend-schema form above. -->
                             <AppLockSettings />
+                            <SidebarVisibility />
                         {/if}
 
                         {#if tab.id === "scraping"}

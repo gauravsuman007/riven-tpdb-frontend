@@ -70,7 +70,6 @@
         crossorigin="anonymous" />
 </svelte:head>
 
-
 <AppLockGuard enabled={data.appLock.enabled} timeoutMinutes={data.appLock.timeoutMinutes} />
 
 <ModeWatcher defaultMode="dark" defaultTheme="darkmatter" />
@@ -78,7 +77,7 @@
 
 <div
     class="bg-background relative grid h-dvh w-screen grid-cols-1 overflow-hidden md:grid-cols-[auto_1fr]">
-    <Sidebar user={data.user} addons={data.addonNav ?? []} />
+    <Sidebar user={data.user} addons={data.addonNav ?? []} hidden={data.navHidden ?? []} />
     <main class="relative overflow-hidden">
         <div
             bind:this={mainContent}

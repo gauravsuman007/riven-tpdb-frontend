@@ -5,8 +5,7 @@
     import Link2Off from "@lucide/svelte/icons/link-2-off";
     import { authClient } from "$lib/auth-client";
     import { toast } from "svelte-sonner";
-    import { goto } from "$app/navigation";
-    import { resolve } from "$app/paths";
+    import { invalidateAll } from "$app/navigation";
 
     interface Account {
         id: string;
@@ -64,7 +63,11 @@
                                         providerId: providerId
                                     });
                                     toast.success(`${providerId} unlinked successfully.`);
-                                    await goto(resolve("/auth"), { invalidateAll: true });
+                                    // The profile is a settings tab now, so
+                                    // this is already the page we are on --
+                                    // reloading its data is all that is left
+                                    // to do.
+                                    await invalidateAll();
                                 }}>
                                 <Link2Off class="mr-2 h-4 w-4" />
                                 Unlink
@@ -77,13 +80,13 @@
                                         // Use oauth2.link() for generic OAuth providers
                                         await authClient.oauth2.link({
                                             providerId: providerId,
-                                            callbackURL: "/auth"
+                                            callbackURL: "/settings?tab=profile"
                                         });
                                     } else {
                                         // Use linkSocial() for built-in social providers (plex)
                                         await authClient.linkSocial({
                                             provider: providerId,
-                                            callbackURL: "/auth"
+                                            callbackURL: "/settings?tab=profile"
                                         });
                                     }
                                     toast.success(`${providerId} linked successfully.`);
