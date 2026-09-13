@@ -36,6 +36,39 @@
         type AddonsResponse
     } from "$lib/addons";
 
+    /*
+        What each capability is called on the page, and what it means when
+        somebody hovers it.
+
+        "scrapers" is the only one with a consequence rather than a
+        description, and its note says so: declaring it is what puts the
+        add-on's outbound traffic through whatever the VPN tab is set to.
+        Somebody deciding whether to trust an add-on with their network
+        should be able to read that from the badge.
+    */
+    const CAPABILITY_LABEL: Record<string, string> = {
+        settings: "settings",
+        api: "API",
+        jobs: "scheduled work",
+        rails: "rows",
+        database: "own tables",
+        tv: "television",
+        slots: "page sections",
+        scrapers: "scrapers"
+    };
+
+    const CAPABILITY_NOTE: Record<string, string> = {
+        settings: "Contributes a tab to this settings page.",
+        api: "Answers its own routes under /api/v1/x/<key>.",
+        jobs: "Runs scheduled work on the host's scheduler.",
+        rails: "Offers rows that Home, Explore and its own page can show.",
+        database: "Owns tables, in a schema of its own that a purge drops.",
+        tv: "Draws something on the television surface.",
+        slots: "Fills a named section inside one of this app's own pages.",
+        scrapers:
+            "Fetches from third-party sites. Its traffic follows the VPN tab's scraping setting."
+    };
+
     let data = $state<AddonsResponse | null>(null);
     let failure = $state<string | null>(null);
     let notice = $state<string | null>(null);
@@ -284,6 +317,27 @@
                         </p>
                         {#if addon.description}
                             <p class="text-muted-foreground mt-0.5 text-xs">{addon.description}</p>
+                        {/if}
+
+                        <!--
+                            WHAT IT DOES, not what it claims to do. Every one
+                            of these but "scrapers" is decided by the host
+                            calling the add-on -- it has settings because its
+                            settings model answered, rails because its rail
+                            list did. A manifest field restating that could
+                            disagree with the code, and the badge would be
+                            drawn from the wrong half.
+                        -->
+                        {#if addon.capabilities?.length}
+                            <p class="mt-1.5 flex flex-wrap items-center gap-1">
+                                {#each addon.capabilities as capability (capability)}
+                                    <span
+                                        class="border-border/60 text-muted-foreground rounded-full border px-2 py-0.5 font-mono text-[10px]"
+                                        title={CAPABILITY_NOTE[capability] ?? ""}>
+                                        {CAPABILITY_LABEL[capability] ?? capability}
+                                    </span>
+                                {/each}
+                            </p>
                         {/if}
                     </div>
 
