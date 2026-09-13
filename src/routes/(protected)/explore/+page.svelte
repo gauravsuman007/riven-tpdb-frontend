@@ -182,7 +182,7 @@
         layout = data.railLayout ?? [];
     });
 
-    const shown = $derived(arrange(catalogue, layout));
+    const shown = $derived(arrange(catalogue, layout, "explore"));
 
     /** The engine's own record for one catalogued key, when it has one. */
     function rankedRail(key: string): Rail | undefined {

@@ -47,7 +47,7 @@
         layout = data.railLayout ?? [];
     });
 
-    const shown = $derived(arrange(catalogue, layout));
+    const shown = $derived(arrange(catalogue, layout, "home"));
 
     /*
         One store per row, kept across re-arrangements.

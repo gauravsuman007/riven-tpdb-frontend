@@ -155,9 +155,19 @@ export function addonRails(addons: Addon[]): RailDef[] {
  * verbatim instead of filling in defaults, and it is why a user who switches
  * every row off does not watch the page put them all back.
  */
-export function arrange(catalogue: RailDef[], layout: RailPlacement[]): RailDef[] {
+export function arrange(catalogue: RailDef[], layout: RailPlacement[], page: RailPage): RailDef[] {
+    /*
+        `defaultPage` decides what a page shows on its own, and it is checked
+        against THIS page rather than merely against "none".
+        `addonRails()` turns an add-on's "own" into `x/<key>`, so without
+        this an installed add-on's performer rows would appear on somebody's
+        Home the moment it loaded -- a page they had never arranged suddenly
+        carrying rows they never asked for.
+    */
+    const belongs = (rail: RailDef) => rail.defaultPage === page;
+
     if (!layout.length) {
-        return catalogue.filter((rail) => rail.defaultPage !== "none");
+        return catalogue.filter(belongs);
     }
 
     const byKey = new Map(catalogue.map((rail) => [rail.key, rail]));
@@ -172,10 +182,19 @@ export function arrange(catalogue: RailDef[], layout: RailPlacement[]): RailDef[
         if (rail && entry.enabled) ordered.push(rail);
     }
 
-    // Rails the saved layout has never heard of -- everything an update
-    // added, everything an add-on installed since. On, at the end.
+    /*
+        Rails the saved layout has never heard of -- everything an update
+        added, everything an add-on installed since. On, at the end, and only
+        the ones that belong to this page by default.
+
+        Belonging matters here for the same reason as above and one more: an
+        arranged page must not gain rows from an add-on installed for a
+        different screen. What it SHOULD gain is a row the app itself added,
+        which is the case this branch exists for -- otherwise every new row is
+        invisible to exactly the people who have arranged their pages.
+    */
     for (const rail of catalogue) {
-        if (!placed.has(rail.key) && rail.defaultPage !== "none") ordered.push(rail);
+        if (!placed.has(rail.key) && belongs(rail)) ordered.push(rail);
     }
 
     return ordered;
@@ -184,9 +203,24 @@ export function arrange(catalogue: RailDef[], layout: RailPlacement[]): RailDef[
 /**
  * The picker's view: every offered rail with its current on/off, in the
  * order the page draws them, followed by the ones that are off.
+ *
+ * EVERYTHING IN THE CATALOGUE IS OFFERED, including rails that belong to
+ * another page by default -- that is what "add a row" means on Home and
+ * Explore, and it is why the caller decides what the catalogue contains. An
+ * add-on's own page is narrowed by passing only that add-on's rails in;
+ * narrowing here instead would make it impossible to put a performer row on
+ * Home at all.
+ *
+ * `arrange` is the other half and does the opposite: it filters by page,
+ * because a row nobody has asked for should not appear on a page nobody has
+ * arranged.
  */
-export function forEditing(catalogue: RailDef[], layout: RailPlacement[]): RailPlacement[] {
-    const shown = arrange(catalogue, layout);
+export function forEditing(
+    catalogue: RailDef[],
+    layout: RailPlacement[],
+    page: RailPage
+): RailPlacement[] {
+    const shown = arrange(catalogue, layout, page);
     const shownKeys = new Set(shown.map((rail) => rail.key));
 
     return [

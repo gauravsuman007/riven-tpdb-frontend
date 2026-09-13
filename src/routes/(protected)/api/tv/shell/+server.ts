@@ -140,7 +140,7 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
             strip rather than a feature. An add-on's rail says the same thing
             about itself.
         */
-        rows: arrange(await railCatalogue(fetch), await getRailLayout("home", fetch))
+        rows: arrange(await railCatalogue(fetch), await getRailLayout("home", fetch), "home")
             .filter((rail) => rail.tv && rail.endpoint)
             .map(({ key, title, endpoint, viewAll, source }) => ({
                 key,

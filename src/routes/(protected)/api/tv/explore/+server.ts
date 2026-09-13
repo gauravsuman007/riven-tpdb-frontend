@@ -61,7 +61,7 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
 
     return json({
         version: 1,
-        rows: arrange(catalogue, layout)
+        rows: arrange(catalogue, layout, "explore")
             /*
                 The studio row and the storefront shelves are dropped here,
                 not hidden over there. Each is a grid of covers with its own

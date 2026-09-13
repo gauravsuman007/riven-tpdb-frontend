@@ -50,7 +50,7 @@
     function start() {
         // Taken fresh on every open, so a layout saved in another tab (or by
         // an add-on appearing since this page loaded) is what gets edited.
-        draft = forEditing(catalogue, layout);
+        draft = forEditing(catalogue, layout, page);
         error = null;
         open = true;
     }
