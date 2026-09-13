@@ -24,6 +24,22 @@ export interface AddonTv {
     title: boolean;
 }
 
+/** One row of cards an add-on offers a page. See `AddonRail` in the
+ *  backend's `program/addons/contract.py`. */
+export interface AddonRail {
+    /** Stable across versions -- it is what a saved layout stores. */
+    key: string;
+    title: string;
+    /** Where it sits before anyone has arranged that page: "own", "home",
+     *  "explore" or "none". NOT a restriction: the host's pages offer every
+     *  installed rail in their pickers, whatever this says. */
+    default_page: string;
+    /** Relative to the add-on's own mount, `/api/v1/x/<key>`. */
+    endpoint: string;
+    description: string;
+    tv: boolean;
+}
+
 export interface Addon {
     key: string;
     name: string;
@@ -45,6 +61,17 @@ export interface Addon {
     /** Named places in the HOST's pages this add-on fills with a section
      *  of its own, e.g. ["details"]. See `addon-slots.ts`. */
     slots: string[];
+    /** "settings", "api", "jobs", "rails", "database", "tv", "slots",
+     *  "scrapers". Inferred by the host from what the add-on implements --
+     *  except "scrapers", which nothing it can call would reveal, and which
+     *  is the one with a consequence rather than a label: it is what routes
+     *  the add-on's traffic through the configured VPN. */
+    capabilities: string[];
+    /** The add-on's rail CATALOGUE -- what may be picked. What a page
+     *  actually shows is the layout, at `/api/v1/rails`. A disabled or
+     *  failed add-on offers none, which is how its rows leave every page
+     *  without their saved positions being touched. */
+    rails: AddonRail[];
     settings_schema: Record<string, unknown> | null;
     settings: Record<string, unknown> | null;
     tables: number;

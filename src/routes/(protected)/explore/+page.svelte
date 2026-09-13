@@ -16,12 +16,21 @@
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
     import { entryHref } from "$lib/collections";
-    import type { Rail, RailSort, Recommendation } from "$lib/recommendations";
+    import type { ExploreRows, Rail, RailSort, Recommendation } from "$lib/recommendations";
     import RailControls from "$lib/components/rail-controls.svelte";
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
     import ShelfRow from "$lib/components/explore/shelf-row.svelte";
     import StudioRow from "$lib/components/explore/studio-row.svelte";
+    import RailEditor from "$lib/components/rail-editor.svelte";
+    import AddonRailRow from "$lib/components/addon-rail.svelte";
+    import {
+        addonRails,
+        arrange,
+        EXPLORE_STATIC_RAILS,
+        type RailDef,
+        type RailPlacement
+    } from "$lib/rails";
     import { Button } from "$lib/components/ui/button/index.js";
     import RatingBadge from "$lib/components/media/rating-badge.svelte";
     import CheckIcon from "@lucide/svelte/icons/check";
@@ -116,6 +125,70 @@
         });
     }
 
+    /*
+        THE RANKED ROWS ARE RESOLVED HERE RATHER THAN AWAITED IN THE MARKUP.
+
+        They used to sit inside one `{#await data.rows}`, with the storefront
+        shelves and the studio row below it in fixed positions. They cannot
+        stay that way now that the three are interleaved by the viewer's own
+        arrangement: an `{#await}` cannot be half of an ordering.
+
+        So the promise is resolved into state, the order is computed from it,
+        and each section keeps its OWN `{#await}` inside the loop below. The
+        independent streaming the old shape bought is preserved -- the shelves
+        still arrive without waiting for the ranking -- while the order across
+        all of them is one list.
+    */
+    let ranked = $state<ExploreRows | null>(null);
+    let rankingFailed = $state(false);
+
+    $effect(() => {
+        const promise = data.rows;
+
+        promise
+            .then((rows) => {
+                if (promise === data.rows) ranked = rows;
+            })
+            .catch(() => {
+                if (promise === data.rows) rankingFailed = true;
+            });
+    });
+
+    /*
+        The catalogue of rows this page can draw.
+
+        The ranked rails are not a fixed list -- their keys depend on which
+        intents are configured -- so they are catalogued from the engine's own
+        answer rather than declared anywhere. Which means the picker is empty
+        until the ranking lands, and that is honest: before it does, there is
+        genuinely nothing ranked to arrange.
+    */
+    const catalogue = $derived<RailDef[]>([
+        ...(ranked?.rails ?? []).map((rail) => ({
+            key: rail.key,
+            title: rail.title,
+            description: rail.reason,
+            source: "ranked",
+            defaultPage: "explore" as const,
+            tv: false
+        })),
+        ...EXPLORE_STATIC_RAILS,
+        ...addonRails(data.addons ?? [])
+    ]);
+
+    let layout = $state<RailPlacement[]>([]);
+
+    $effect(() => {
+        layout = data.railLayout ?? [];
+    });
+
+    const shown = $derived(arrange(catalogue, layout));
+
+    /** The engine's own record for one catalogued key, when it has one. */
+    function rankedRail(key: string): Rail | undefined {
+        return ranked?.rails.find((rail) => rail.key === key);
+    }
+
     /** The strongest signal behind a title, for the badge on its card. */
     function topSignal(item: Recommendation): string | null {
         const entries = Object.entries(item.signals);
@@ -162,19 +235,154 @@
             </p>
         </header>
 
-        {#await data.rows}
+        {#snippet rankedSection(rail: Rail)}
+            <section class="flex flex-col gap-4">
+                <div class="flex items-end justify-between gap-4">
+                    <div class="space-y-1">
+                        <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                            {rail.title}
+                        </h2>
+                        <p class="max-w-2xl text-sm text-zinc-400">{rail.reason}</p>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-end gap-2">
+                        <RailControls
+                            minRating={view(rail).minRating}
+                            sort={view(rail).sort}
+                            busy={view(rail).busy}
+                            onChange={(next) => adjust(rail, next)} />
+                        {#if rail.kind === "scenes"}
+                            <span class="font-mono text-xs text-zinc-400">
+                                StashDB · browse only
+                            </span>
+                        {/if}
+                        {#if view(rail).error}
+                            <span class="font-mono text-xs text-amber-400">
+                                {view(rail).error}
+                            </span>
+                        {/if}
+                    </div>
+                </div>
+
+                <ul
+                    class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
+                    {#each itemsFor(rail) as item (item.key)}
+                        <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
+                            <svelte:element
+                                this={href(item) ? "a" : "div"}
+                                href={href(item)}
+                                class="group flex flex-col gap-2 focus-visible:outline-none">
+                                <div
+                                    class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
+                                    {#if item.poster_path}
+                                        <PosterImage
+                                            src={item.poster_path}
+                                            alt={item.title}
+                                            class="transition-transform duration-500 group-hover:scale-105">
+                                            {#snippet fallback()}
+                                                <div
+                                                    class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                                                    {item.title}
+                                                </div>
+                                            {/snippet}
+                                        </PosterImage>
+                                    {:else}
+                                        <div
+                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                                            {item.title}
+                                        </div>
+                                    {/if}
+
+                                    {#if topSignal(item)}
+                                        <span
+                                            class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+                                            {topSignal(item)}
+                                        </span>
+                                    {/if}
+
+                                    {#if item.requested}
+                                        <span
+                                            class="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-md bg-emerald-600/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+                                            <CheckIcon class="size-3" aria-hidden="true" />
+                                            In library
+                                        </span>
+                                    {/if}
+                                </div>
+
+                                <div class="space-y-0.5">
+                                    <p
+                                        class="truncate text-sm text-white/90 group-hover:text-white">
+                                        {item.title}
+                                    </p>
+                                    <p
+                                        class="flex items-center gap-1.5 truncate font-mono text-xs text-zinc-400">
+                                        <RatingBadge rating={item.rating} />
+                                        {#if item.year}
+                                            <span>{item.year}</span>
+                                        {/if}
+                                        {#if item.studio}
+                                            <span class="truncate">{item.studio}</span>
+                                        {/if}
+                                    </p>
+                                    {#if item.reasons.length}
+                                        <!--
+                                        The provenance, in the
+                                        engine's own words: which
+                                        award, which facet, whose
+                                        presence in the library.
+                                    -->
+                                        <p
+                                            class="truncate font-mono text-[10px] text-zinc-500"
+                                            title={item.reasons.join(" · ")}>
+                                            {item.reasons.join(" · ")}
+                                        </p>
+                                    {/if}
+                                </div>
+                            </svelte:element>
+                        </li>
+                    {/each}
+                </ul>
+
+                {#if !itemsFor(rail).length}
+                    <!--
+                    Only reachable through the controls -- a rail
+                    that ranked empty is dropped by the backend.
+                    Named rather than left blank, and it names the
+                    filter, because "nothing here" and "nothing
+                    here at four stars and up" are different facts.
+                -->
+                    <p class="py-6 font-mono text-sm text-zinc-400">
+                        {#if rail.kind === "scenes"}
+                            StashDB carries no audience ratings, so no scene can meet a minimum. Set
+                            it back to Any.
+                        {:else}
+                            Nothing in this row is rated {view(rail).minRating} or higher yet. Ratings
+                            are read from Adult Empire's product pages — run the rating backfill if you
+                            have not.
+                        {/if}
+                    </p>
+                {/if}
+            </section>
+        {/snippet}
+
+        {#if !ranked && !rankingFailed}
             <div class="flex flex-col gap-3 py-24 text-center">
                 <p class="text-zinc-300">Ranking the catalogue…</p>
             </div>
-        {:then rows}
-            {#if rows.notices.length}
+        {:else if rankingFailed}
+            <p class="py-24 text-center text-zinc-300">
+                Could not reach the recommendation engine.
+            </p>
+        {/if}
+
+        {#if ranked}
+            {#if ranked.notices.length}
                 <!--
                     Named, not swallowed. An absent row tells nobody anything;
                     "the scene engine needs a StashDB key" is something a
                     person can act on.
                 -->
                 <ul class="flex flex-col gap-2">
-                    {#each rows.notices as notice (notice)}
+                    {#each ranked.notices as notice (notice)}
                         <li
                             class="flex items-start gap-2 rounded-xl border border-dashed border-white/20 px-4 py-3 text-sm text-zinc-300">
                             <InfoIcon
@@ -237,7 +445,7 @@
                 </div>
             {/if}
 
-            {#if !rows.rails.length}
+            {#if !ranked.rails.length}
                 <div class="flex flex-col items-center gap-3 py-20 text-center">
                     <SparklesIcon class="size-10 text-white/40" aria-hidden="true" />
                     <p class="max-w-lg text-zinc-300">
@@ -258,218 +466,107 @@
                     </p>
                 </div>
             {/if}
+        {/if}
 
-            <div class="flex flex-col gap-12 pb-20">
-                {#each rows.rails as rail (rail.key)}
-                    <section class="flex flex-col gap-4">
-                        <div class="flex items-end justify-between gap-4">
-                            <div class="space-y-1">
-                                <h2
-                                    class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                    {rail.title}
-                                </h2>
-                                <p class="max-w-2xl text-sm text-zinc-400">{rail.reason}</p>
-                            </div>
-                            <div class="flex shrink-0 flex-col items-end gap-2">
-                                <RailControls
-                                    minRating={view(rail).minRating}
-                                    sort={view(rail).sort}
-                                    busy={view(rail).busy}
-                                    onChange={(next) => adjust(rail, next)} />
-                                {#if rail.kind === "scenes"}
-                                    <span class="font-mono text-xs text-zinc-400">
-                                        StashDB · browse only
-                                    </span>
-                                {/if}
-                                {#if view(rail).error}
-                                    <span class="font-mono text-xs text-amber-400">
-                                        {view(rail).error}
-                                    </span>
-                                {/if}
-                            </div>
-                        </div>
-
-                        <ul
-                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                            {#each itemsFor(rail) as item (item.key)}
-                                <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
-                                    <svelte:element
-                                        this={href(item) ? "a" : "div"}
-                                        href={href(item)}
-                                        class="group flex flex-col gap-2 focus-visible:outline-none">
-                                        <div
-                                            class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
-                                            {#if item.poster_path}
-                                                <PosterImage
-                                                    src={item.poster_path}
-                                                    alt={item.title}
-                                                    class="transition-transform duration-500 group-hover:scale-105">
-                                                    {#snippet fallback()}
-                                                        <div
-                                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                            {item.title}
-                                                        </div>
-                                                    {/snippet}
-                                                </PosterImage>
-                                            {:else}
-                                                <div
-                                                    class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                    {item.title}
-                                                </div>
-                                            {/if}
-
-                                            {#if topSignal(item)}
-                                                <span
-                                                    class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
-                                                    {topSignal(item)}
-                                                </span>
-                                            {/if}
-
-                                            {#if item.requested}
-                                                <span
-                                                    class="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-md bg-emerald-600/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
-                                                    <CheckIcon class="size-3" aria-hidden="true" />
-                                                    In library
-                                                </span>
-                                            {/if}
-                                        </div>
-
-                                        <div class="space-y-0.5">
-                                            <p
-                                                class="truncate text-sm text-white/90 group-hover:text-white">
-                                                {item.title}
-                                            </p>
-                                            <p
-                                                class="flex items-center gap-1.5 truncate font-mono text-xs text-zinc-400">
-                                                <RatingBadge rating={item.rating} />
-                                                {#if item.year}
-                                                    <span>{item.year}</span>
-                                                {/if}
-                                                {#if item.studio}
-                                                    <span class="truncate">{item.studio}</span>
-                                                {/if}
-                                            </p>
-                                            {#if item.reasons.length}
-                                                <!--
-                                                    The provenance, in the
-                                                    engine's own words: which
-                                                    award, which facet, whose
-                                                    presence in the library.
-                                                -->
-                                                <p
-                                                    class="truncate font-mono text-[10px] text-zinc-500"
-                                                    title={item.reasons.join(" · ")}>
-                                                    {item.reasons.join(" · ")}
-                                                </p>
-                                            {/if}
-                                        </div>
-                                    </svelte:element>
-                                </li>
-                            {/each}
-                        </ul>
-
-                        {#if !itemsFor(rail).length}
-                            <!--
-                                Only reachable through the controls -- a rail
-                                that ranked empty is dropped by the backend.
-                                Named rather than left blank, and it names the
-                                filter, because "nothing here" and "nothing
-                                here at four stars and up" are different facts.
-                            -->
-                            <p class="py-6 font-mono text-sm text-zinc-400">
-                                {#if rail.kind === "scenes"}
-                                    StashDB carries no audience ratings, so no scene can meet a
-                                    minimum. Set it back to Any.
-                                {:else}
-                                    Nothing in this row is rated {view(rail).minRating} or higher yet.
-                                    Ratings are read from Adult Empire's product pages — run the rating
-                                    backfill if you have not.
-                                {/if}
-                            </p>
-                        {/if}
-                    </section>
-                {/each}
-            </div>
-        {:catch}
-            <p class="py-24 text-center text-zinc-300">
-                Could not reach the recommendation engine.
-            </p>
-        {/await}
+        <div class="flex justify-end">
+            <RailEditor page="explore" {catalogue} {layout} onsaved={(saved) => (layout = saved)} />
+        </div>
 
         <!--
-            THE CATALOGUE ITSELF, under the rails computed from it.
+            EVERY ROW ON THIS PAGE, IN THE VIEWER'S ORDER.
 
-            Below rather than above because the ranked rails are the answer to
-            "what should I watch" and these are the raw material -- but on the
-            same page, because a reader who does not like the answer wants the
-            material, not a tab.
-
-            Each row awaits on its own. The rails can still be ranking while
-            these are already drawn, and a failure in one says so where it
-            happened instead of taking the page with it.
+            The ranked rails, the studio row and the storefront shelves used to
+            be three fixed blocks in a fixed sequence. They are one list now,
+            and each still awaits its own data inside the loop -- so a slow
+            shelf sync does not hold up the ranking, and a failed one says so
+            where it happened rather than taking the page with it.
         -->
-        {#await Promise.all([data.studios, data.studioSuggestions])}
-            <!--
-                A placeholder of the row's own height, so the ranked rails
-                above do not jump down by 240px when these land a moment later.
-            -->
-            <div class="h-[220px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]"></div>
-        {:then [studios, suggestions]}
-            <StudioRow {studios} {suggestions} action="?/saveStudio" />
-        {/await}
+        <div class="flex flex-col gap-12 pb-20">
+            {#each shown as rail (rail.key)}
+                {#if rail.source === "ranked"}
+                    {@const record = rankedRail(rail.key)}
+                    {#if record}
+                        {@render rankedSection(record)}
+                    {/if}
+                {:else if rail.key === "studios"}
+                    {#await Promise.all([data.studios, data.studioSuggestions])}
+                        <!--
+                            A placeholder of the row's own height, so the rows
+                            around it do not jump when this one lands.
+                        -->
+                        <div
+                            class="h-[220px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]">
+                        </div>
+                    {:then [studios, suggestions]}
+                        <StudioRow {studios} {suggestions} action="?/saveStudio" />
+                    {/await}
+                {:else if rail.key === "shelves"}
+                    {#await Promise.all([data.shelves, data.brochure])}
+                        <div
+                            class="h-[320px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]">
+                        </div>
+                    {:then [shelves, brochure]}
+                        {#if shelves.length}
+                            <div class="flex flex-col gap-12 pb-20">
+                                <div class="flex flex-wrap items-center gap-2 text-zinc-300">
+                                    <span class="font-mono text-xs tracking-widest uppercase">
+                                        Adult Empire
+                                    </span>
+                                    <span class="h-px w-8 bg-zinc-700"></span>
+                                    <span class="font-mono text-sm">
+                                        {shelves
+                                            .reduce((sum, shelf) => sum + shelf.total, 0)
+                                            .toLocaleString()} ranked titles · not in your library
+                                    </span>
+                                </div>
 
-        {#await Promise.all([data.shelves, data.brochure])}
-            <div class="h-[320px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]"></div>
-        {:then [shelves, brochure]}
-            {#if shelves.length}
-                <div class="flex flex-col gap-12 pb-20">
-                    <div class="flex flex-wrap items-center gap-2 text-zinc-300">
-                        <span class="font-mono text-xs tracking-widest uppercase">
-                            Adult Empire
-                        </span>
-                        <span class="h-px w-8 bg-zinc-700"></span>
-                        <span class="font-mono text-sm">
-                            {shelves
-                                .reduce((sum, shelf) => sum + shelf.total, 0)
-                                .toLocaleString()} ranked titles · not in your library
-                        </span>
-                    </div>
-
-                    {#each shelves as shelf (shelf.key)}
-                        <ShelfRow {shelf} />
-                    {/each}
-                </div>
-            {:else if !brochure.enabled}
-                <!--
-                    Switched off rather than empty, which are different facts
-                    and want different buttons. Turning it on is the brochure
-                    tab's job -- it is the page that explains what the sync
-                    costs -- so this points there rather than duplicating the
-                    switch and its explanation.
-                -->
-                <div
-                    class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div class="flex items-center gap-2 text-sm text-white/90">
-                        <BookOpenIcon class="size-4" aria-hidden="true" />
-                        Adult Empire's listings have not been switched on.
-                    </div>
-                    <p class="max-w-2xl font-mono text-xs text-zinc-400">
-                        All-time bestsellers, current bestsellers, trending and new releases, as
-                        rows you can browse — and the studio directory that the row above is
-                        picked from. Nothing is downloaded; a title enters your library only when
-                        you request it.
-                    </p>
-                    <Button href={resolve("/explore/brochure")} size="sm" variant="secondary">
-                        <BookOpenIcon class="mr-2 size-4" aria-hidden="true" />
-                        Set up the brochure
-                    </Button>
-                </div>
-            {:else}
-                <p class="pb-20 font-mono text-sm text-zinc-400">
-                    The brochure is switched on but its first sync has not landed yet. Covers
-                    appear a shelf at a time.
-                </p>
-            {/if}
-        {/await}
+                                {#each shelves as shelf (shelf.key)}
+                                    <ShelfRow {shelf} />
+                                {/each}
+                            </div>
+                        {:else if !brochure.enabled}
+                            <!--
+                                Switched off rather than empty, which are different facts
+                                and want different buttons. Turning it on is the brochure
+                                tab's job -- it is the page that explains what the sync
+                                costs -- so this points there rather than duplicating the
+                                switch and its explanation.
+                            -->
+                            <div
+                                class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+                                <div class="flex items-center gap-2 text-sm text-white/90">
+                                    <BookOpenIcon class="size-4" aria-hidden="true" />
+                                    Adult Empire's listings have not been switched on.
+                                </div>
+                                <p class="max-w-2xl font-mono text-xs text-zinc-400">
+                                    All-time bestsellers, current bestsellers, trending and new
+                                    releases, as rows you can browse — and the studio directory that
+                                    the row above is picked from. Nothing is downloaded; a title
+                                    enters your library only when you request it.
+                                </p>
+                                <Button
+                                    href={resolve("/explore/brochure")}
+                                    size="sm"
+                                    variant="secondary">
+                                    <BookOpenIcon class="mr-2 size-4" aria-hidden="true" />
+                                    Set up the brochure
+                                </Button>
+                            </div>
+                        {:else}
+                            <p class="pb-20 font-mono text-sm text-zinc-400">
+                                The brochure is switched on but its first sync has not landed yet.
+                                Covers appear a shelf at a time.
+                            </p>
+                        {/if}
+                    {/await}
+                {:else}
+                    <AddonRailRow
+                        title={rail.title}
+                        endpoint={rail.endpoint ?? ""}
+                        addon={rail.source}
+                        description={rail.description} />
+                {/if}
+            {/each}
+        </div>
     </div>
 </PageShell>

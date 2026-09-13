@@ -19,7 +19,8 @@
 
 import type { RequestHandler } from "./$types";
 import { error, json } from "@sveltejs/kit";
-import { HOME_ROWS, NAV_ITEMS } from "$lib/tv/manifest";
+import { NAV_ITEMS } from "$lib/tv/manifest";
+import { addonRails, arrange, builtinHomeRails, getRailLayout } from "$lib/rails";
 import { themeTokens } from "$lib/tv/theme";
 import { listAddons } from "$lib/addons";
 
@@ -50,35 +51,51 @@ async function tvAddons(fetch: typeof globalThis.fetch) {
     // before any of this existed -- not a screen that fails to render.
     if ("error" in result) return [];
 
-    return result.addons.addons
-        /*
+    return (
+        result.addons.addons
+            /*
             `nav` is NOT required. An add-on with no page of its own has none
             -- the tube scraper is exactly that, a section on a title rather
             than a screen -- and requiring it here would have silently
             excluded the one add-on the television most needs.
         */
-        .filter((addon) => addon.state === "ok" && addon.tv)
-        .map((addon) => ({
-            key: addon.key,
-            label: addon.nav?.label ?? addon.name,
-            /*
+            .filter((addon) => addon.state === "ok" && addon.tv)
+            .map((addon) => ({
+                key: addon.key,
+                label: addon.nav?.label ?? addon.name,
+                /*
                 The lucide name the add-on declared. The other surface has no
                 icon font and no sprite -- it hand-draws a small set inline --
                 so this is a request, not a guarantee: a name it has not
                 drawn falls back to the same mountain the sidebar here uses.
             */
-            icon: addon.nav?.icon ?? "puzzle",
-            /*
+                icon: addon.nav?.icon ?? "puzzle",
+                /*
                 What the OTHER surface calls it. `riven-tv` writes its own
                 path -- it has a session in front of every URL and this app
                 does not -- so this is the identity of the destination, not a
                 link to follow.
             */
-            href: addon.nav?.href ?? `/x/${addon.key}`,
-            browse: Boolean(addon.tv?.browse),
-            title: Boolean(addon.tv?.title)
-        }))
-        .filter((addon) => addon.browse || addon.title);
+                href: addon.nav?.href ?? `/x/${addon.key}`,
+                browse: Boolean(addon.tv?.browse),
+                title: Boolean(addon.tv?.title)
+            }))
+            .filter((addon) => addon.browse || addon.title)
+    );
+}
+
+/**
+ * Every row the home page could draw, in this app's vocabulary.
+ *
+ * Its own, still defined in `$lib/tv/manifest` so that both renderers keep
+ * reading one list, plus every row each installed add-on offers. An add-on's
+ * rows reach the television by exactly the same route as this app's, which
+ * is what stops the set falling a version behind when one is installed.
+ */
+async function railCatalogue(fetch: typeof globalThis.fetch) {
+    const result = await listAddons(fetch);
+
+    return [...builtinHomeRails(), ...addonRails("error" in result ? [] : result.addons.addons)];
 }
 
 export const GET: RequestHandler = async ({ locals, fetch }) => {
@@ -107,12 +124,40 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
             label,
             href
         })),
-        rows: HOME_ROWS.filter((row) => row.tv).map(({ key, title, endpoint, viewAll }) => ({
-            key,
-            title,
-            endpoint,
-            viewAll
-        })),
+        /*
+            THE VIEWER'S OWN ARRANGEMENT, not this app's defaults.
+
+            The television renders whatever rows this route names, so a row
+            moved or switched off here has to move or disappear there too --
+            otherwise "arrange your home page" would mean "arrange one of your
+            two home pages", and the one in the living room would be the stale
+            one nobody thinks to check.
+
+            The `tv` flag is still applied AFTER the arrangement. It is a fact
+            about the row, not about the order: a set has no way to request a
+            title, so a row of things it can only look at is worth less there,
+            and a row whose items that renderer cannot draw would be an empty
+            strip rather than a feature. An add-on's rail says the same thing
+            about itself.
+        */
+        rows: arrange(await railCatalogue(fetch), await getRailLayout("home", fetch))
+            .filter((rail) => rail.tv && rail.endpoint)
+            .map(({ key, title, endpoint, viewAll, source }) => ({
+                key,
+                title,
+                endpoint,
+                viewAll: viewAll ?? null,
+                /*
+                    Which renderer draws it over there. An add-on's row
+                    answers normalised CARDS -- an id and what pressing it
+                    does -- and the television already has a renderer for
+                    those; this app's own rows answer library and TPDB items,
+                    which it draws differently. Naming the add-on is enough
+                    for it to pick, and to build the card's address, which no
+                    card carries.
+                */
+                addon: source === "built-in" ? null : source
+            })),
         theme: themeTokens()
     });
 };

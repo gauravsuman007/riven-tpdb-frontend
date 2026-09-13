@@ -6,6 +6,8 @@ import { createScopedLogger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
 import { entryHref } from "$lib/collections";
 import { getRows, type Recommendation } from "$lib/recommendations";
+import { listAddons } from "$lib/addons";
+import { getRailLayout } from "$lib/rails";
 import type { TMDBNowPlayingItem } from "$lib/components/tmdb-now-playing.svelte";
 
 const logger = createScopedLogger("home");
@@ -61,6 +63,34 @@ function heroItem(item: Recommendation, index: number): TMDBNowPlayingItem {
  * synced has nothing to rank, and an empty hero would be worse than a generic
  * one.
  */
+/**
+ * What this page needs to know about its own rows.
+ *
+ * Both halves, because they are useless apart: the ADD-ONS are the half of
+ * the catalogue this app cannot know by itself, and the LAYOUT is which of
+ * the catalogue the viewer wants and in what order.
+ *
+ * Loaded server-side and awaited, unlike the feeds below, because they decide
+ * what is drawn at all -- streaming them would mean the page reflows from its
+ * defaults into the viewer's arrangement while they are looking at it.
+ *
+ * Neither can fail the page. An add-on listing that cannot be read is a home
+ * page with no add-on rows, which is how it behaved before any of this
+ * existed; a layout that cannot be read is an UNARRANGED page, which draws
+ * every row it knows about.
+ */
+async function railData(fetch: typeof globalThis.fetch) {
+    const [listed, railLayout] = await Promise.all([
+        listAddons(fetch),
+        getRailLayout("home", fetch)
+    ]);
+
+    return {
+        addons: "error" in listed ? [] : listed.addons.addons,
+        railLayout
+    };
+}
+
 export const load: PageServerLoad = async ({ locals, fetch }) => {
     if (!locals.user || !locals.session) redirect(302, "/auth/login");
 
@@ -78,7 +108,7 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
         const forYou = rows.rails.find((rail) => rail.key === "for-you");
 
         if (forYou?.items.length) {
-            return { nowPlaying: forYou.items.map(heroItem) };
+            return { nowPlaying: forYou.items.map(heroItem), ...(await railData(fetch)) };
         }
 
         logger.info("No ranked recommendations yet; the hero falls back to TPDB.");
@@ -114,10 +144,11 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
         // it is deliberately not loaded here -- it used to add a serial round
         // trip to every home page render.
         return {
-            nowPlaying: await attachLibraryStates(withBackdrop.slice(0, 20), auth)
+            nowPlaying: await attachLibraryStates(withBackdrop.slice(0, 20), auth),
+            ...(await railData(fetch))
         };
     } catch (err) {
         logger.error("Error fetching TPDB home content:", err);
-        return { nowPlaying: [] };
+        return { nowPlaying: [], ...(await railData(fetch)) };
     }
 };

@@ -1,6 +1,8 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
 import { getBrochure, getBrochureStatus } from "$lib/collections";
+import { listAddons } from "$lib/addons";
+import { getRailLayout } from "$lib/rails";
 import { listStudios, setStudioSaved } from "$lib/studios";
 import {
     getCategoryIndex,
@@ -59,7 +61,22 @@ export const load: PageServerLoad = async (event) => {
             follows under ninety-seven they do not.
         */
         studios: listStudios(options, { saved: true }),
-        studioSuggestions: listStudios(options, { limit: 12 })
+        studioSuggestions: listStudios(options, { limit: 12 }),
+        /*
+            The rows this page may draw and the order they are drawn in.
+
+            Awaited rather than streamed with the rest: they decide WHAT is
+            drawn, so streaming them would reflow the page from its defaults
+            into the viewer's arrangement while they are looking at it.
+
+            An add-on listing that cannot be read is a page with no add-on
+            rows; a layout that cannot be read is an unarranged page. Neither
+            is an error worth showing.
+        */
+        addons: await listAddons(event.fetch).then((result) =>
+            "error" in result ? [] : result.addons.addons
+        ),
+        railLayout: await getRailLayout("explore", event.fetch)
     };
 };
 

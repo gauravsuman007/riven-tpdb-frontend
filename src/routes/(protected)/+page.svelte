@@ -5,7 +5,15 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { MediaListStore, type BaseListItem } from "$lib/services/lists-cache.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
-    import { HOME_ROWS } from "$lib/tv/manifest";
+    import RailEditor from "$lib/components/rail-editor.svelte";
+    import AddonRailRow from "$lib/components/addon-rail.svelte";
+    import {
+        addonRails,
+        arrange,
+        builtinHomeRails,
+        type RailDef,
+        type RailPlacement
+    } from "$lib/rails";
     import { fly } from "svelte/transition";
     import { cubicOut } from "svelte/easing";
 
@@ -15,24 +23,54 @@
         "text-muted-foreground border-white/10 bg-black/20 hover:bg-black/40 hover:text-foreground h-9 w-24 rounded-xl border text-xs font-bold backdrop-blur-md shadow-inner transition-all";
 
     /*
-        The rows come from `$lib/tv/manifest`, not from this file.
+        The rows, and who decides them.
 
-        They are drawn twice -- here, and by `riven-tv` on the television,
-        which cannot run this bundle and renders its own markup over the
-        same API. Two hand-maintained lists drift, and the drift is silent:
-        a row added here was simply absent there until somebody remembered.
-        Add, remove, retitle or reorder a row in the manifest and both
-        surfaces follow.
+        The CATALOGUE is what this page could draw: its own rows, still
+        defined in `$lib/tv/manifest` so that the television -- which cannot
+        run this bundle -- keeps rendering from the same list, plus every row
+        each installed add-on offers.
 
-        No initialData on any of them: each store fetches on mount, so the
-        server load no longer blocks first paint on a library round trip.
+        The LAYOUT is what the viewer picked, and it comes from the backend.
+        An unarranged page draws the catalogue's own defaults, which is
+        exactly what this page did before any of it was arrangeable.
     */
-    const rows = HOME_ROWS.map((row) => ({
-        row,
-        store: new MediaListStore<BaseListItem>(row.key, row.endpoint, null, {
-            noCache: row.noCache ?? false
-        })
-    }));
+    const catalogue = $derived<RailDef[]>([
+        ...builtinHomeRails(),
+        ...addonRails(data.addons ?? [])
+    ]);
+
+    let layout = $state<RailPlacement[]>([]);
+
+    // Seeded from the load rather than initialised from it, so that saving an
+    // arrangement redraws the page without a round trip to the server.
+    $effect(() => {
+        layout = data.railLayout ?? [];
+    });
+
+    const shown = $derived(arrange(catalogue, layout));
+
+    /*
+        One store per row, kept across re-arrangements.
+
+        A `MediaListStore` holds the fetched items and a five-minute cache.
+        Rebuilding them whenever the order changes would refetch every feed on
+        the page each time somebody moved a row one place, so they are made
+        once per key and looked up thereafter.
+    */
+    const stores = new Map<string, MediaListStore<BaseListItem>>();
+
+    function storeFor(rail: RailDef): MediaListStore<BaseListItem> {
+        let store = stores.get(rail.key);
+
+        if (!store) {
+            store = new MediaListStore<BaseListItem>(rail.key, rail.endpoint!, null, {
+                noCache: rail.noCache ?? false
+            });
+            stores.set(rail.key, store);
+        }
+
+        return store;
+    }
 </script>
 
 {#snippet listHeading(title: string)}
@@ -72,32 +110,53 @@
         </div>
 
         <div class="mx-auto flex w-full max-w-[2400px] flex-col gap-12 px-6 md:px-12 lg:px-16">
-            {#each rows as { row, store }, index (row.key)}
-                <!--
-                    An empty row is not drawn. A heading over nothing reads
-                    as a feed that broke rather than one that is still
-                    loading, and every one of these arrives on its own.
-                -->
-                {#if store.items.length}
-                    <div
-                        class="flex flex-col gap-4"
-                        in:fly|global={{
-                            y: 20,
-                            duration: 400,
-                            delay: 100 + index * 50,
-                            easing: cubicOut
-                        }}>
-                        <div class="mb-1 flex items-center justify-between">
-                            {@render listHeading(row.title)}
-                            {#if row.viewAll}
-                                <Button
-                                    class={viewAllButtonClass}
-                                    variant="ghost"
-                                    href={row.viewAll}>View All</Button>
-                            {/if}
+            <div class="flex justify-end">
+                <RailEditor
+                    page="home"
+                    {catalogue}
+                    {layout}
+                    onsaved={(saved) => (layout = saved)} />
+            </div>
+
+            {#each shown as rail, index (rail.key)}
+                {#if rail.source === "built-in"}
+                    {@const store = storeFor(rail)}
+                    <!--
+                        An empty row is not drawn. A heading over nothing reads
+                        as a feed that broke rather than one that is still
+                        loading, and every one of these arrives on its own.
+                    -->
+                    {#if store.items.length}
+                        <div
+                            class="flex flex-col gap-4"
+                            in:fly|global={{
+                                y: 20,
+                                duration: 400,
+                                delay: 100 + index * 50,
+                                easing: cubicOut
+                            }}>
+                            <div class="mb-1 flex items-center justify-between">
+                                {@render listHeading(rail.title)}
+                                {#if rail.viewAll}
+                                    <Button
+                                        class={viewAllButtonClass}
+                                        variant="ghost"
+                                        href={rail.viewAll}>View All</Button>
+                                {/if}
+                            </div>
+                            <ListCarousel data={store.items} />
                         </div>
-                        <ListCarousel data={store.items} />
-                    </div>
+                    {/if}
+                {:else}
+                    <!--
+                        An add-on's row, drawn by one renderer that knows
+                        nothing about which add-on it is. See `addon-rail`.
+                    -->
+                    <AddonRailRow
+                        title={rail.title}
+                        endpoint={rail.endpoint ?? ""}
+                        addon={rail.source}
+                        description={rail.description} />
                 {/if}
             {/each}
         </div>
