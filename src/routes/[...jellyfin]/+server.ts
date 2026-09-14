@@ -387,7 +387,13 @@ async function proxyStream(event: Ctx, rivenId: number): Promise<Response> {
         "content-length",
         "content-range",
         "accept-ranges",
-        "content-disposition"
+        "content-disposition",
+        /*
+            A throttled file comes back as 503 with Retry-After. Dropping the
+            header leaves an external player to retry at once, which is the
+            behaviour that got the file throttled.
+        */
+        "retry-after"
     ]) {
         const value = response.headers.get(name);
         if (value) forwarded.set(name, value);
