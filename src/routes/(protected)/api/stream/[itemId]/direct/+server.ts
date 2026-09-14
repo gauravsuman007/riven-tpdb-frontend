@@ -10,8 +10,10 @@ import type { RequestHandler } from "./$types";
  * it should.
  *
  * The backend decides whether that is safe and answers `{url: null, reason}`
- * when it is not -- disabled in settings, routed through the VPN, or a
- * provider whose links only work from this server. That is a normal answer,
+ * when it is not -- disabled in settings, or a provider whose links only work
+ * from this server. Never because of the VPN: that is for the tube and
+ * OnlyFans add-ons, and a library file from the debrid provider never goes
+ * through it. That is a normal answer,
  * not an error: the player falls back to the proxied route.
  */
 export const GET: RequestHandler = async ({ params, locals, fetch, url }) => {
