@@ -109,40 +109,31 @@
     }
 
     /*
-        THE LIBRARY WINS.
+        Where a ranked card points is `entryHref`'s decision, not this page's.
 
-        A rail item is a catalogue entry, and `entryHref` sends one without a
-        TPDB id to the storefront listing it came from. That is right for a
-        title nobody owns and wrong for one already in the library: Adult
-        Empire's self-sourced rows never resolve a TPDB id at all, so every
-        owned title among them opened a storefront page instead of itself.
+        It used to be made here, in a copy of that function's ordering, and
+        that copy was the bug: only the Explore rails learned to prefer the
+        library, so the same owned title still opened the storefront from the
+        brochure shelves, the home hero and the studio pages. One function
+        decides for every surface now.
 
-        So a library match, when the backend found one, is what the card
-        opens -- through the TPDB record where the library holds one and the
-        item's own page where it does not, which is exactly what the library
-        grid does with the same item.
-
-        A scene with neither has no entry to open. Linking it anywhere would
-        be a lie about what the app can do with it, so the card is inert --
-        deliberately, and the rail says why.
+        A scene with neither an entry nor a library match has nothing to open.
+        Linking it anywhere would be a lie about what the app can do with it,
+        so the card is inert -- deliberately, and the rail says why.
     */
     function href(item: Recommendation): string | undefined {
-        if (item.library_tpdb_id) {
-            return `/details/tpdb/${item.kind === "scene" ? "tv" : "movie"}/${item.library_tpdb_id}`;
-        }
-
-        if (item.library_item_id !== null) {
-            return `/details/riven/${item.library_item_id}`;
-        }
-
-        if (item.entry_id === null) {
+        if (item.entry_id === null && item.library_item_id === null && !item.library_tpdb_id) {
             return undefined;
         }
 
         return entryHref({
-            id: item.entry_id,
+            // Only reached with no entry when a library match supplied the
+            // destination, in which case the id is never consulted.
+            id: item.entry_id ?? 0,
             tpdb_id: item.tpdb_id,
-            tpdb_kind: item.kind === "scene" ? "scene" : "movie"
+            tpdb_kind: item.kind === "scene" ? "scene" : "movie",
+            library_item_id: item.library_item_id,
+            library_tpdb_id: item.library_tpdb_id
         });
     }
 

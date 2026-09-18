@@ -39,12 +39,18 @@ function heroItem(item: Recommendation, index: number): TMDBNowPlayingItem {
         rating: item.rating,
         reasons: item.reasons,
         href:
-            item.entry_id === null
+            item.entry_id === null && item.library_item_id === null && !item.library_tpdb_id
                 ? null
                 : entryHref({
-                      id: item.entry_id,
+                      id: item.entry_id ?? 0,
                       tpdb_id: item.tpdb_id,
-                      tpdb_kind: item.kind === "scene" ? "scene" : "movie"
+                      tpdb_kind: item.kind === "scene" ? "scene" : "movie",
+                      // The hero draws the same ranked titles the rails do, so
+                      // it has to make the same choice: a title already in the
+                      // library opens the library's copy, not the storefront
+                      // listing it was mirrored from.
+                      library_item_id: item.library_item_id,
+                      library_tpdb_id: item.library_tpdb_id
                   })
     };
 }

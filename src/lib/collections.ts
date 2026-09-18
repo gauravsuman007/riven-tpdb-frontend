@@ -55,6 +55,15 @@ export interface CollectionEntry {
     actionable: boolean;
     media_item_id: number | null;
     state: string | null;
+    /**
+     * The library item this entry's title names, when the library holds one.
+     *
+     * Matched by title on the backend, because `media_item_id` is only set for
+     * a title requested THROUGH Riven and a self-sourced storefront row never
+     * resolves a TPDB id either. See `entryHref`.
+     */
+    library_item_id?: number | null;
+    library_tpdb_id?: string | null;
 }
 
 export interface BrochureShelf {
@@ -339,28 +348,55 @@ export async function deleteCollection(key: string, options: FetchOptions) {
 /**
  * Where a catalogue entry's card should point.
  *
- * Once a storefront title has been resolved against TPDB it is an ordinary
- * library title, and the brochure page has nothing left to add -- the TPDB
- * detail page shows the same metadata plus the library state, files and
- * releases. Sending the user to the brochure page at that point would show
- * them the poorer of the two.
+ * THE LIBRARY WINS, and this is the ONE place that decides it. Every surface
+ * that draws a catalogue row -- the brochure shelves, the bestseller and
+ * trending rails, the home hero, the studio pages, and the brochure detail
+ * page's own redirect -- routes through here, so a card cannot open the
+ * storefront on one page and the title on another.
  *
- * Entries TPDB has no match for keep their brochure page, which is the only
- * place their metadata exists.
+ * The order, and why:
+ *
+ *  1. `library_tpdb_id` / `library_item_id`. The library already holds this
+ *     title. A catalogue entry only links to a media item when it was
+ *     requested THROUGH Riven, and an Adult Empire self-sourced row never
+ *     resolves a TPDB id at all -- it carries title, studio, year and cast, so
+ *     it is requestable without one and never acquires one. So an owned title
+ *     kept opening the storefront listing it was mirrored from, which is the
+ *     poorest page of the three and the only one with no library state on it.
+ *  2. `media_item_id`, when Riven's own request path linked it. Same
+ *     destination, a different and stronger piece of evidence.
+ *  3. `tpdb_id`. Resolved against TPDB but not owned: the TPDB detail page
+ *     shows the same metadata the brochure page would, plus releases.
+ *  4. The brochure page, for an entry TPDB has no match for. That is the only
+ *     place its metadata exists.
  */
 export function entryHref(entry: {
     id: number;
     tpdb_id?: string | null;
     tpdb_kind?: string | null;
+    media_item_id?: number | null;
+    library_item_id?: number | null;
+    library_tpdb_id?: string | null;
 }): string {
     // Resolved through the typed route ids rather than built as a string, so
     // a renamed route breaks the build instead of producing a dead link.
-    if (!entry.tpdb_id) {
-        return resolve("/(protected)/explore/brochure/[id]", { id: String(entry.id) });
-    }
+    const tpdb = (id: string) =>
+        resolve("/(protected)/details/tpdb/[type]/[id]", {
+            type: entry.tpdb_kind === "scene" ? "tv" : "movie",
+            id
+        });
+    const riven = (id: number) => resolve("/(protected)/details/riven/[id]", { id: String(id) });
 
-    return resolve("/(protected)/details/tpdb/[type]/[id]", {
-        type: entry.tpdb_kind === "scene" ? "tv" : "movie",
-        id: entry.tpdb_id
-    });
+    // A library match is answered through the LIBRARY item's own ids, never by
+    // falling back to the entry's. An owned title whose media item carries no
+    // TPDB id belongs on its riven page: sending it to the entry's TPDB record
+    // instead would show a detail page that cannot find the copy you own and
+    // therefore offers to request it again.
+    if (entry.library_tpdb_id) return tpdb(entry.library_tpdb_id);
+    if (entry.library_item_id != null) return riven(entry.library_item_id);
+
+    if (entry.tpdb_id) return tpdb(entry.tpdb_id);
+    if (entry.media_item_id != null) return riven(entry.media_item_id);
+
+    return resolve("/(protected)/explore/brochure/[id]", { id: String(entry.id) });
 }

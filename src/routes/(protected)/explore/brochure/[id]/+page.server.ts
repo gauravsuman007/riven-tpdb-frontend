@@ -2,6 +2,7 @@ import type { Actions, PageServerLoad } from "./$types";
 import { error, fail, redirect } from "@sveltejs/kit";
 import { entryHref, getEntry, requestEntry } from "$lib/collections";
 import providers from "$lib/providers";
+import { resolve } from "$app/paths";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -25,6 +26,12 @@ export const load: PageServerLoad = async (event) => {
     }
 
     /*
+        Asked as "is this page still the right one for this entry?" rather than
+        by re-testing `tpdb_id`: `entryHref` is the single place that decides
+        where a catalogue row belongs, and re-deciding it here is how this page
+        kept its old answer while every card that links to it learned a better
+        one. A title already in the library now leaves here too.
+
         A resolved title has no library state to show here any more: its
         MediaItem carries a tpdb_id and no adultempire_id, so the lookup below
         (keyed on the storefront id) would find nothing and the page would
@@ -36,8 +43,10 @@ export const load: PageServerLoad = async (event) => {
         first place. A bookmark, a shared link, or the back button all land
         here through `load`, not through those actions.
     */
-    if (entry.tpdb_id) {
-        redirect(303, entryHref(entry));
+    const target = entryHref(entry);
+
+    if (target !== resolve("/(protected)/explore/brochure/[id]", { id: String(entry.id) })) {
+        redirect(303, target);
     }
 
     /*
