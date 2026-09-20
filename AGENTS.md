@@ -558,3 +558,36 @@ both normal states rather than errors.
 
 Matching is fuzzy on the backend, so nothing here second-guesses spelling:
 "brazers" finds Brazzers and "evilangel" finds Evil Angel.
+
+## `/api/search` is public on purpose (federated search)
+
+`GET /api/search?q=&limit=` answers the multiplexer's federated search with
+`{ results: [{ title, path, kind?, year?, subtitle?, poster? }] }` — the same
+contract riven-tv serves.
+
+**It lives in `src/routes/api/`, NOT under `(protected)`, and that is the
+whole point.** The caller has no viewer: the multiplexer's own process asks on
+behalf of somebody who spoke at a television in front of a different app, and
+holds no cookie for anyone. A protected route asked that way does **not**
+answer 401 — it answers with the SIGN-IN PAGE and a **200**, which is exactly
+the shape of failure that gets mistaken for an empty library. Measured; it is
+why riven-tv's federated search goes to the backend directly instead.
+
+So it uses the server's own backend key and is readable by anything that can
+reach this port — the LAN here. Same bargain riven-tv's `/api/search` already
+makes, and neither returns anything a viewer could not see by opening the app.
+
+**Paths are bare and app-relative** (`/details/media/...`, `/studios/...`,
+`/x/onlyfans/...`), with no session and no origin: the multiplexer rewrites
+them to `/app/riven/...`. An absolute URL here sends the viewer out of its
+shell.
+
+It returns the same three kinds as the app's own search, so a voice search
+from a television and a search typed into the app do not disagree about what
+exists.
+
+**The multiplexer must be told.** Search is opt-in per app via `searchPath` in
+its `apps.json`; without that entry the mux answers *"No app behind this
+server offers search yet"* — and since search is scoped to the app you are
+standing in, that is what searching from inside Riven TPDB showed. Adding the
+route is only half the fix.
