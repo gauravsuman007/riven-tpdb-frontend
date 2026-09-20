@@ -83,6 +83,46 @@
     let scale = $state(1);
     let offsetX = $state(0);
     let offsetY = $state(0);
+
+    /*
+        IDENTITY IS NOT "NONE", AND THE DIFFERENCE IS VISIBLE.
+
+        "translate(0px, 0px) scale(1)" still promotes this wrapper to its own
+        compositing layer, which takes the <video> inside it off the hardware
+        video plane -- permanently, since the wrapper carries a transform for
+        the whole session whether or not anyone ever zooms.
+
+        riven-tv learned the severe version of this on a television, where the
+        picture becomes a black box with sound (src/html.ts, "Never the
+        video"). Android fails softly instead, which is why it went unnoticed
+        here: the picture plays, but as a composited texture. The phone's own
+        video post-processing no longer touches it, so it looks washed out
+        beside a player that uses a SurfaceView; and the frame is scaled
+        through the page's backing store instead of being presented at its own
+        resolution by the display controller, so it also looks softer.
+
+        The swap back is delayed rather than immediate because a transition to
+        "none" does not animate -- easing out of a zoom would jump.
+    */
+    let zoomed = $derived(scale !== 1 || offsetX !== 0 || offsetY !== 0);
+    let settled = $state(true);
+
+    $effect(() => {
+        if (zoomed) {
+            settled = false;
+            return;
+        }
+
+        const timer = setTimeout(() => (settled = true), 160);
+
+        return () => clearTimeout(timer);
+    });
+
+    let stageTransform = $derived(
+        !zoomed && settled
+            ? 'none'
+            : `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+    );
     let isFullscreen = $state(false);
 
     // Frame size, tracked so the zoom ceiling can follow the actual video
@@ -1319,7 +1359,7 @@
             ondblclick={(e) => onDoubleToggle(e.clientX, e.clientY)}>
             <div
                 class="h-full w-full origin-center"
-                style="transform: translate({offsetX}px, {offsetY}px) scale({scale}); transition: {panStart ||
+                style="transform: {stageTransform}; transition: {panStart ||
                 pinchStartDistance
                     ? 'none'
                     : 'transform 120ms ease-out'};">

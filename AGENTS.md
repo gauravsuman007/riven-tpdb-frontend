@@ -488,3 +488,39 @@ own fact, not something in the backend's settings schema.
   preference looks like on a slow first paint.
 - A key nothing offers today is kept rather than pruned, so an add-on switched
   off for an afternoon does not come back with its entry silently re-shown.
+
+## Never put a CSS transform on an element containing the `<video>`
+
+The overlay player's zoom is a transform on a wrapper around the video. It used
+to be written unconditionally -- at rest it still emitted
+`translate(0px, 0px) scale(1)`, which is *not* the same as `none`.
+
+Any transform promotes that wrapper to its own compositing layer, and the
+`<video>` inside it leaves the hardware video plane. It never came back,
+because the wrapper carried a transform for the whole session whether or not
+anyone ever zoomed.
+
+`riven-tv` found the severe version of this on a television, and says so in
+`src/html.ts` ("Never the video"): there the picture becomes a **black box with
+sound**, so it is impossible to miss. Android fails softly instead, which is
+why this survived here for so long. The picture plays, but as a composited
+texture:
+
+* the phone's own video post-processing no longer touches it, so it looks
+  washed out next to a player that draws to a SurfaceView (MX Player, VLC);
+* the frame is scaled through the page's backing store instead of being
+  presented at its own resolution by the display controller, so a 4K stream
+  also looks softer.
+
+Reported from an Android phone, 2026-09-20: the same file looked "beautiful"
+in MX Player and "washed out and lower quality" in the web player. Nothing in
+the server explained it -- `playback_info` says `mode: direct` for these files,
+so the browser and MX Player receive byte-identical H.264.
+
+The fix is to emit `transform: none` whenever the picture is unzoomed. Note the
+160ms delay before swapping back: a transition **to** `none` does not animate,
+so easing out of a zoom would otherwise jump.
+
+The same rule applies to `filter`, `backdrop-filter`, `opacity` below 1 and
+`mix-blend-mode` on any ancestor of the video. None of them are worth a
+measurably worse picture.
