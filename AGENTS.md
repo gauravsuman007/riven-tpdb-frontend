@@ -524,3 +524,37 @@ so easing out of a zoom would otherwise jump.
 The same rule applies to `filter`, `backdrop-filter`, `opacity` below 1 and
 `mix-blend-mode` on any ancestor of the video. None of them are worth a
 measurably worse picture.
+
+## Search answers with three kinds of thing, in three rows
+
+Titles, **studios** and **OnlyFans accounts**. The box was asked for all three
+and answered with only the first.
+
+**The bug that made search look broken.** `searchHref` built
+`/details/tpdb/{movie|tv}/{id}` for EVERY result, including TPDB performers
+and "sites". Clicking a studio therefore opened a title page with a site's
+uuid and answered **404 "Title not found on TPDB"**.
+
+**TPDB sites and studio pages are different id spaces.** `/studios/[id]` is
+keyed by Adult Empire's id; a TPDB site carries its own numeric id and a uuid,
+and neither rewrites into the other. So the Studios row is sourced from the
+studio DIRECTORY (`/api/v1/studios?search=`) -- the thing that actually has a
+page -- and NOT from TPDB's site search. A TPDB site in the titles list now
+falls back to the library's `site=` facet, and a performer to `performer=`,
+because neither has a page in this app.
+
+**The rows render above the titles and outside the results branch**, because
+they must show when no title matched. Searching a studio whose films are not
+in the catalogue used to say "No results found" with the studio page one click
+away; that state now says "No titles matched".
+
+`$lib/entity-search.ts` is hand-maintained for the same reason as
+`studios.ts` -- `providers/riven.ts` is generated from the backend's OpenAPI
+spec, and the OnlyFans half is an ADD-ON's route, so it is never in that spec
+at all. It is streamed rather than awaited (the client store fetches titles
+independently and must not wait behind a server round-trip) and uses
+`allSettled`, because a missing add-on and an unsynced studio directory are
+both normal states rather than errors.
+
+Matching is fuzzy on the backend, so nothing here second-guesses spelling:
+"brazers" finds Brazzers and "evilangel" finds Evil Angel.

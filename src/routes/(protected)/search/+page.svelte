@@ -5,6 +5,7 @@
     import { type Action } from "svelte/action";
     import ListItem from "$lib/components/list-item.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
+    import EntityRow from "$lib/components/search/entity-row.svelte";
     import { Button } from "$lib/components/ui/button/index.js";
     import PortraitCardSkeleton from "$lib/components/media/portrait-card-skeleton.svelte";
     import { SearchStore } from "$lib/services/search-store.svelte";
@@ -24,6 +25,39 @@
     */
     const disco = streamed(() => data.discovery);
 
+    /*
+        Studios and OnlyFans accounts, streamed the same way. These are not
+        titles and do not belong in the titles list: a studio is a place with
+        its own page of rankings, and an account is a performer's index. They
+        get their own rows above the titles, which is also the order someone
+        searching a studio name wants them in.
+    */
+    const entities = streamed(() => data.entities);
+
+    const studioItems = $derived(
+        (entities.value?.studios ?? []).map((studio) => ({
+            // The directory's own id, which is Adult Empire's -- the same one
+            // `/studios/[id]` is keyed by. NOT a TPDB site id.
+            href: `/studios/${studio.id}`,
+            title: studio.name,
+            subtitle: studio.title_count ? `${studio.title_count} titles` : null,
+            image: studio.logo_path ?? studio.poster_path ?? null
+        }))
+    );
+
+    const accountItems = $derived(
+        (entities.value?.accounts ?? []).map((account) => ({
+            href: `/x/onlyfans/${account.handle}`,
+            title: account.display_name || account.handle,
+            subtitle: `@${account.handle}`,
+            image: account.avatar_url ?? null,
+            round: true
+        }))
+    );
+
+    /** Something was found, even if no TITLE was. */
+    const hasEntities = $derived(studioItems.length > 0 || accountItems.length > 0);
+
     const heroItems = $derived(disco.value?.heroItems ?? []);
     const feelingLuckyItems = $derived(disco.value?.feelingLuckyItems ?? []);
     const searchExamples = $derived(disco.value?.searchExamples ?? []);
@@ -35,12 +69,37 @@
     let showEmptyState = $derived(
         !searchStore.rawSearchString && Object.keys(searchStore.filterParams).length === 0
     );
-    /** Search returns TPDB rows plus the occasional person/company. */
+    /*
+        Where a result opens.
+
+        A person and a company are NOT titles, and sending them to a title
+        page is what made search look broken: `/details/tpdb/movie/<site uuid>`
+        answers 404 "Title not found on TPDB", so every studio result was a
+        dead end.
+
+        Neither has a page of its own in this app. A performer's nearest
+        honest destination is their work in the library, which the library's
+        own `performer=` facet already serves. TPDB's "sites" are a different
+        id space from the studio directory -- `/studios/[id]` is keyed by
+        Adult Empire's id, not TPDB's -- so a site cannot be turned into a
+        studio page by rewriting the URL. The Studios ROW below is sourced
+        from the directory instead, and links there properly.
+    */
     const searchHref = (item: Record<string, any>) => {
+        if (item.media_type === "person") {
+            return `/library?performer=${encodeURIComponent(item.title ?? "")}`;
+        }
+
+        if (item.media_type === "company") {
+            return `/library?site=${encodeURIComponent(item.title ?? "")}`;
+        }
+
         const type = item.media_type === "tv" ? "tv" : "movie";
+
         if (item.indexer === "tpdb") {
             return `/details/tpdb/${type}/${item.tpdb_uuid ?? item.id}`;
         }
+
         return `/details/media/${item.id}/${type}`;
     };
 
@@ -245,6 +304,18 @@
             {/if}
 
             <!-- Content -->
+            <!--
+                Studios and accounts sit ABOVE the titles and outside the
+                results branch below, because they must show even when no
+                title matched: searching a studio whose films are not in the
+                catalogue used to answer "No results found" while the studio
+                page sat one click away.
+            -->
+            {#if !showEmptyState}
+                <EntityRow label="Studios" items={studioItems} />
+                <EntityRow label="OnlyFans" items={accountItems} />
+            {/if}
+
             {#if showEmptyState}
                 <div class="relative flex flex-col gap-12 py-12 md:py-16">
                     <!-- Hero section -->
@@ -386,8 +457,13 @@
                     {/each}
                 </div>
             {:else}
-                <div class="flex flex-col items-center justify-center gap-2 py-16">
-                    <p class="text-muted-foreground text-lg">No results found</p>
+                <div
+                    class="flex flex-col items-center justify-center gap-2 {hasEntities
+                        ? 'py-6'
+                        : 'py-16'}">
+                    <p class="text-muted-foreground text-lg">
+                        {hasEntities ? "No titles matched" : "No results found"}
+                    </p>
                     <p class="text-muted-foreground text-sm">
                         Try adjusting your search or filters
                     </p>

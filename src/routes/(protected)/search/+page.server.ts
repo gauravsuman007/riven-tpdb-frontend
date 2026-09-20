@@ -6,6 +6,7 @@ import { parseSearchQuery } from "$lib/search-parser";
 import providers from "$lib/providers";
 import { transformTPDBList, type TPDBTransformedListItem } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
+import { findEntities, NO_ENTITIES } from "$lib/entity-search";
 
 /**
  * Discovery is sourced from the Riven backend's TPDB endpoints rather than
@@ -41,8 +42,27 @@ export const load: PageServerLoad = async ({ url, fetch, locals }) => {
     // typing feel slow. When there is a query, skip it: the search results
     // replace this content anyway, and clearing the box navigates back to the
     // query-less URL, which repopulates it.
+    // Named apart from the `auth` inside the discovery closure below: that
+    // one carries prebuilt headers for the generated provider client, this
+    // one a bare key for the hand-maintained studio/add-on clients.
+    const entityAuth = {
+        baseUrl: locals.backendUrl,
+        apiKey: locals.apiKey,
+        fetch
+    };
+
     if (parsed?.query) {
-        return { form, parsed, discovery: NOTHING };
+        /*
+            Studios and OnlyFans accounts, as their own rows.
+
+            Streamed rather than awaited, like discovery below. Both are local
+            database reads and answer in milliseconds, but the title results
+            are fetched by the client store and should not wait behind a
+            server round-trip to appear -- a search that renders its titles
+            promptly and fills two rows in afterwards reads as fast, and the
+            reverse does not.
+        */
+        return { form, parsed, discovery: NOTHING, entities: findEntities(parsed.query, entityAuth) };
     }
 
     /*
@@ -120,7 +140,7 @@ export const load: PageServerLoad = async ({ url, fetch, locals }) => {
         }
     })();
 
-    return { form, parsed, discovery };
+    return { form, parsed, discovery, entities: Promise.resolve(NO_ENTITIES) };
 };
 
 function shuffleArray<T>(array: T[]): T[] {
