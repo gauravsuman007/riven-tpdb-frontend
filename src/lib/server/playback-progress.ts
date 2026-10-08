@@ -10,7 +10,7 @@
  * clients are the participant whose wire format cannot be changed.
  */
 
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, or } from "drizzle-orm";
 import { recordActivity } from "./app-lock";
 import { db } from "$lib/server/db";
 import { playbackProgress } from "$lib/server/schema";
@@ -70,6 +70,33 @@ export function getContinueWatching(userId: string, limit = 20): Progress[] {
         )
         .orderBy(desc(playbackProgress.updatedAt))
         .limit(limit)
+        .all();
+}
+
+/**
+ * What someone has watched lately, finished or not, newest first.
+ *
+ * The continue-watching list above leaves out finished items, which is right
+ * for a "resume" row and wrong for anything that wants to know what was
+ * watched -- the television's home hero picks "Because you watched X" from
+ * the last thing watched, and "not watched yet" from everything that is
+ * absent here. Rows with no position and no played mark carry nothing and are
+ * skipped.
+ */
+export function getRecentProgress(userId: string, limit = 50): Progress[] {
+    if (!userId) return [];
+
+    return db
+        .select()
+        .from(playbackProgress)
+        .where(
+            and(
+                eq(playbackProgress.userId, userId),
+                or(eq(playbackProgress.played, true), gt(playbackProgress.positionTicks, 0))
+            )
+        )
+        .orderBy(desc(playbackProgress.updatedAt))
+        .limit(Math.max(1, Math.min(200, Math.floor(limit) || 50)))
         .all();
 }
 

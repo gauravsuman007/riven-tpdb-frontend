@@ -9,6 +9,7 @@ import { getRows, type Recommendation } from "$lib/recommendations";
 import { listAddons } from "$lib/addons";
 import { getRailLayout } from "$lib/rails";
 import type { TMDBNowPlayingItem } from "$lib/components/tmdb-now-playing.svelte";
+import { loadUpNext, type UpNextCard } from "$lib/server/up-next";
 
 const logger = createScopedLogger("home");
 
@@ -56,7 +57,43 @@ function heroItem(item: Recommendation, index: number): TMDBNowPlayingItem {
 }
 
 /**
- * The hero carousel is the Explore page's "Recommended for you" rail.
+ * An "Up next" card in the hero's item shape. Only the data changes; the
+ * hero draws it exactly as it draws a recommendation -- the reason and the
+ * detail ride in `reasons`, which the hero already shows under the title.
+ *
+ * It opens the library's own copy: these are owned titles by definition.
+ */
+function upNextItem(card: UpNextCard): TMDBNowPlayingItem {
+    const id = Number(card.item.id);
+
+    return {
+        id,
+        media_type: "movie",
+        title: card.item.title ?? "",
+        backdrop_path: null,
+        poster_path: card.item.poster_path ?? null,
+        release_date: card.item.aired_at ? String(card.item.aired_at).slice(0, 10) : undefined,
+        reasons: [card.reason, card.detail],
+        href: entryHref({
+            id: 0,
+            library_item_id: id,
+            library_tpdb_id: card.item.tpdb_id ?? card.item.parent_ids?.tpdb_id ?? null
+        })
+    };
+}
+
+/**
+ * THE HERO IS "UP NEXT" FIRST: something to resume, something like the last
+ * thing watched, something owned and never opened -- see
+ * `$lib/server/up-next`, which riven-tv's home screen reads too, so the two
+ * cannot disagree. A recommendation of what the library does not have yet is
+ * a question for Explore; the hero is "what do I put on now".
+ *
+ * When there is nothing to offer (an empty library, or one where every title
+ * is in Recently Added and nothing has been watched), it falls back to what
+ * it was before, in this order:
+ *
+ * The Explore page's "Recommended for you" rail.
  *
  * That row is ranked from award history, storefront ratings, demand and what
  * the library already contains, over titles that are catalogued but not yet
@@ -106,6 +143,16 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
             headers: { "x-api-key": locals.apiKey },
             fetch
         };
+
+        const upNext = await loadUpNext(locals.user.id, {
+            backendUrl: locals.backendUrl,
+            apiKey: locals.apiKey,
+            fetch
+        });
+
+        if (upNext.length) {
+            return { nowPlaying: upNext.map(upNextItem), ...(await railData(fetch)) };
+        }
 
         const rows = await getRows(
             { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch },
