@@ -1,6 +1,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
 import { listStudios, setStudioSaved } from "$lib/studios";
+import { logoVersion } from "$lib/server/studio-logos";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -22,7 +23,20 @@ export const load: PageServerLoad = async (event) => {
         { limit: 2000 }
     );
 
-    return { studios };
+    /*
+        The logo is addressed through this app, not TPDB's CDN: the route
+        keeps one copy on the data volume (see `$lib/server/studio-logos`).
+        `v` is a hash of the CDN URL, so a studio whose logo changes gets a
+        new address and the browser's year-long cache never serves the old one.
+    */
+    return {
+        studios: studios.map((studio) => ({
+            ...studio,
+            logo: studio.logo_path
+                ? `/studios/${studio.id}/logo?v=${logoVersion(studio.logo_path)}`
+                : null
+        }))
+    };
 };
 
 export const actions: Actions = {

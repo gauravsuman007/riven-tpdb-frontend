@@ -7,7 +7,14 @@
 
     Logos come from TPDB and are frequently missing -- Adult Empire's studio
     pages carry no artwork whatsoever -- so the name is the primary element and
-    the logo is an enhancement, not the other way round.
+    the logo is an enhancement, not the other way round. They are served from a
+    copy kept on the data volume, which is same-origin, so each can be measured
+    once loaded: a mostly-black logo (Elegant Angel, say) vanishes on the dark
+    card, and gets a light plate behind it.
+
+    SAVED STUDIOS COME FIRST, as larger tiles. They are the ones this page
+    exists to curate and the ones the brochure shows, so they should not be
+    found by scrolling past a thousand others.
 -->
 <script lang="ts">
     import type { PageProps } from "./$types";
@@ -43,7 +50,83 @@
         if (!needle) return data.studios;
         return data.studios.filter((studio) => collapse(studio.name).includes(needle));
     });
+
+    // Saved ones lead as big tiles; the directory below is everything else.
+    const saved = $derived(visible.filter((studio) => studio.saved));
+    const others = $derived(visible.filter((studio) => !studio.saved));
+
+    /*
+        Whether a loaded logo would disappear on a dark card: the average
+        brightness of its visible pixels. Measured on a small canvas -- the
+        image is same-origin, so reading it back is allowed. A failure to
+        measure (no canvas, an SVG that will not rasterise) is "not dark":
+        the logo is shown as it always was.
+    */
+    function plateIfDark(node: HTMLImageElement) {
+        const measure = () => {
+            try {
+                const size = 48;
+                const canvas = document.createElement("canvas");
+                canvas.width = size;
+                canvas.height = size;
+                const context = canvas.getContext("2d");
+                if (!context) return;
+                context.drawImage(node, 0, 0, size, size);
+                const pixels = context.getImageData(0, 0, size, size).data;
+                let seen = 0;
+                let light = 0;
+                for (let i = 0; i < pixels.length; i += 4) {
+                    if (pixels[i + 3] < 128) continue;
+                    seen++;
+                    light += (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) / 1000;
+                }
+                if (seen > 20 && light / seen < 70) node.dataset.dark = "true";
+            } catch {
+                // Not measurable: leave it as it is.
+            }
+        };
+
+        if (node.complete && node.naturalWidth) measure();
+        node.addEventListener("load", measure);
+
+        return { destroy: () => node.removeEventListener("load", measure) };
+    }
 </script>
+
+{#snippet logo(studio: (typeof data.studios)[number], big: boolean)}
+    <div class="flex items-center justify-center {big ? 'h-28' : 'h-16'}" data-logo-holder>
+        {#if studio.logo}
+            <img
+                src={studio.logo}
+                alt={studio.name}
+                loading="lazy"
+                use:plateIfDark
+                class="logo max-h-full max-w-full object-contain" />
+        {:else}
+            <BuildingIcon class="{big ? 'size-12' : 'size-8'} text-white/30" aria-hidden="true" />
+        {/if}
+    </div>
+{/snippet}
+
+{#snippet saveButton(studio: (typeof data.studios)[number])}
+    <form method="POST" action="?/save" use:enhance class="mt-auto">
+        <input type="hidden" name="studioId" value={studio.id} />
+        <input type="hidden" name="saved" value={String(!studio.saved)} />
+        <Button
+            type="submit"
+            variant={studio.saved ? "secondary" : "outline"}
+            size="sm"
+            class="w-full">
+            {#if studio.saved}
+                <CheckIcon class="mr-2 size-4" aria-hidden="true" />
+                Saved
+            {:else}
+                <PlusIcon class="mr-2 size-4" aria-hidden="true" />
+                Add
+            {/if}
+        </Button>
+    </form>
+{/snippet}
 
 <svelte:head>
     <title>Studios · Riven</title>
@@ -104,64 +187,91 @@
                 </p>
             </div>
         {:else}
-            <ul class="grid grid-cols-2 gap-4 pb-20 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {#each visible as studio (studio.id)}
-                    <li
-                        class="flex flex-col gap-3 rounded-xl border border-white/15 bg-zinc-900/60 p-4 transition-colors hover:border-white/30">
-                        <a
-                            href={resolve(`/studios/${studio.id}`)}
-                            class="flex flex-1 flex-col gap-3 focus-visible:outline-none">
-                            <div class="flex h-16 items-center justify-center">
-                                {#if studio.logo_path}
-                                    <img
-                                        src={studio.logo_path}
-                                        alt={studio.name}
-                                        loading="lazy"
-                                        class="max-h-full max-w-full object-contain" />
-                                {:else}
-                                    <BuildingIcon
-                                        class="size-8 text-white/30"
-                                        aria-hidden="true" />
-                                {/if}
-                            </div>
+            {#if saved.length}
+                <section class="flex flex-col gap-3">
+                    <h2 class="font-mono text-xs tracking-widest text-zinc-400 uppercase">
+                        Saved · {saved.length}
+                    </h2>
+                    <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {#each saved as studio (studio.id)}
+                            <li
+                                class="flex flex-col gap-4 rounded-2xl border border-white/20 bg-zinc-900/80 p-6 transition-colors hover:border-white/40">
+                                <a
+                                    href={resolve(`/studios/${studio.id}`)}
+                                    class="flex flex-1 flex-col gap-4 focus-visible:outline-none">
+                                    {@render logo(studio, true)}
 
-                            <div class="space-y-1">
-                                <p class="truncate text-sm font-medium text-white/90">
-                                    {studio.name}
-                                </p>
-                                {#if studio.title_count}
-                                    <p class="font-mono text-xs text-zinc-400">
-                                        {studio.title_count.toLocaleString()} titles
-                                    </p>
-                                {/if}
-                                {#if studio.description}
-                                    <p class="line-clamp-2 text-xs text-zinc-500">
-                                        {studio.description}
-                                    </p>
-                                {/if}
-                            </div>
-                        </a>
+                                    <div class="space-y-1">
+                                        <p class="truncate text-lg font-semibold text-white">
+                                            {studio.name}
+                                        </p>
+                                        {#if studio.title_count}
+                                            <p class="font-mono text-sm text-zinc-400">
+                                                {studio.title_count.toLocaleString()} titles
+                                            </p>
+                                        {/if}
+                                        {#if studio.description}
+                                            <p class="line-clamp-3 text-sm text-zinc-400">
+                                                {studio.description}
+                                            </p>
+                                        {/if}
+                                    </div>
+                                </a>
+                                {@render saveButton(studio)}
+                            </li>
+                        {/each}
+                    </ul>
+                </section>
+            {/if}
 
-                        <form method="POST" action="?/save" use:enhance class="mt-auto">
-                            <input type="hidden" name="studioId" value={studio.id} />
-                            <input type="hidden" name="saved" value={String(!studio.saved)} />
-                            <Button
-                                type="submit"
-                                variant={studio.saved ? "secondary" : "outline"}
-                                size="sm"
-                                class="w-full">
-                                {#if studio.saved}
-                                    <CheckIcon class="mr-2 size-4" aria-hidden="true" />
-                                    Saved
-                                {:else}
-                                    <PlusIcon class="mr-2 size-4" aria-hidden="true" />
-                                    Add
-                                {/if}
-                            </Button>
-                        </form>
-                    </li>
-                {/each}
-            </ul>
+            {#if others.length}
+                <section class="flex flex-col gap-3">
+                    {#if saved.length}
+                        <h2 class="font-mono text-xs tracking-widest text-zinc-400 uppercase">
+                            All studios · {others.length}
+                        </h2>
+                    {/if}
+                    <ul
+                        class="grid grid-cols-2 gap-4 pb-20 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                        {#each others as studio (studio.id)}
+                            <li
+                                class="flex flex-col gap-3 rounded-xl border border-white/15 bg-zinc-900/60 p-4 transition-colors hover:border-white/30">
+                                <a
+                                    href={resolve(`/studios/${studio.id}`)}
+                                    class="flex flex-1 flex-col gap-3 focus-visible:outline-none">
+                                    {@render logo(studio, false)}
+
+                                    <div class="space-y-1">
+                                        <p class="truncate text-sm font-medium text-white/90">
+                                            {studio.name}
+                                        </p>
+                                        {#if studio.title_count}
+                                            <p class="font-mono text-xs text-zinc-400">
+                                                {studio.title_count.toLocaleString()} titles
+                                            </p>
+                                        {/if}
+                                        {#if studio.description}
+                                            <p class="line-clamp-2 text-xs text-zinc-500">
+                                                {studio.description}
+                                            </p>
+                                        {/if}
+                                    </div>
+                                </a>
+                                {@render saveButton(studio)}
+                            </li>
+                        {/each}
+                    </ul>
+                </section>
+            {/if}
         {/if}
     </div>
 </PageShell>
+
+<style>
+    /* A mostly-black logo gets a light plate so it can be read at all. */
+    :global(img.logo[data-dark="true"]) {
+        background: rgb(244 244 245 / 0.92);
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.625rem;
+    }
+</style>
