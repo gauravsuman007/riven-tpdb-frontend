@@ -52,6 +52,9 @@
     import SkipBackIcon from "@lucide/svelte/icons/skip-back";
     import SkipForwardIcon from "@lucide/svelte/icons/skip-forward";
     import { formatBytes } from "$lib/helpers";
+    import { loadProgress, loadTimeline } from "$lib/player/timeline";
+    import { locate, partStarts, totalDuration } from "$lib/utils/parts";
+    import { resumeTarget } from "$lib/utils/playback";
     import {
         MIN_SCALE,
         clampTransform,
@@ -197,6 +200,85 @@
     const isPlaylist = $derived(parts.length > 1);
     const currentPart = $derived(parts.find((entry) => entry.index === part) ?? null);
 
+    /*
+        ONE TIMELINE ACROSS THE FILES.
+
+        Every position this player shows, seeks to, remembers or reports is a
+        second of the WHOLE title -- the resume store holds one number per
+        item, riven-tv reads it the same way, and "watched" is decided against
+        the whole length. Only `seekTo` and the mount below know which file a
+        second falls in. Used only when every file's length is known; until
+        then a multi-file title plays file by file as it always did, because
+        a timeline with a hole in it would put every later second in the
+        wrong place.
+
+        The player is not mounted until the file list and the stored position
+        have both answered, so it opens on the right file at the right second
+        rather than starting the first one and jumping.
+    */
+    let timelineReady = $state(false);
+    /** Seconds into the file being mounted; undefined = let it resume itself. */
+    let startAt = $state<number | null | undefined>(undefined);
+    const durations = $derived(parts.map((entry) => entry.duration ?? 0));
+    const total = $derived(isPlaylist ? totalDuration(durations) : null);
+    const timelineOn = $derived(isPlaylist && total !== null);
+    const starts = $derived(partStarts(durations));
+    const partOffset = $derived(timelineOn ? (starts[part] ?? 0) : 0);
+
+    /** The current second of the whole title. */
+    function position(): number {
+        return partOffset + (video?.currentTime ?? 0);
+    }
+
+    /**
+     * Go to a second of the whole title, crossing into another file if it
+     * must. Within the file it is an ordinary seek; across files the next
+     * file is mounted already pointed at the right second.
+     */
+    function seekTo(to: number): void {
+        if (!video) return;
+
+        if (!timelineOn || total === null) {
+            video.currentTime = clampTime(to, video.duration);
+            return;
+        }
+
+        const target = clampTime(to, total);
+        const spot = locate(durations, target);
+
+        currentTime = target;
+
+        if (spot.part === part) {
+            video.currentTime = spot.local;
+            return;
+        }
+
+        startAt = spot.local;
+        part = spot.part;
+    }
+
+    /*
+        Thirty seconds before a file ends, ask the server about the next one,
+        so the change is a mount and not a mount plus a probe plus a link
+        resolution. Only the backend's caches are being warmed; the answers
+        are thrown away.
+    */
+    let warmed = new Set<string>();
+
+    function warmNext(): void {
+        if (!timelineOn || !video || target?.kind !== "library") return;
+
+        const next = part + 1;
+        const length = durations[part] ?? 0;
+        const key = `${target.itemId}:${next}`;
+
+        if (next >= parts.length || !length || video.currentTime < length - 30 || warmed.has(key)) return;
+
+        warmed.add(key);
+        void fetch(`/api/stream/${target.itemId}/playback_info?part=${next}`).catch(() => {});
+        void fetch(`/api/stream/${target.itemId}/direct?part=${next}`).catch(() => {});
+    }
+
     $effect(() => {
         const active = player.current;
 
@@ -204,6 +286,8 @@
             parts = [];
             part = 0;
             partsOpen = false;
+            timelineReady = false;
+            startAt = undefined;
             return;
         }
 
@@ -215,31 +299,54 @@
         parts = [];
         part = 0;
         partsOpen = false;
+        timelineReady = false;
+        startAt = undefined;
+        warmed = new Set();
+
+        // An explicit start (Start over, a file chosen on the detail page) or
+        // a WebView restart's remembered second; otherwise the stored one.
+        const requested = active.startAt ?? player.resumeAt ?? null;
+        player.resumeAt = null;
 
         void (async () => {
-            try {
-                const response = await fetch(`/api/stream/${itemId}/parts`);
+            const [timeline, progress] = await Promise.all([
+                loadTimeline(itemId),
+                requested === null ? loadProgress(itemId) : Promise.resolve(null)
+            ]);
 
-                if (!response.ok) return;
+            // Ignore an answer that arrived after the user moved on.
+            if (player.current !== active) return;
 
-                const payload = await response.json();
+            // An empty list is the degraded answer: part 0, as before
+            // playlists existed.
+            parts = timeline.parts;
 
-                // Ignore a response that arrived after the user moved on.
-                if (player.current?.kind !== "library" || player.current.itemId !== itemId) {
-                    return;
-                }
+            if (parts.length > 1 && timeline.totalDuration !== null) {
+                const stored = progress && !progress.played ? progress.positionSeconds : 0;
+                const at = requested ?? resumeTarget(stored, timeline.totalDuration) ?? 0;
+                const spot = locate(
+                    parts.map((entry) => entry.duration),
+                    at
+                );
 
-                parts = payload.parts ?? [];
-            } catch {
-                // The player falls back to part 0, which is what it played
-                // before playlists existed.
+                part = spot.part;
+                startAt = spot.local;
+            } else {
+                part = 0;
+                // A single file resumes itself, against its own probed length.
+                startAt = requested ?? undefined;
             }
+
+            timelineReady = true;
         })();
     });
 
     function playPart(index: number): void {
         if (index < 0 || index >= parts.length) return;
 
+        // From the start of that file: a stored position belongs to the
+        // timeline, not to whichever file happens to be mounted next.
+        startAt = 0;
         part = index;
         partsOpen = false;
     }
@@ -267,7 +374,7 @@
 
         return {
             offset: formatOffset(seekOffset),
-            target: formatTime(clampTime(from + seekOffset, video.duration))
+            target: formatTime(clampTime(from + seekOffset, duration))
         };
     });
 
@@ -387,21 +494,6 @@
      * for the load it came back on, and leaving it set would drag the viewer
      * back there after every later seek of their own.
      */
-    function applyResume() {
-        const at = player.resumeAt;
-        if (!video || at === null) return;
-
-        player.resumeAt = null;
-
-        if (!Number.isFinite(at) || at <= 0) return;
-
-        try {
-            video.currentTime = at;
-        } catch {
-            // Not seekable yet -- the position is lost, not the playback.
-        }
-    }
-
     function applyTwoFinger(centre: { x: number; y: number }, ratio: number) {
         const view = viewport();
         if (!view || !pinchStart) return;
@@ -443,7 +535,7 @@
             // A mouse has no second pointer, so it keeps one-button panning.
             panStart = { x: event.clientX, y: event.clientY, offsetX, offsetY };
         } else if (pointers.size === 1 && canSeek() && !onControlBar(event)) {
-            seekStart = { x: event.clientX, y: event.clientY, time: video?.currentTime ?? 0 };
+            seekStart = { x: event.clientX, y: event.clientY, time: position() };
             seekSamples = [{ x: event.clientX, t: event.timeStamp }];
             seekOffset = 0;
         }
@@ -566,18 +658,25 @@
 
         paused = video.paused;
         muted = video.muted;
-        duration = probedDuration ?? (Number.isFinite(video.duration) ? video.duration : 0);
+        duration =
+            timelineOn && total !== null
+                ? total
+                : (probedDuration ?? (Number.isFinite(video.duration) ? video.duration : 0));
 
         // While scrubbing, the readout follows the finger, not the element --
         // otherwise it snaps back on every timeupdate mid-drag.
-        if (!scrubbing && !seeking) currentTime = video.currentTime;
+        if (!scrubbing && !seeking) currentTime = position();
 
         // Keep the resume point current, so an activity restart (a foldable
         // being opened mid-playback) comes back to the same second.
-        if (video.currentTime > 0) player.remember(video.currentTime);
+        if (video.currentTime > 0) player.remember(position());
+
+        warmNext();
 
         try {
-            buffered = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+            buffered = video.buffered.length
+                ? partOffset + video.buffered.end(video.buffered.length - 1)
+                : 0;
         } catch {
             // `buffered` throws while the media is still being set up.
             buffered = 0;
@@ -592,7 +691,14 @@
         const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
 
         currentTime = clampTime(ratio * duration, duration);
-        video.currentTime = currentTime;
+
+        /*
+            Live within the file on screen; across a file boundary only on
+            release (see the scrubber's pointerup) -- a drag across three
+            files must not mount each of them on the way.
+        */
+        if (!timelineOn || locate(durations, currentTime).part === part) seekTo(currentTime);
+
         showControls();
     }
 
@@ -628,7 +734,7 @@
 
         if (!wasSeeking || !video) return;
 
-        video.currentTime = clampTime(start.time + total, video.duration);
+        seekTo(start.time + total);
         showControls();
     }
 
@@ -779,10 +885,7 @@
             if (!video) return;
 
             event.preventDefault();
-            video.currentTime = clampTime(
-                video.currentTime + (event.key === "ArrowRight" ? 10 : -10),
-                video.duration
-            );
+            seekTo(position() + (event.key === "ArrowRight" ? 10 : -10));
             showControls();
         }
     }
@@ -1150,7 +1253,6 @@
 
         element.addEventListener("loadedmetadata", syncMetadata);
         element.addEventListener("resize", syncMetadata);
-        element.addEventListener("loadedmetadata", applyResume);
         for (const name of playbackEvents) element.addEventListener(name, syncPlayback);
 
         syncMetadata();
@@ -1159,7 +1261,6 @@
         return () => {
             element.removeEventListener("loadedmetadata", syncMetadata);
             element.removeEventListener("resize", syncMetadata);
-            element.removeEventListener("loadedmetadata", applyResume);
             for (const name of playbackEvents) element.removeEventListener(name, syncPlayback);
         };
     });
@@ -1409,10 +1510,19 @@
                 {/if}
 
                 {#key target.kind === "library" ? `item-${target.itemId}-${part}` : target.src}
-                    {#if target.kind === "library"}
+                    {#if target.kind === "library" && !timelineReady}
+                        <div class="flex h-full w-full items-center justify-center">
+                            <div
+                                class="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white">
+                            </div>
+                        </div>
+                    {:else if target.kind === "library"}
                         <VideoPlayer
                             itemId={target.itemId}
                             {part}
+                            {startAt}
+                            offset={partOffset}
+                            total={timelineOn && total !== null ? total : undefined}
                             onended={onPartEnded}
                             poster={target.poster}
                             bind:element={video}
@@ -1489,16 +1599,15 @@
                     onpointerup={(e) => {
                         scrubbing = false;
                         e.currentTarget.releasePointerCapture(e.pointerId);
+                        // Commits a drag that ended in another file.
+                        if (timelineOn) seekTo(currentTime);
                     }}
                     onpointercancel={() => (scrubbing = false)}
                     onkeydown={(e) => {
                         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
                         e.preventDefault();
                         if (!video) return;
-                        video.currentTime = clampTime(
-                            video.currentTime + (e.key === "ArrowRight" ? 10 : -10),
-                            video.duration
-                        );
+                        seekTo(position() + (e.key === "ArrowRight" ? 10 : -10));
                     }}>
                     <div
                         class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20">
@@ -1510,6 +1619,17 @@
                             class="bg-primary absolute inset-y-0 left-0 rounded-full"
                             style="width: {duration ? (currentTime / duration) * 100 : 0}%">
                         </div>
+                        <!-- Where one file of the release ends and the next begins. -->
+                        {#if timelineOn && total}
+                            {#each starts.slice(1) as boundary, at (at)}
+                                {#if boundary !== null}
+                                    <div
+                                        class="absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-black/80"
+                                        style="left: {(boundary / total) * 100}%">
+                                    </div>
+                                {/if}
+                            {/each}
+                        {/if}
                     </div>
                     <div
                         class="bg-primary absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow transition-transform group-hover:scale-125"

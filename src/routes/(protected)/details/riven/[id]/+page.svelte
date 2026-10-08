@@ -11,16 +11,14 @@
     import type { PageData, ActionData } from "./$types";
     import { enhance } from "$app/forms";
     import { Badge } from "$lib/components/ui/badge/index.js";
-    import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
-    import PlayIcon from "@lucide/svelte/icons/play";
     import AddonSlot from "$lib/components/addon-slot.svelte";
     import CandidateReleases from "$lib/components/media/riven/candidate-releases.svelte";
     import KeepOnDisk from "$lib/components/media/riven/keep-on-disk.svelte";
     import ItemManualScrape from "$lib/components/media/riven/item-manual-scrape.svelte";
     import TpdbLink from "$lib/components/media/riven/tpdb-link.svelte";
     import { describeState } from "$lib/utils/item-state";
-    import { openPlayer } from "$lib/stores/player.svelte";
+    import TitlePlayback from "$lib/components/media/title-playback.svelte";
     import { formatBytes } from "$lib/helpers";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -84,13 +82,14 @@
                             {formatBytes(entry.file_size)}
                         </Badge>
                     {/if}
+                    <!-- A multi-file release's totals; nothing for one file. -->
+                    <TitlePlayback show="summary" itemId={item.id} title={item.title} poster={item.poster_path} />
                 </div>
 
                 {#if playable}
-                    <Button class="w-fit" onclick={() => openPlayer(item.id, item.title, item.poster_path)}>
-                        <PlayIcon class="mr-2 size-4" />
-                        Play
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <TitlePlayback show="actions" itemId={item.id} title={item.title} poster={item.poster_path} />
+                    </div>
                 {/if}
 
                 {#if playable}
@@ -106,6 +105,12 @@
                 <TpdbLink itemId={item.id} title={item.title} currentTpdbId={item.tpdb_id ?? null} {form} />
             </div>
         </div>
+
+        {#if playable}
+            <div class="mt-8">
+                <TitlePlayback show="files" itemId={item.id} title={item.title} poster={item.poster_path} />
+            </div>
+        {/if}
 
         {#if performers.length}
             <div class="mt-8 flex flex-col gap-2">

@@ -21,8 +21,7 @@
     import { liveState } from "$lib/utils/live-state.svelte";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
-    import PlayIcon from "@lucide/svelte/icons/play";
-    import { openPlayer } from "$lib/stores/player.svelte";
+    import TitlePlayback from "$lib/components/media/title-playback.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -112,6 +111,16 @@
                     {#if runtime}<span>{runtime}</span>{/if}
                 </div>
 
+                {#if libraryState?.riven_id}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <TitlePlayback
+                            show="summary"
+                            itemId={libraryState.riven_id}
+                            title={item.title}
+                            {poster} />
+                    </div>
+                {/if}
+
                 {#if item.description}
                     <p class="text-muted-foreground max-w-3xl leading-relaxed">
                         {item.description}
@@ -136,10 +145,12 @@
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
                     {#if playable && libraryState}
-                        <Button onclick={() => openPlayer(libraryState.riven_id, item.title, poster)}>
-                            <PlayIcon class="mr-2 size-4" />
-                            Play
-                        </Button>
+                        <!-- Play, or Resume and Start over: the same rules as the player. -->
+                        <TitlePlayback
+                            show="actions"
+                            itemId={libraryState.riven_id}
+                            title={item.title}
+                            {poster} />
                     {/if}
 
                     <!-- Only once the file exists: there is nothing to copy
@@ -213,6 +224,21 @@
                     <p class="text-muted-foreground text-xs">
                         {status.description}
                     </p>
+                {/if}
+
+                <!--
+                    A multi-file release lists EVERY file it holds, with its
+                    length and size. "On disk" below is what the VFS mounted,
+                    which is only the first file of such a release.
+                -->
+                {#if playable && libraryState?.riven_id}
+                    <div class="mt-2">
+                        <TitlePlayback
+                            show="files"
+                            itemId={libraryState.riven_id}
+                            title={item.title}
+                            {poster} />
+                    </div>
                 {/if}
 
                 {#if files.length}

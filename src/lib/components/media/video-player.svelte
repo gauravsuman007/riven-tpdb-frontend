@@ -14,7 +14,7 @@
      *   remux     -- keep the video, rebuild audio/container (cheap)
      *   transcode -- re-encode via HLS (last resort, expensive)
      */
-    import { onMount, onDestroy } from "svelte";
+    import { onMount, onDestroy, untrack } from "svelte";
     import { resumeTarget } from "$lib/utils/playback";
     import Hls from "hls.js";
     import { toGuid } from "$lib/utils/jellyfin-ids";
@@ -90,6 +90,23 @@
         part?: number;
         /** Fired when this part plays to its end, so the overlay can advance. */
         onended?: () => void;
+        /**
+         * Seconds of the whole title before this part begins, and the whole
+         * title's length. Progress is reported as `offset + currentTime`
+         * against `total`, so a multi-file release has ONE resume point and is
+         * "watched" at the end of its last file, not its first. 0 and
+         * undefined for a single file, which reports exactly as before.
+         */
+        offset?: number;
+        total?: number;
+        /**
+         * Seconds into THIS file to start at, decided by the overlay (which
+         * knows which file a stored position falls in). A number skips this
+         * component's own resume lookup; undefined keeps it, for a single
+         * file. 0 means from the start -- the next file of a playlist must
+         * not be sent to the stored second as well.
+         */
+        startAt?: number | null;
     }
 
     interface PlaybackInfo {
@@ -119,8 +136,20 @@
         resolution = $bindable(),
         fileSize = $bindable(),
         part = 0,
-        onended
+        onended,
+        offset = 0,
+        total,
+        startAt
     }: VideoPlayerProps = $props();
+
+    /*
+        Read once. This instance plays one file; the overlay remounts it for
+        the next, and by the time this one's teardown reports its last
+        position the props may already describe the file after it.
+    */
+    const reportOffset = untrack(() => offset);
+    const reportTotal = untrack(() => total);
+    const startHere = untrack(() => startAt);
 
     /**
      * `?part=N` for the stream endpoints, or nothing at all for part 0.
@@ -339,13 +368,14 @@
     function reportProgress(): void {
         if (itemId === undefined || !videoElement) return;
 
-        const positionSeconds = videoElement.currentTime;
+        if (!Number.isFinite(videoElement.currentTime)) return;
 
-        if (!Number.isFinite(positionSeconds)) return;
+        // Seconds of the whole title, against the whole title's length.
+        const positionSeconds = reportOffset + videoElement.currentTime;
 
-        const durationSeconds = Number.isFinite(videoElement.duration)
-            ? videoElement.duration
-            : duration;
+        const durationSeconds =
+            reportTotal ??
+            (Number.isFinite(videoElement.duration) ? videoElement.duration : duration);
 
         // keepalive: this runs during teardown, where a normal fetch is
         // cancelled with the page/component and the last position is lost.
@@ -362,6 +392,12 @@
         if (resumeApplied || itemId === undefined || !videoElement) return;
 
         resumeApplied = true;
+
+        // The overlay already decided where this file starts.
+        if (startHere !== undefined && startHere !== null) {
+            if (startHere > 0) videoElement.currentTime = startHere;
+            return;
+        }
 
         try {
             const response = await fetch(`/api/playback/progress?itemId=${itemId}`);

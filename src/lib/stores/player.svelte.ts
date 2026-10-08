@@ -52,6 +52,12 @@ interface LibraryTarget {
      * app icon rather than leaving the element bare -- see FALLBACK_POSTER.
      */
     poster?: string;
+    /**
+     * Where to start, in seconds of the WHOLE title (see `$lib/utils/parts`):
+     * 0 to start over, a file's start to play that file. Absent means "where
+     * the viewer left off", which is what a plain Play has always done.
+     */
+    startAt?: number;
 }
 
 interface DirectTarget {
@@ -169,12 +175,18 @@ class PlayerStore {
      */
     resumeAt = $state<number | null>(null);
 
-    open(itemId: number, title: string, poster?: string | null) {
+    open(itemId: number, title: string, poster?: string | null, startAt?: number) {
         if (nativePlayerAvailable()) {
             window.RivenNative!.play(toGuid(itemId));
             return;
         }
-        this.current = { kind: "library", itemId, title, poster: posterUrl(poster) };
+        this.current = {
+            kind: "library",
+            itemId,
+            title,
+            poster: posterUrl(poster),
+            ...(startAt !== undefined && Number.isFinite(startAt) ? { startAt: Math.max(0, startAt) } : {})
+        };
     }
 
     openDirect(options: {
@@ -334,8 +346,10 @@ export const player = new PlayerStore();
 export function openPlayer(
     itemId: number | null | undefined,
     title: string,
-    poster?: string | null
+    poster?: string | null,
+    /** Seconds of the whole title; omitted to resume where the viewer stopped. */
+    startAt?: number
 ) {
     if (!itemId) return;
-    player.open(itemId, title, poster);
+    player.open(itemId, title, poster, startAt);
 }

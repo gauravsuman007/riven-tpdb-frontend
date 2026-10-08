@@ -591,3 +591,39 @@ its `apps.json`; without that entry the mux answers *"No app behind this
 server offers search yet"* — and since search is scoped to the app you are
 standing in, that is what searching from inside Riven TPDB showed. Adding the
 route is only half the fix.
+
+## A multi-file release is ONE timeline: positions are seconds of the whole title
+
+A scene compilation ("Drive", item 869) is one torrent of five files, played
+through `?part=N`. The player used to give each file its own clock, which
+broke three things at once: the resume store holds ONE position per item, so
+every file it mounted seeked to the same stored second; `decideProgress`
+marks "watched" at 90% of the reported duration, so finishing FILE 1 marked
+the whole title watched; and riven-tv, which reads the same store, could not
+tell which file a position was in.
+
+- **Every position is a second of the WHOLE title.** `$lib/utils/parts`
+  (`locate`, `partStarts`, `totalDuration`) is the rule, with
+  `__tests__/parts.test.ts`. riven-tv's player script carries the same
+  `locate`; change both or neither.
+- **`/api/stream/[id]/parts` fills in durations.** The backend lists files
+  without probing; for a multi-file title this route probes each unknown
+  length via `playback_info?part=N` in parallel (~1 s cold, cached 10 min)
+  and adds `total_size` / `total_duration`. `total_duration` is null unless
+  every length is known -- then the player stays file-by-file, because a
+  timeline with a hole in it misplaces every later second.
+- **The overlay owns the timeline** (`overlay-player.svelte`): `seekTo()` is
+  the only place that knows which file a second is in; crossing a boundary
+  remounts `VideoPlayer` on that file, already pointed at the right second.
+  A scrub drag across files commits on release, not per pointer move. It
+  waits for the file list and stored position before mounting, so a resume
+  into file 4 never starts file 1. 30 s before a file ends it warms the next
+  one's `playback_info` and `/direct`.
+- **`VideoPlayer` reports `offset + currentTime` against `total`** and takes
+  `startAt` (seconds into ITS file) from the overlay. Both read once at
+  mount: the teardown report must describe the file that was playing, not
+  the one replacing it. A single file passes neither and behaves as before.
+- **Detail pages** use `title-playback.svelte` (`show="actions" | "summary" |
+  "files"`): Resume "1:23:20 · file 3" / Start over, the release's totals,
+  and every file with its length and size, each row playing from its start.
+  `player.open(id, title, poster, startAt)` takes a whole-title second.
