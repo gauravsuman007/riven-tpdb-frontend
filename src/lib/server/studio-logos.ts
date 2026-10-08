@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { env } from "$env/dynamic/private";
 import { createScopedLogger } from "$lib/logger";
+import { isDark } from "$lib/utils/logo-darkness";
 
 const logger = createScopedLogger("studio-logos");
 
@@ -41,6 +42,8 @@ const TYPES = Object.fromEntries(Object.entries(EXTENSIONS).map(([type, ext]) =>
 export interface CachedLogo {
     body: Buffer;
     type: string;
+    /** Mostly black, so it disappears on a dark card. See `isDark`. */
+    dark: boolean;
 }
 
 function directory(): string {
@@ -74,7 +77,24 @@ function fromDisk(dir: string, key: string): CachedLogo | null {
     for (const ext of Object.keys(TYPES)) {
         const file = join(dir, `${key}.${ext}`);
 
-        if (existsSync(file)) return { body: readFileSync(file), type: TYPES[ext] };
+        if (!existsSync(file)) continue;
+
+        const body = readFileSync(file);
+        const type = TYPES[ext];
+        const mark = join(dir, `${key}.dark`);
+
+        // Measured once and remembered beside the image, so serving a logo
+        // never decodes it again. A logo cached before this existed has no
+        // mark yet; it gets one the first time it is asked for.
+        let dark: boolean;
+
+        if (existsSync(mark)) dark = readFileSync(mark, "utf8") === "1";
+        else {
+            dark = isDark(body, type);
+            writeFileSync(mark, dark ? "1" : "0");
+        }
+
+        return { body, type, dark };
     }
 
     return null;
@@ -126,7 +146,11 @@ async function download(
         writeFileSync(partial, body);
         renameSync(partial, final);
 
-        return { body, type };
+        const dark = isDark(body, type);
+
+        writeFileSync(join(dir, `${key}.dark`), dark ? "1" : "0");
+
+        return { body, type, dark };
     } catch (error) {
         logger.warn(`Logo ${url} could not be cached: ${(error as Error).message}`);
         writeFileSync(join(dir, `${key}.miss`), "");
