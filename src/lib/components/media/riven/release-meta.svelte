@@ -16,6 +16,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
+    import { indexerHue } from "$lib/indexer-color";
 
     interface Props {
         seeders?: number | null;
@@ -63,9 +64,17 @@
     </Badge>
 {/if}
 {#if indexer}
+    <!--
+        Coloured by source so a mixed list can be read at a glance. Hue comes
+        from the name; lightness is set here per theme to stay legible.
+    -->
     <Badge
         variant="outline"
-        class={cn("text-muted-foreground/80", textClass)}
+        style="--h: {indexerHue(indexer)}"
+        class={cn(
+            "border-[hsl(var(--h)_65%_45%/0.55)] bg-[hsl(var(--h)_70%_50%/0.14)] font-medium text-[hsl(var(--h)_70%_32%)] dark:border-[hsl(var(--h)_65%_60%/0.55)] dark:text-[hsl(var(--h)_80%_74%)]",
+            textClass
+        )}
         title="The indexer this release came from.">
         {indexer}
     </Badge>

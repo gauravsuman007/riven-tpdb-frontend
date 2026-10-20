@@ -28,6 +28,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
+    import { Switch } from "$lib/components/ui/switch/index.js";
     import LoaderCircle from "@lucide/svelte/icons/loader-circle";
     import AlertCircle from "@lucide/svelte/icons/alert-circle";
     import FileIcon from "@lucide/svelte/icons/file";
@@ -263,10 +264,15 @@
         gave no way to tell "nothing was found" from "seventeen were found and
         discarded". Off by default: the filter is right far more often than
         not, and the accepted releases are what someone is normally choosing
-        between. Re-scrapes when toggled, because the rejected set is built
-        server-side and is not in the results already on screen.
+        between.
+
+        Every scrape asks the server for the rejected set up front and the
+        toggle only hides or shows it. It used to re-scrape on toggle, which
+        meant waiting on every indexer again (and spending a PornoLab download
+        or two) to reveal results the server had already computed.
     */
     let showFiltered = $state(false);
+    let filteredCount = $derived(streams.filter(({ stream }) => stream.filtered).length);
     let eventSourceRef = $state<EventSource | null>(null);
 
     const categoryIcons: Record<string, typeof Monitor> = {
@@ -303,7 +309,7 @@
     }
 
     let filteredStreams = $derived.by(() => {
-        let result = streams;
+        let result = showFiltered ? streams : streams.filter(({ stream }) => !stream.filtered);
 
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
@@ -903,7 +909,9 @@
             params.set("custom_imdb_id", customImdbId);
         }
 
-        if (showFiltered) params.set("include_filtered", "true");
+        // Always: see the note on `showFiltered`. Hiding them is a client-side
+        // filter, so the toggle needs no round trip.
+        params.set("include_filtered", "true");
 
         // Add ranking overrides
         const rankingOverrides = getRankingOverrides();
@@ -1705,22 +1713,21 @@
                             </div>
 
                             <!--
-                                Re-runs the scrape rather than filtering what is
-                                on screen: the rejected releases are decided
-                                server-side and were never sent.
+                                Instant: the rejected releases arrive with every
+                                scrape and this only hides or shows them.
                             -->
                             <label
-                                class="text-muted-foreground flex items-center gap-2 text-xs select-none">
-                                <input
-                                    type="checkbox"
-                                    class="accent-primary h-3.5 w-3.5"
-                                    checked={showFiltered}
-                                    disabled={loading}
-                                    onchange={(event) => {
-                                        showFiltered = event.currentTarget.checked;
-                                        handleFetchStreams();
-                                    }} />
-                                Show filtered-out releases, with their rank
+                                class="bg-muted/40 hover:bg-muted/60 flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5 select-none">
+                                <span class="flex flex-col">
+                                    <span class="text-sm font-semibold">
+                                        Show filtered-out releases
+                                    </span>
+                                    <span class="text-muted-foreground text-xs">
+                                        {filteredCount} hidden by the matcher, listed after the
+                                        accepted ones with their rank
+                                    </span>
+                                </span>
+                                <Switch bind:checked={showFiltered} />
                             </label>
                         </div>
                     {/if}
