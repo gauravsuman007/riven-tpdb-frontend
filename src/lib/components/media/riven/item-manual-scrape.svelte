@@ -1717,7 +1717,8 @@
                                 scrape and this only hides or shows them.
                             -->
                             <label
-                                class="bg-muted/40 hover:bg-muted/60 flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5 select-none">
+                                class="bg-muted/40 hover:bg-muted/60 flex w-fit max-w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 select-none">
+                                <Switch bind:checked={showFiltered} />
                                 <span class="flex flex-col">
                                     <span class="text-sm font-semibold">
                                         Show filtered-out releases
@@ -1727,7 +1728,6 @@
                                         accepted ones with their rank
                                     </span>
                                 </span>
-                                <Switch bind:checked={showFiltered} />
                             </label>
                         </div>
                     {/if}
