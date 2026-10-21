@@ -1058,6 +1058,25 @@
 
     async function handleSelectStream(infohash: string) {
         isManualMagnet = false;
+
+        /*
+            No hash exists yet, so the id is a placeholder the debrid service
+            has never heard of: asking it for a file list would fail at best.
+            Go straight to queueing; the server downloads the .torrent now (the
+            one slot this pick costs) and carries on with the real hash.
+        */
+        if (streams.find((s) => s.magnet === infohash)?.stream.unresolved) {
+            loading = true;
+            error = null;
+
+            try {
+                await queueUncachedRelease(`magnet:?xt=urn:btih:${infohash}`);
+            } finally {
+                loading = false;
+            }
+            return;
+        }
+
         await startScrapeSession(`magnet:?xt=urn:btih:${infohash}`);
     }
 

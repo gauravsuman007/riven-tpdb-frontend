@@ -17,6 +17,9 @@ export interface Stream {
     // True for a release the adult matcher REJECTED, returned only when a
     // manual scrape asked to see them (`include_filtered`). Still pickable:
     // the point is to let someone overrule a filter they can see.
+    // Found without an infohash: the indexer caps .torrent downloads, so
+    // nothing has been downloaded yet and picking this release spends one.
+    unresolved?: boolean;
     filtered?: boolean;
     // What the matcher weighed when it turned the release down.
     filter_reason?: string | null;

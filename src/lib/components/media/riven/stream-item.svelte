@@ -104,6 +104,14 @@
                     {#if stream.is_cached}
                         <Badge class="bg-chart-1 text-primary-foreground">Cached</Badge>
                     {/if}
+                    {#if stream.unresolved}
+                        <Badge
+                            variant="outline"
+                            class="border-amber-500/60 text-amber-600 dark:text-amber-400"
+                            title="{stream.indexer ?? 'This indexer'} limits .torrent downloads per day, so this release has not been downloaded. Picking it uses one.">
+                            Uses 1 download
+                        </Badge>
+                    {/if}
                     <!--
                         Choosing a release here is the same decision as choosing
                         one on the detail page, so it gets the same numbers: how
