@@ -28,6 +28,12 @@
         tags?: string[];
         privacy?: string | null;
         language?: string | null;
+        quota?: {
+            left: number | null;
+            limit: number | null;
+            unavailable: boolean;
+            unlimited: boolean;
+        } | null;
     }
 
     // Anything a person would want to search by: name, category, tag, privacy.
@@ -188,6 +194,22 @@
                                         {indexer.privacy === "semiPrivate"
                                             ? "semi-private"
                                             : indexer.privacy}
+                                    </Badge>
+                                {/if}
+                                {#if indexer.quota}
+                                    <Badge
+                                        variant="outline"
+                                        class={indexer.quota.unavailable
+                                            ? "border-amber-500/60 px-1.5 py-0 text-[10px] text-amber-600 dark:text-amber-400"
+                                            : "px-1.5 py-0 text-[10px]"}
+                                        title="Daily .torrent downloads, as the indexer reports them. Searching never uses any; picking a release does.">
+                                        {#if indexer.quota.unavailable}
+                                            downloads: unreadable, re-test in Prowlarr
+                                        {:else if indexer.quota.unlimited}
+                                            unlimited downloads
+                                        {:else}
+                                            {indexer.quota.left}/{indexer.quota.limit} downloads left
+                                        {/if}
                                     </Badge>
                                 {/if}
                                 {#if indexer.language}
