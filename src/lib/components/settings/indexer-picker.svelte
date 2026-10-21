@@ -24,6 +24,23 @@
         name: string;
         enabled: boolean;
         protocol: string;
+        categories?: string[];
+        tags?: string[];
+        privacy?: string | null;
+        language?: string | null;
+    }
+
+    // Anything a person would want to search by: name, category, tag, privacy.
+    function haystack(indexer: Indexer): string {
+        return [
+            indexer.name,
+            ...(indexer.categories ?? []),
+            ...(indexer.tags ?? []),
+            indexer.privacy ?? "",
+            indexer.language ?? ""
+        ]
+            .join(" ")
+            .toLowerCase();
     }
 
     let open = $state(false);
@@ -35,7 +52,7 @@
     let filter = $state("");
 
     const visible = $derived(
-        indexers.filter((indexer) => indexer.name.toLowerCase().includes(filter.toLowerCase()))
+        indexers.filter((indexer) => haystack(indexer).includes(filter.toLowerCase()))
     );
 
     async function load() {
@@ -131,7 +148,7 @@
                     class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                 <input
                     bind:value={filter}
-                    placeholder="Filter indexers"
+                    placeholder="Filter by name, XXX, tag, private..."
                     class="border-input bg-background w-full rounded-md border py-2 pr-3 pl-9 text-sm" />
             </div>
 
@@ -144,12 +161,49 @@
                             checked={selected.has(indexer.id)}
                             onchange={() => toggle(indexer.id)}
                             class="size-4 shrink-0" />
-                        <span class="min-w-0 flex-1 truncate">{indexer.name}</span>
-                        {#if !indexer.enabled}
-                            <Badge variant="outline" class="shrink-0 text-[10px]">
-                                disabled in Prowlarr
-                            </Badge>
-                        {/if}
+                        <span class="flex min-w-0 flex-1 flex-col gap-1">
+                            <span class="flex items-center gap-2">
+                                <span class="min-w-0 truncate font-medium">{indexer.name}</span>
+                                <span class="text-muted-foreground shrink-0 text-[10px]">
+                                    #{indexer.id}
+                                </span>
+                                {#if !indexer.enabled}
+                                    <Badge variant="outline" class="shrink-0 text-[10px]">
+                                        disabled in Prowlarr
+                                    </Badge>
+                                {/if}
+                            </span>
+                            <span class="flex flex-wrap items-center gap-1">
+                                {#each indexer.categories ?? [] as category (category)}
+                                    <Badge
+                                        variant={category === "XXX" ? "default" : "outline"}
+                                        class="px-1.5 py-0 text-[10px]">
+                                        {category}
+                                    </Badge>
+                                {/each}
+                                {#if indexer.privacy}
+                                    <Badge
+                                        variant="outline"
+                                        class="text-muted-foreground px-1.5 py-0 text-[10px]">
+                                        {indexer.privacy === "semiPrivate"
+                                            ? "semi-private"
+                                            : indexer.privacy}
+                                    </Badge>
+                                {/if}
+                                {#if indexer.language}
+                                    <Badge
+                                        variant="outline"
+                                        class="text-muted-foreground px-1.5 py-0 text-[10px]">
+                                        {indexer.language}
+                                    </Badge>
+                                {/if}
+                                {#each indexer.tags ?? [] as tag (tag)}
+                                    <Badge variant="secondary" class="px-1.5 py-0 text-[10px]">
+                                        {tag}
+                                    </Badge>
+                                {/each}
+                            </span>
+                        </span>
                     </label>
                 {:else}
                     <p class="text-muted-foreground py-6 text-center text-sm">
