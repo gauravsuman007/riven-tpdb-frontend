@@ -191,3 +191,37 @@ export function addonApi(key: string | null | undefined): string {
 
     return `/api/v1/x/${clean}`;
 }
+
+/*
+    The saved git token every update check and pull uses, for add-ons whose
+    repository is private. Only whether one is saved comes back to the page:
+    the value is written, never shown again.
+*/
+const TOKEN_PATH = "/api/v1/settings";
+
+export async function hasAddonGitToken(): Promise<boolean> {
+    try {
+        const response = await fetch(`${TOKEN_PATH}/get/addons_git_token`);
+        if (!response.ok) return false;
+        const body = await response.json();
+        return Boolean(body?.addons_git_token);
+    } catch {
+        return false;
+    }
+}
+
+export async function saveAddonGitToken(token: string): Promise<string | null> {
+    try {
+        const set = await fetch(`${TOKEN_PATH}/set/addons_git_token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ addons_git_token: token })
+        });
+        if (!set.ok) return `Could not save the token (${set.status})`;
+
+        const save = await fetch(`${TOKEN_PATH}/save`, { method: "POST" });
+        return save.ok ? null : `Could not save the token (${save.status})`;
+    } catch (e) {
+        return e instanceof Error ? e.message : "Could not save the token";
+    }
+}

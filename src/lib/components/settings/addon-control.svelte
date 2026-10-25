@@ -33,7 +33,9 @@
         removeAddon,
         formatBytes,
         type Addon,
-        type AddonsResponse
+        type AddonsResponse,
+        hasAddonGitToken,
+        saveAddonGitToken
     } from "$lib/addons";
 
     /*
@@ -84,6 +86,39 @@
     let installing = $state(false);
 
     /*
+        The saved token for private repositories. The install box above takes
+        one for a single install and forgets it, which left an add-on whose
+        repository went private with no way to update: this is that way.
+    */
+    let tokenSaved = $state(false);
+    let newToken = $state("");
+    let savingToken = $state(false);
+
+    async function storeToken(value: string) {
+        savingToken = true;
+        failure = null;
+        notice = null;
+
+        const problem = await saveAddonGitToken(value);
+
+        if (problem) {
+            failure = problem;
+        } else {
+            tokenSaved = Boolean(value);
+            newToken = "";
+            notice = value
+                ? "Token saved. Checking for updates with it…"
+                : "Token removed.";
+
+            if (value && apply(await checkAddonUpdates())) {
+                notice = "Token saved, and every add-on checked for updates with it.";
+            }
+        }
+
+        savingToken = false;
+    }
+
+    /*
         Which add-on is being removed, and whether its data goes too. Held as
         state rather than a `confirm()` because the answer depends on numbers
         the user needs to see -- "and its 6,402 rows" is a different decision
@@ -122,7 +157,10 @@
         if ("addons" in result) data = result.addons;
     }
 
-    onMount(refresh);
+    onMount(() => {
+        refresh();
+        hasAddonGitToken().then((saved) => (tokenSaved = saved));
+    });
 
     /*
         Deliberately a button rather than something listing does on its own:
@@ -273,6 +311,48 @@
         <p class="text-muted-foreground text-[11px]">
             An add-on runs inside Riven with full access to its database and credentials. There is
             no sandbox — only install add-ons you would trust with a shell.
+        </p>
+    </div>
+
+    <!-- Saved token for private repositories, used by checks and updates -->
+    <div class="border-border/60 flex flex-col gap-2 rounded-md border border-dashed p-3">
+        <label class="text-xs font-medium" for="addon-git-token">
+            GitHub token for private add-ons
+            <span class="text-muted-foreground font-normal">
+                — {tokenSaved ? "a token is saved" : "none saved"}
+            </span>
+        </label>
+        <div class="flex flex-wrap gap-2">
+            <input
+                id="addon-git-token"
+                bind:value={newToken}
+                type="password"
+                autocomplete="off"
+                placeholder={tokenSaved ? "paste a new token to replace it" : "github_pat_…"}
+                class="border-border/60 bg-background min-w-0 flex-1 rounded-md border px-3 py-1.5 font-mono text-xs" />
+            <Button
+                type="button"
+                size="sm"
+                disabled={savingToken || !newToken.trim()}
+                onclick={() => storeToken(newToken.trim())}>
+                {savingToken ? "Saving…" : "Save token"}
+            </Button>
+            {#if tokenSaved}
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={savingToken}
+                    onclick={() => storeToken("")}>
+                    Remove
+                </Button>
+            {/if}
+        </div>
+        <p class="text-muted-foreground text-[11px]">
+            Used for every update check and update of an add-on whose repository is private. On
+            GitHub: a fine-grained token limited to those repositories, with Contents set to
+            read-only. It is sent with each git command and never written into a repository's
+            settings.
         </p>
     </div>
 
