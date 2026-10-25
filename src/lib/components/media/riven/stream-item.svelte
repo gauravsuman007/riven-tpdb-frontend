@@ -4,6 +4,7 @@
     import { Checkbox } from "$lib/components/ui/checkbox/index.js";
     import type { Stream } from "$lib/types";
     import ReleaseMeta from "./release-meta.svelte";
+    import LoaderIcon from "@lucide/svelte/icons/loader-circle";
 
     interface Props {
         stream: Stream;
@@ -12,9 +13,22 @@
         onSelect: (magnet: string) => void;
         onScrape: (magnet: string) => void;
         showCheckbox?: boolean;
+        /** This release is the one being picked right now. */
+        busy?: boolean;
+        /** Some pick is in progress: further clicks are ignored, visibly. */
+        locked?: boolean;
     }
 
-    let { stream, magnet, isSelected, onSelect, onScrape, showCheckbox = true }: Props = $props();
+    let {
+        stream,
+        magnet,
+        isSelected,
+        onSelect,
+        onScrape,
+        showCheckbox = true,
+        busy = false,
+        locked = false
+    }: Props = $props();
 
     function getResolutionColor(resolution?: string): string {
         if (!resolution) return "bg-primary text-primary-foreground";
@@ -36,12 +50,29 @@
         to show it is so they can pick it anyway.
     -->
     <Card.Root
-        class="border-border hover:border-primary flex-1 cursor-pointer transition-all hover:shadow-md {stream.filtered
+        class="border-border flex-1 transition-all {busy
+            ? 'border-primary shadow-md'
+            : locked
+              ? 'cursor-wait opacity-50'
+              : 'hover:border-primary cursor-pointer hover:shadow-md'} {stream.filtered && !busy
             ? 'border-dashed opacity-60 hover:opacity-100'
             : ''}"
-        onclick={() => onScrape(magnet)}>
+        aria-busy={busy}
+        onclick={() => {
+            // A pick can take several seconds (a capped tracker's .torrent is
+            // fetched first); a second click used to start a second pick.
+            if (!locked) onScrape(magnet);
+        }}>
         <Card.Content class="px-4 py-3">
             <div class="flex flex-col gap-2">
+                {#if busy}
+                    <p class="text-primary flex items-center gap-2 text-sm font-medium" role="status">
+                        <LoaderIcon class="size-4 animate-spin" />
+                        {stream.unresolved
+                            ? "Fetching this release's torrent from the tracker…"
+                            : "Queuing this release…"}
+                    </p>
+                {/if}
                 <div class="flex items-start justify-between gap-2">
                     <p class="text-foreground min-w-0 flex-1 text-sm font-medium break-all">
                         {stream.raw_title}

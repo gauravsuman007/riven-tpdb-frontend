@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { SvelteSet, SvelteURLSearchParams } from "svelte/reactivity";
-    import { invalidateAll } from "$app/navigation";
+    import { goto, invalidateAll } from "$app/navigation";
     import providers from "$lib/providers";
     import type { components, operations } from "$lib/providers/riven";
     import {
@@ -873,6 +873,19 @@
         toast.success(payload.message ?? "Queued");
         open = false;
         resetFlow();
+
+        // A title that was not in the library has just become an item: show
+        // its page, where the download's progress is, rather than leaving the
+        // viewer on a storefront page that knows nothing about it.
+        if (payload.created && payload.item_id) {
+            await goto(
+                payload.tpdb_id
+                    ? `/details/tpdb/movie/${payload.tpdb_id}`
+                    : `/details/riven/${payload.item_id}`
+            );
+            return;
+        }
+
         await invalidateAll();
     }
 
@@ -1056,7 +1069,22 @@
         }
     }
 
+    /** The release being picked, while its request is in flight. */
+    let picking = $state<string | null>(null);
+
     async function handleSelectStream(infohash: string) {
+        if (picking) return;
+
+        picking = infohash;
+
+        try {
+            await selectStream(infohash);
+        } finally {
+            picking = null;
+        }
+    }
+
+    async function selectStream(infohash: string) {
         isManualMagnet = false;
 
         /*
@@ -1884,6 +1912,8 @@
                                                 isSelected={selectedMagnets.has(magnet)}
                                                 onSelect={toggleMagnetSelection}
                                                 onScrape={handleSelectStream}
+                                                busy={picking === magnet}
+                                                locked={picking !== null}
                                                 showCheckbox={mediaType === "tv"} />
                                         {/each}
                                     </div>
