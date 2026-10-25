@@ -96,6 +96,7 @@
         "mode-watcher": "^1.1.0",
         "nprogress": "^0.2.0",
         "openapi-fetch": "^0.15.0",
+        "sharp": "^0.34.5",
         "zod": "^4.3.5"
     },
     "overrides": {
@@ -105,7 +106,8 @@
         "onlyBuiltDependencies": [
             "@tailwindcss/oxide",
             "better-sqlite3",
-            "esbuild"
+            "esbuild",
+            "sharp"
         ],
         "overrides": {
             "cookie": "^0.7.0",

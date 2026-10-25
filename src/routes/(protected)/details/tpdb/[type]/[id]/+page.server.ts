@@ -4,6 +4,8 @@ import providers from "$lib/providers";
 import { transformTPDBList } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
+import { faceSrc } from "$lib/server/performer-faces";
+import { lookupStudio } from "$lib/studios";
 
 /**
  * Detail page for a TPDB title.
@@ -132,8 +134,50 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
             return null;
         });
 
+    /*
+        The studio page this title's site belongs to. A database read, so it
+        is awaited: the link sits in the title line and should not pop in.
+        Site, then parent, then network -- see `lookupStudio`.
+    */
+    type Site = { id?: unknown; name?: string; parent?: Site | null; network?: Site | null };
+    const site = item.site as Site | undefined;
+    const studioSites = [site, site?.parent, site?.network]
+        .filter((s): s is Site => !!s?.name)
+        .map((s) => ({ id: typeof s.id === "number" ? s.id : null, name: String(s.name) }));
+    const studio = await lookupStudio(studioSites, {
+        baseUrl: locals.backendUrl,
+        apiKey: locals.apiKey,
+        fetch
+    });
+
+    /*
+        The cast, each with a face served through this app's cache rather
+        than TPDB's CDN. A scene's performer record is the SITE's copy and
+        mostly has no picture of its own (62% missing, measured on the
+        library); the canonical performer under `parent` almost always does,
+        so it is the fallback before the full poster.
+    */
+    type Performer = {
+        id?: string;
+        name?: string;
+        face?: string | null;
+        image?: string | null;
+        parent?: Performer | null;
+    };
+    const cast = ((item.performers ?? []) as Performer[])
+        .filter((p) => p?.name)
+        .map((p) => ({
+            id: p.parent?.id ?? p.id ?? String(p.name),
+            name: String(p.name),
+            face: faceSrc(p.face || p.parent?.face || p.image || p.parent?.image)
+        }));
+
     return {
         item,
+        cast,
+        // Null when the storefront carries no page for this site; the page
+        // then offers the studio directory searched for the name instead.
+        studio: studio ? { id: studio.id, name: studio.name } : null,
         // The kind the title actually turned out to be, which is not always
         // the kind the URL asked for.
         type: resolvedType,

@@ -92,11 +92,41 @@ export async function listStudios(
 }
 
 /** One studio. A database read on the backend, so this is fast. */
-export async function getStudio(
-    studioId: number,
+export async function getStudio(studioId: number, options: FetchOptions): Promise<Studio | null> {
+    return get<Studio>(`/studios/${studioId}`, options);
+}
+
+/**
+ * The studio page a TPDB title's site belongs to, or null.
+ *
+ * `sites` is most specific first -- the title's site, its parent, its
+ * network -- because a scene's site is often a sub-brand the storefront does
+ * not carry while its network is. A database read on the backend, so fast.
+ */
+export async function lookupStudio(
+    sites: { id: number | null; name: string }[],
     options: FetchOptions
 ): Promise<Studio | null> {
-    return get<Studio>(`/studios/${studioId}`, options);
+    const query = new URLSearchParams();
+
+    for (const site of sites) {
+        query.append("tpdb_site_id", String(site.id ?? 0));
+        query.append("name", site.name);
+    }
+
+    if (!query.size) return null;
+
+    try {
+        const response = await options.fetch(`${options.baseUrl}/api/v1/studios/lookup?${query}`, {
+            headers: { "x-api-key": options.apiKey }
+        });
+
+        // 404 is the ordinary answer for a site with no studio page.
+        return response.ok ? ((await response.json()) as Studio) : null;
+    } catch (err) {
+        logger.error(`studio lookup threw: ${err}`);
+        return null;
+    }
 }
 
 /**
@@ -112,10 +142,7 @@ export async function getStudioRows(
     options: FetchOptions,
     perRow = 12
 ): Promise<StudioRow[]> {
-    const payload = await get<StudioRows>(
-        `/studios/${studioId}/rows?per_row=${perRow}`,
-        options
-    );
+    const payload = await get<StudioRows>(`/studios/${studioId}/rows?per_row=${perRow}`, options);
     return payload?.rows ?? [];
 }
 

@@ -20,6 +20,7 @@
     import type { PageProps } from "./$types";
     import { enhance } from "$app/forms";
     import { resolve } from "$app/paths";
+    import { page } from "$app/state";
     import { Button } from "$lib/components/ui/button/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
     import BuildingIcon from "@lucide/svelte/icons/building-2";
@@ -29,7 +30,9 @@
 
     let { data, form }: PageProps = $props();
 
-    let search = $state("");
+    // `?q=` arrives from a title page whose site has no exact studio match,
+    // so the directory opens already narrowed to the likely candidates.
+    let search = $state(page.url.searchParams.get("q") ?? "");
 
     const savedCount = $derived(data.studios.filter((studio) => studio.saved).length);
 

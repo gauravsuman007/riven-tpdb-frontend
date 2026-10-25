@@ -2,6 +2,7 @@
     import type { PageData, ActionData } from "./$types";
     import { streamed } from "$lib/streamed.svelte";
     import { enhance } from "$app/forms";
+    import { resolve } from "$app/paths";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";
     import PageShell from "$lib/components/page-shell.svelte";
@@ -21,6 +22,7 @@
     import { liveState } from "$lib/utils/live-state.svelte";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
+    import { SvelteSet } from "svelte/reactivity";
     import TitlePlayback from "$lib/components/media/title-playback.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
 
@@ -60,7 +62,14 @@
 
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
-    const performers = $derived((item.performers ?? []).filter((p: any) => p?.name));
+    // A face the cache could not get (gone from TPDB, refused) shows initials.
+    const brokenFaces = new SvelteSet<string>();
+    const initials = (name: string) =>
+        name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() ?? "")
+            .join("");
     const tags = $derived((item.tags ?? []).filter((t: any) => t?.name));
 
     // Related rows link the same way list-item.svelte does: prefer the TPDB
@@ -106,7 +115,19 @@
                 </h1>
 
                 <div class="text-muted-foreground flex flex-wrap items-center gap-3 text-sm">
-                    {#if item.site?.name}<span class="font-semibold">{item.site.name}</span>{/if}
+                    {#if item.site?.name}
+                        <!-- The storefront's studio page when one exists; otherwise the
+                             directory, already searched for the name, which is what
+                             finding it by hand used to mean. -->
+                        <a
+                            href={data.studio
+                                ? resolve(`/studios/${data.studio.id}`)
+                                : `${resolve("/studios")}?q=${encodeURIComponent(item.site.name)}`}
+                            class="text-foreground font-semibold underline-offset-4 hover:underline"
+                            title={data.studio ? `Open ${data.studio.name}` : "Find this studio"}>
+                            {item.site.name}
+                        </a>
+                    {/if}
                     {#if item.date}<span>{item.date}</span>{/if}
                     {#if runtime}<span>{runtime}</span>{/if}
                 </div>
@@ -127,12 +148,39 @@
                     </p>
                 {/if}
 
-                {#if performers.length}
-                    <div class="flex flex-wrap gap-2">
-                        {#each performers as performer (performer.id ?? performer.name)}
-                            <Badge variant="secondary">{performer.name}</Badge>
+                {#if data.cast.length}
+                    <ul class="flex flex-wrap gap-4">
+                        {#each data.cast as performer (performer.id)}
+                            <li>
+                                <!-- The library's cast facet is the only page a
+                                     performer has. -->
+                                <a
+                                    href={`${resolve("/library")}?performer=${encodeURIComponent(performer.name)}`}
+                                    class="group flex w-20 flex-col items-center gap-1.5 text-center">
+                                    <span
+                                        class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex size-20 items-center justify-center overflow-hidden rounded-full text-lg font-semibold ring-1 transition">
+                                        {#if performer.face && !brokenFaces.has(performer.id)}
+                                            <img
+                                                src={performer.face}
+                                                alt=""
+                                                width="80"
+                                                height="80"
+                                                loading="lazy"
+                                                decoding="async"
+                                                class="size-full object-cover"
+                                                onerror={() => brokenFaces.add(performer.id)} />
+                                        {:else}
+                                            {initials(performer.name)}
+                                        {/if}
+                                    </span>
+                                    <span
+                                        class="text-foreground line-clamp-2 text-xs leading-tight">
+                                        {performer.name}
+                                    </span>
+                                </a>
+                            </li>
                         {/each}
-                    </div>
+                    </ul>
                 {/if}
 
                 {#if tags.length}
@@ -298,7 +346,9 @@
                     to add something new; watching direct is for when you just
                     want to stream now.
                 -->
-                <AddonSlot name="details" props={{ title: item.title, itemId: libraryState?.riven_id ?? null }} />
+                <AddonSlot
+                    name="details"
+                    props={{ title: item.title, itemId: libraryState?.riven_id ?? null }} />
 
                 {#if collected}
                     <p class="text-muted-foreground text-xs">
