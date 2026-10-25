@@ -628,19 +628,15 @@ tell which file a position was in.
   and every file with its length and size, each row playing from its start.
   `player.open(id, title, poster, startAt)` takes a whole-title second.
 
-## Title page: studio link and cast faces
+## Title page: studio link and cast pictures
 - The site name on `/details/tpdb/...` links to `/studios/{id}` via the
   backend's `/studios/lookup` (site, then parent, then network); with no match
   it opens `/studios?q=<name>`, which pre-fills the directory search.
-- Cast faces are served by `/performers/face?u=<TPDB url>` from
-  `<data dir>/cache/performer-faces`, stored as 192x192 WebP (q72, `attention`
-  crop): ~40 KB JPEG -> ~3-5 KB. Only `cdn.`/`thumb.theporndb.net` are fetched
-  and redirects are refused -- the URL comes from the request, so that check
-  is what stops the route being an SSRF into the home network.
-- `sharp` does the resize. It is a native module: it must stay in
-  `dependencies` (adapter-node externalises it) and in `onlyBuiltDependencies`.
-  The image builds per platform, so pnpm installs the matching
-  `@img/sharp-linuxmusl-*` binary; cross-building with `--platform=$BUILDPLATFORM`
-  would ship the wrong one.
-- Fallback order is `face`, `parent.face`, `image`, `parent.image`: a scene's
-  performer is the site's copy and mostly has no picture of its own.
+- Cast pictures load from `/performers/photo?u=<TPDB url>`, a thin proxy to
+  the backend's `/tpdb/performer-image`. The BACKEND downscales (ffmpeg, 200px
+  wide WebP, ~5-8 KB) and stores them inside its TPDB cache, so they count
+  against the one TPDB cache size limit. Do not move the cache back here: the
+  frontend's volume is a different disk and could never share that budget.
+- Source order is `image`, `parent.image`, `face`, `parent.face`. TPDB's
+  `face` is NOT a face -- it is a square "smart" crop, often a torso. And a
+  scene's performer is the site's copy, 62% without a picture of its own.

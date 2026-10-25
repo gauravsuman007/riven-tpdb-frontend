@@ -4,7 +4,7 @@ import providers from "$lib/providers";
 import { transformTPDBList } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
-import { faceSrc } from "$lib/server/performer-faces";
+import { photoSrc } from "$lib/performer-photos";
 import { lookupStudio } from "$lib/studios";
 
 /**
@@ -151,11 +151,12 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
     });
 
     /*
-        The cast, each with a face served through this app's cache rather
-        than TPDB's CDN. A scene's performer record is the SITE's copy and
-        mostly has no picture of its own (62% missing, measured on the
-        library); the canonical performer under `parent` almost always does,
-        so it is the fallback before the full poster.
+        The cast, each with a picture served through the backend's TPDB cache
+        rather than TPDB's CDN. The full poster, not `face`: TPDB's `face` is
+        a square "smart" crop that is as often a torso as a face. A scene's
+        performer record is the SITE's copy and mostly has no picture of its
+        own (62% missing, measured on the library); the canonical performer
+        under `parent` almost always does.
     */
     type Performer = {
         id?: string;
@@ -169,7 +170,7 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         .map((p) => ({
             id: p.parent?.id ?? p.id ?? String(p.name),
             name: String(p.name),
-            face: faceSrc(p.face || p.parent?.face || p.image || p.parent?.image)
+            photo: photoSrc(p.image || p.parent?.image || p.face || p.parent?.face)
         }));
 
     return {

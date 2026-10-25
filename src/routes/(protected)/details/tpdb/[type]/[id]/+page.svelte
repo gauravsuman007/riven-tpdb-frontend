@@ -62,8 +62,8 @@
 
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
-    // A face the cache could not get (gone from TPDB, refused) shows initials.
-    const brokenFaces = new SvelteSet<string>();
+    // A picture the cache could not get (gone from TPDB, refused) shows initials.
+    const brokenPhotos = new SvelteSet<string>();
     const initials = (name: string) =>
         name
             .split(/\s+/)
@@ -156,19 +156,19 @@
                                      performer has. -->
                                 <a
                                     href={`${resolve("/library")}?performer=${encodeURIComponent(performer.name)}`}
-                                    class="group flex w-20 flex-col items-center gap-1.5 text-center">
+                                    class="group flex w-24 flex-col items-center gap-1.5 text-center">
                                     <span
-                                        class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex size-20 items-center justify-center overflow-hidden rounded-full text-lg font-semibold ring-1 transition">
-                                        {#if performer.face && !brokenFaces.has(performer.id)}
+                                        class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-lg text-lg font-semibold ring-1 transition">
+                                        {#if performer.photo && !brokenPhotos.has(performer.id)}
                                             <img
-                                                src={performer.face}
+                                                src={performer.photo}
                                                 alt=""
-                                                width="80"
-                                                height="80"
+                                                width="96"
+                                                height="144"
                                                 loading="lazy"
                                                 decoding="async"
                                                 class="size-full object-cover"
-                                                onerror={() => brokenFaces.add(performer.id)} />
+                                                onerror={() => brokenPhotos.add(performer.id)} />
                                         {:else}
                                             {initials(performer.name)}
                                         {/if}
