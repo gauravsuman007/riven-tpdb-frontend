@@ -22,7 +22,17 @@ import type { RequestHandler } from "@sveltejs/kit";
 
 //: Forwarded from the client. Range is what makes seeking work at all;
 //: without it the player can only ever play from the start.
-const FORWARD_REQUEST = ["range", "if-range", "accept", "content-type"];
+//: The conditional headers are what let an add-on's bundle, served
+//: `no-cache` so updates reach the browser, revalidate as a 304 instead of
+//: downloading again on every page load.
+const FORWARD_REQUEST = [
+    "range",
+    "if-range",
+    "accept",
+    "content-type",
+    "if-none-match",
+    "if-modified-since"
+];
 
 //: Returned to the client. Content-Range and Accept-Ranges have to survive or
 //: the browser does not believe the 206 it was just given.
@@ -84,7 +94,11 @@ const passthrough = async (
         if (value) out.set(name, value);
     }
 
-    return new Response(upstream.body, { status: upstream.status, headers: out });
+    // A 304 (or 204) may not carry a body at all: the Response constructor
+    // throws on one, even an empty stream, and the revalidation above makes
+    // 304 the common answer for an add-on's bundle.
+    const bodyless = upstream.status === 304 || upstream.status === 204;
+    return new Response(bodyless ? null : upstream.body, { status: upstream.status, headers: out });
 };
 
 export const GET: RequestHandler = ({ locals, url, request }) =>
