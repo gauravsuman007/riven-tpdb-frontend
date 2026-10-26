@@ -72,6 +72,13 @@
             .join("");
     const tags = $derived((item.tags ?? []).filter((t: any) => t?.name));
 
+    // One row of the cast until expanded: as many 96px cards (plus the 16px
+    // gap) as the section's width holds. Before the width is measured (SSR,
+    // first paint) six, which is a row on any screen this page lays out for.
+    let castWidth = $state(0);
+    let castExpanded = $state(false);
+    const perRow = $derived(castWidth ? Math.max(1, Math.floor((castWidth + 16) / 112)) : 6);
+
     // Related rows link the same way list-item.svelte does: prefer the TPDB
     // uuid, falling back to the numeric id.
     const relatedHref = (related: Record<string, any>) =>
@@ -146,41 +153,6 @@
                     <p class="text-muted-foreground max-w-3xl leading-relaxed">
                         {item.description}
                     </p>
-                {/if}
-
-                {#if data.cast.length}
-                    <ul class="flex flex-wrap gap-4">
-                        {#each data.cast as performer (performer.id)}
-                            <li>
-                                <!-- The library's cast facet is the only page a
-                                     performer has. -->
-                                <a
-                                    href={`${resolve("/library")}?performer=${encodeURIComponent(performer.name)}`}
-                                    class="group flex w-24 flex-col items-center gap-1.5 text-center">
-                                    <span
-                                        class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-lg text-lg font-semibold ring-1 transition">
-                                        {#if performer.photo && !brokenPhotos.has(performer.id)}
-                                            <img
-                                                src={performer.photo}
-                                                alt=""
-                                                width="96"
-                                                height="144"
-                                                loading="lazy"
-                                                decoding="async"
-                                                class="size-full object-cover"
-                                                onerror={() => brokenPhotos.add(performer.id)} />
-                                        {:else}
-                                            {initials(performer.name)}
-                                        {/if}
-                                    </span>
-                                    <span
-                                        class="text-foreground line-clamp-2 text-xs leading-tight">
-                                        {performer.name}
-                                    </span>
-                                </a>
-                            </li>
-                        {/each}
-                    </ul>
                 {/if}
 
                 {#if tags.length}
@@ -362,6 +334,60 @@
                 {/if}
             </div>
         </div>
+
+        <!--
+            The cast, most important first (see `$lib/cast-order`). One row
+            until expanded: a twenty-strong cast used to push everything else
+            off the screen. The row is however many cards fit the width, not
+            a fixed count, so it is exactly one row on a phone and on a wide
+            monitor alike.
+        -->
+        {#if data.cast.length}
+            <section class="flex flex-col gap-4" bind:clientWidth={castWidth}>
+                <div class="flex items-baseline justify-between gap-4">
+                    <h2 class="text-foreground text-2xl font-bold tracking-tight">Cast</h2>
+                    {#if data.cast.length > perRow}
+                        <button
+                            type="button"
+                            class="text-muted-foreground hover:text-foreground font-mono text-xs transition-colors"
+                            aria-expanded={castExpanded}
+                            onclick={() => (castExpanded = !castExpanded)}>
+                            {castExpanded ? "Show less" : `Show all ${data.cast.length}`}
+                        </button>
+                    {/if}
+                </div>
+                <ul class="flex flex-wrap gap-4">
+                    {#each castExpanded ? data.cast : data.cast.slice(0, perRow) as performer (performer.id)}
+                        <li>
+                            <!-- The library's cast facet is the only page a performer has. -->
+                            <a
+                                href={`${resolve("/library")}?performer=${encodeURIComponent(performer.name)}`}
+                                class="group flex w-24 flex-col items-center gap-1.5 text-center">
+                                <span
+                                    class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-lg text-lg font-semibold ring-1 transition">
+                                    {#if performer.photo && !brokenPhotos.has(performer.id)}
+                                        <img
+                                            src={performer.photo}
+                                            alt=""
+                                            width="96"
+                                            height="144"
+                                            loading="lazy"
+                                            decoding="async"
+                                            class="size-full object-cover"
+                                            onerror={() => brokenPhotos.add(performer.id)} />
+                                    {:else}
+                                        {initials(performer.name)}
+                                    {/if}
+                                </span>
+                                <span class="text-foreground line-clamp-2 text-xs leading-tight">
+                                    {performer.name}
+                                </span>
+                            </a>
+                        </li>
+                    {/each}
+                </ul>
+            </section>
+        {/if}
 
         {#await data.streamed.similar then similar}
             {#if similar.length}

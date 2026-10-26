@@ -646,6 +646,15 @@ tell which file a position was in.
   wide WebP, ~5-8 KB) and stores them inside its TPDB cache, so they count
   against the one TPDB cache size limit. Do not move the cache back here: the
   frontend's volume is a different disk and could never share that budget.
+- The cast is its own section just above "Related on TPDB", one row until
+  "Show all N" (the row is as many 96px cards as the width fits; 6 before the
+  width is measured). Order comes from `$lib/cast-order`: NO source has a
+  billing order -- TPDB is women A-Z then men A-Z, Adult Empire's "Starring"
+  is alphabetical -- so importance is inferred from the record: named in the
+  title, named in the description (full or unique first name; a director's
+  "directed by" mention does not count), scenes appeared in, then women
+  first, then TPDB rating. Gets After Dark (Tori Black) and Drive (Maitland
+  Ward) right.
 - Source order is `image`, `parent.image`, `face`, `parent.face`. TPDB's
   `face` is NOT a face -- it is a square "smart" crop, often a torso. And a
   scene's performer is the site's copy, 62% without a picture of its own.

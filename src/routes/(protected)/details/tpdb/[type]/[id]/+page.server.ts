@@ -5,6 +5,7 @@ import { transformTPDBList } from "$lib/providers/parser";
 import { logger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
 import { photoSrc } from "$lib/performer-photos";
+import { castOrder } from "$lib/cast-order";
 import { lookupStudio } from "$lib/studios";
 
 /**
@@ -165,7 +166,8 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         image?: string | null;
         parent?: Performer | null;
     };
-    const cast = ((item.performers ?? []) as Performer[])
+    // Most important first; see `castOrder` for how that is inferred.
+    const cast = (castOrder(item) as Performer[])
         .filter((p) => p?.name)
         .map((p) => ({
             id: p.parent?.id ?? p.id ?? String(p.name),
