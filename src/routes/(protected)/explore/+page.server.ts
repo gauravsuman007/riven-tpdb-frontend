@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { fail, redirect } from "@sveltejs/kit";
-import { getBrochure, getBrochureStatus } from "$lib/collections";
+import { getAvnCategories, getBrochure, getBrochureStatus } from "$lib/collections";
 import { listAddons } from "$lib/addons";
 import { getRailLayout } from "$lib/rails";
 import { listStudios, setStudioSaved } from "$lib/studios";
@@ -60,6 +60,9 @@ export const load: PageServerLoad = async (event) => {
             page; putting it here would bury the two or three studios somebody
             follows under ninety-seven they do not.
         */
+        // AVN categories: a local read over the synced corpus, streamed like
+        // the shelves. [] when AVN is off, which the row explains.
+        avnCategories: getAvnCategories(options),
         studios: listStudios(options, { saved: true }),
         studioSuggestions: listStudios(options, { limit: 12 }),
         /*

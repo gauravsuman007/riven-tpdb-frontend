@@ -293,6 +293,15 @@ Rail data is `lib/recommendations.ts`, hand-maintained against
 `providers/riven.ts` is generated from an OpenAPI spec that needs a running
 backend.
 
+### AVN award winners rail
+- Explore rail key `avn-categories` (in `EXPLORE_STATIC_RAILS`; a new rail
+  switches itself on for arranged layouts). Ten broad award groups from the
+  backend's `/collections/avn/categories`, story first. A card opens
+  `/explore/awards/category/[key]`: every winner in the group, split by year,
+  newest first, each card naming the exact award it won.
+- An empty list means AVN is off or unsynced; the rail then points at the
+  awards tab, which is where it is switched on.
+
 ## Cards: the title sits below the poster
 
 Every grid and carousel renders through `list-item` -> `media/portrait-card`,

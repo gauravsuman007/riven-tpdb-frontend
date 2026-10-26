@@ -21,6 +21,7 @@
     import PosterImage from "$lib/components/media/poster-image.svelte";
     import PageShell from "$lib/components/page-shell.svelte";
     import ShelfRow from "$lib/components/explore/shelf-row.svelte";
+    import AvnCategoryRow from "$lib/components/explore/avn-category-row.svelte";
     import StudioRow from "$lib/components/explore/studio-row.svelte";
     import RailEditor from "$lib/components/rail-editor.svelte";
     import AddonRailRow from "$lib/components/addon-rail.svelte";
@@ -511,6 +512,33 @@
                         </div>
                     {:then [studios, suggestions]}
                         <StudioRow {studios} {suggestions} action="?/saveStudio" />
+                    {/await}
+                {:else if rail.key === "avn-categories"}
+                    {#await data.avnCategories}
+                        <div
+                            class="h-[300px] animate-pulse rounded-xl border border-white/5 bg-white/[0.02]">
+                        </div>
+                    {:then categories}
+                        {#if categories.length}
+                            <AvnCategoryRow {categories} />
+                        {:else}
+                            <!--
+                                Off or not synced yet. The awards tab is where it is
+                                switched on and where the sync's cost is explained.
+                            -->
+                            <div
+                                class="flex flex-col items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+                                <p class="text-sm text-white/90">
+                                    No AVN winners yet. The awards have to be fetched first.
+                                </p>
+                                <Button
+                                    href={resolve("/explore/awards")}
+                                    size="sm"
+                                    variant="secondary">
+                                    Open AVN awards
+                                </Button>
+                            </div>
+                        {/if}
                     {/await}
                 {:else if rail.key === "shelves"}
                     {#await Promise.all([data.shelves, data.brochure])}

@@ -232,6 +232,45 @@ export async function getAvnOverview(options: FetchOptions, perYear = 18): Promi
     );
 }
 
+/**
+ * One of the ten broad AVN award groups (Story & Drama, Comedy & Parody,
+ * Production Value, ...), across every ceremony -- see
+ * `program/services/awards/categories.py`. Titles only: an award that goes to
+ * a person never appears, and a craft award (cinematography, directing...)
+ * appears as the film it was won for.
+ */
+export interface AvnCategory {
+    key: string;
+    name: string;
+    description: string;
+    winners: number;
+    first_year: number | null;
+    last_year: number | null;
+    poster_path: string | null;
+}
+
+export interface AvnCategoryDetail {
+    category: AvnCategory;
+    /** Every winner, newest ceremony first; each keeps the exact award it won as `category`. */
+    entries: CollectionEntry[];
+}
+
+/** The award groups that have winners, story-driven first. [] when AVN is off or unreachable. */
+export async function getAvnCategories(options: FetchOptions): Promise<AvnCategory[]> {
+    return (await get<AvnCategory[]>("/collections/avn/categories", options)) ?? [];
+}
+
+/** Every winner in one group, newest first; null for an unknown key. */
+export async function getAvnCategory(
+    key: string,
+    options: FetchOptions
+): Promise<AvnCategoryDetail | null> {
+    return get<AvnCategoryDetail>(
+        `/collections/avn/categories/${encodeURIComponent(key)}`,
+        options
+    );
+}
+
 async function send<T>(
     path: string,
     method: "POST" | "DELETE",
@@ -343,7 +382,6 @@ export async function removeFromCollection(key: string, entryId: number, options
 export async function deleteCollection(key: string, options: FetchOptions) {
     return send<{ message: string }>(`/collections/${encodeURIComponent(key)}`, "DELETE", options);
 }
-
 
 /**
  * Where a catalogue entry's card should point.

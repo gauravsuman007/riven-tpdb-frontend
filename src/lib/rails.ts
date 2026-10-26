@@ -97,11 +97,11 @@ export function builtinHomeRails(): RailDef[] {
 }
 
 /**
- * Explore's two catalogue rows.
+ * Explore's fixed catalogue rows.
  *
  * The ranked rails are NOT here: their keys depend on the configured
  * intents, so they are catalogued from the engine's own answer at load time
- * (see the Explore page). These two are fixed, and they are the rows that
+ * (see the Explore page). These are fixed, and they are the rows that
  * work before any of the ranking does.
  */
 export const EXPLORE_STATIC_RAILS: RailDef[] = [
@@ -109,6 +109,14 @@ export const EXPLORE_STATIC_RAILS: RailDef[] = [
         key: "studios",
         title: "Studios",
         description: "The studios you follow, and their bestsellers.",
+        source: "built-in",
+        defaultPage: "explore",
+        tv: false
+    },
+    {
+        key: "avn-categories",
+        title: "AVN award winners",
+        description: "Every AVN film category; open one for its winners from every year.",
         source: "built-in",
         defaultPage: "explore",
         tv: false
