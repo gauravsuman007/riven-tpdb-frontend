@@ -122,9 +122,7 @@
     });
 
     let stageTransform = $derived(
-        !zoomed && settled
-            ? 'none'
-            : `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+        !zoomed && settled ? "none" : `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
     );
     let isFullscreen = $state(false);
 
@@ -172,6 +170,37 @@
     let lastTap = 0;
 
     const target = $derived(player.current);
+
+    /*
+        The loading and buffering frame. A <video> poster is drawn letterboxed
+        into a 16:9 box, so the tall cover every caller passes shows as a thin
+        strip in the middle. A library title's wide art (TMDB backdrop or
+        scene still) fills it -- fetched here by item id, so every page that
+        opens the player gets it without passing anything new. Swapped in only
+        once it has actually loaded: a 404 (no wide art) or a slow answer must
+        never blank the cover that is already showing.
+    */
+    let wideArt = $state<{ itemId: number; src: string } | null>(null);
+
+    $effect(() => {
+        const current = target;
+
+        if (!current || current.kind !== "library") return;
+
+        const itemId = current.itemId;
+        const src = `/art/wide/item/${itemId}`;
+        const image = new Image();
+
+        image.onload = () => {
+            if (target?.kind === "library" && target.itemId === itemId) wideArt = { itemId, src };
+        };
+        image.src = src;
+    });
+
+    const loadingPoster = (current: typeof target) =>
+        current?.kind === "library" && wideArt?.itemId === current.itemId
+            ? wideArt.src
+            : (current?.poster ?? undefined);
 
     /*
         Playlists.
@@ -272,7 +301,8 @@
         const length = durations[part] ?? 0;
         const key = `${target.itemId}:${next}`;
 
-        if (next >= parts.length || !length || video.currentTime < length - 30 || warmed.has(key)) return;
+        if (next >= parts.length || !length || video.currentTime < length - 30 || warmed.has(key))
+            return;
 
         warmed.add(key);
         void fetch(`/api/stream/${target.itemId}/playback_info?part=${next}`).catch(() => {});
@@ -1460,8 +1490,7 @@
             ondblclick={(e) => onDoubleToggle(e.clientX, e.clientY)}>
             <div
                 class="h-full w-full origin-center"
-                style="transform: {stageTransform}; transition: {panStart ||
-                pinchStartDistance
+                style="transform: {stageTransform}; transition: {panStart || pinchStartDistance
                     ? 'none'
                     : 'transform 120ms ease-out'};">
                 <!--
@@ -1524,7 +1553,7 @@
                             offset={partOffset}
                             total={timelineOn && total !== null ? total : undefined}
                             onended={onPartEnded}
-                            poster={target.poster}
+                            poster={loadingPoster(target)}
                             bind:element={video}
                             bind:duration={probedDuration}
                             bind:resolution={probedResolution}

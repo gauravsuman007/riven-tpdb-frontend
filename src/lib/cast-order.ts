@@ -1,7 +1,11 @@
 /**
  * A title's cast, most important first.
  *
- * No source has a billing order. TPDB lists women A-Z then men A-Z, and Adult
+ * TMDB's credit order wins when the title is on TMDB (`billing`, from the
+ * backend's title extras -- 40 of 48 library movies); performers TPDB lists
+ * and TMDB does not follow, in the inferred order below.
+ *
+ * Otherwise no source has a billing order. TPDB lists women A-Z then men A-Z, and Adult
  * Empire's "Starring" line is alphabetical too (checked on After Dark: Abella
  * Danger, Adriana Chechik, Ana Foxxx...). So importance is inferred from what
  * the record itself says, strongest signal first:
@@ -30,7 +34,24 @@ function count(haystack: string, needle: string): number {
     return haystack.match(new RegExp(`\\b${escape(needle)}\\b`, "g"))?.length ?? 0;
 }
 
-export function castOrder(record: Json): Json[] {
+const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export function castOrder(record: Json, billing: string[] = []): Json[] {
+    const inferred = inferredOrder(record);
+
+    if (!billing.length) return inferred;
+
+    const rank = new Map(billing.map((name, index) => [key(name), index]));
+    const position = (p: Json) => rank.get(key(String(p.name))) ?? Infinity;
+
+    // Stable: unbilled performers keep the inferred order among themselves.
+    return inferred
+        .map((p, index) => ({ p, index }))
+        .sort((a, b) => position(a.p) - position(b.p) || a.index - b.index)
+        .map((entry) => entry.p);
+}
+
+function inferredOrder(record: Json): Json[] {
     const cast = ((record.performers ?? []) as Json[]).filter((p) => p?.name);
     const title = String(record.title ?? "").toLowerCase();
     const directors = new Set(

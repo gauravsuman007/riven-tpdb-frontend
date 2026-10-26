@@ -170,7 +170,8 @@
                     {@const displayTitle = item.title ?? item.name ?? "Untitled"}
                     <Carousel.Item class="relative w-full {heightClass}">
                         {@const backdrop = item.backdrop_path
-                            ? item.backdrop_path.startsWith("http")
+                            ? item.backdrop_path.startsWith("http") ||
+                              item.backdrop_path.startsWith("/art/")
                                 ? item.backdrop_path
                                 : `${TMDB_IMAGE_BASE_URL}/original${item.backdrop_path}`
                             : null}

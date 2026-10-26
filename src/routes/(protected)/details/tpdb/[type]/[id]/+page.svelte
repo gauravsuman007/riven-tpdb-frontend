@@ -23,6 +23,7 @@
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
     import { SvelteSet } from "svelte/reactivity";
+    import { votes } from "$lib/title-extras";
     import TitlePlayback from "$lib/components/media/title-playback.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
 
@@ -99,7 +100,20 @@
 </svelte:head>
 
 <PageShell class="bg-background relative flex min-h-screen flex-col overflow-x-hidden">
-    {#if backdrop}
+    <!--
+        The banner. A real 16:9 image (TMDB backdrop, or a scene's still) is
+        shown properly; TPDB's own `background` for a movie is the tall box
+        cover, which only works as a faint wash, so it stays at 30%.
+    -->
+    {#if data.wide}
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[70vh]">
+            <img src={data.wide} alt="" class="h-full w-full object-cover object-top opacity-60" />
+            <div class="from-background absolute inset-0 bg-gradient-to-t via-transparent"></div>
+            <div
+                class="from-background/90 absolute inset-0 bg-gradient-to-r via-transparent to-transparent">
+            </div>
+        </div>
+    {:else if backdrop}
         <div class="pointer-events-none absolute inset-x-0 top-0 h-[60vh]">
             <img src={backdrop} alt="" class="h-full w-full object-cover opacity-30" />
             <div class="from-background absolute inset-0 bg-gradient-to-t via-transparent"></div>
@@ -137,6 +151,18 @@
                     {/if}
                     {#if item.date}<span>{item.date}</span>{/if}
                     {#if runtime}<span>{runtime}</span>{/if}
+                    {#if data.imdb}
+                        <a
+                            href={`https://www.imdb.com/title/${data.imdb.id}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex items-center gap-1.5 rounded-md bg-[#f5c518] px-1.5 py-0.5 text-xs font-bold text-black"
+                            title="IMDb rating">
+                            IMDb {data.imdb.rating.toFixed(1)}
+                            <span class="font-normal text-black/70"
+                                >({votes(data.imdb.votes)})</span>
+                        </a>
+                    {/if}
                 </div>
 
                 {#if libraryState?.riven_id}

@@ -302,6 +302,23 @@ backend.
 - An empty list means AVN is off or unsynced; the rail then points at the
   awards tab, which is where it is switched on.
 
+### Wide art, billing order, IMDb rating
+- From the backend's title extras (`$lib/title-extras`, TMDB + IMDb's own
+  dataset; see the backend AGENTS.md). Wide images are always drawn through
+  `/art/wide?u=` (1280px WebP from the backend's cache), never hot-linked.
+- Title page: `castOrder(record, extras.cast_order)` -- TMDB billing wins,
+  the inferred order fills the rest. A real 16:9 banner when there is one;
+  TPDB's movie `background` is the tall box cover and stays a 30% wash.
+  IMDb badge links out. Extras are awaited with a 3s cap (`getTitleExtras`);
+  library titles are pre-computed, so it is a cache read.
+- Player: fetches `/art/wide/item/{id}` itself (it holds only an item id,
+  whichever page opened it) and swaps it in as the `<video>` poster ONLY
+  after it loads -- a 404 must never blank the cover already showing.
+- Home hero: `withWideArt` uses the CACHE-ONLY batch, so the hero never waits
+  on TMDB; misses are worked out in the background for the next visit. The
+  hero accepts `/art/` paths in `backdrop_path` (anything else not starting
+  with http is treated as a TMDB path).
+
 ## Cards: the title sits below the poster
 
 Every grid and carousel renders through `list-item` -> `media/portrait-card`,

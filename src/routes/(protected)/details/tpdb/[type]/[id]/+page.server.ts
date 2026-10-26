@@ -6,6 +6,7 @@ import { logger } from "$lib/logger";
 import { attachLibraryStates } from "$lib/server/library-state";
 import { photoSrc } from "$lib/performer-photos";
 import { castOrder } from "$lib/cast-order";
+import { getTitleExtras, wideSrc } from "$lib/title-extras";
 import { lookupStudio } from "$lib/studios";
 
 /**
@@ -145,11 +146,13 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
     const studioSites = [site, site?.parent, site?.network]
         .filter((s): s is Site => !!s?.name)
         .map((s) => ({ id: typeof s.id === "number" ? s.id : null, name: String(s.name) }));
-    const studio = await lookupStudio(studioSites, {
-        baseUrl: locals.backendUrl,
-        apiKey: locals.apiKey,
-        fetch
-    });
+    // Both local reads for a library title (the extras are pre-computed);
+    // the extras may ask TMDB for anything else, which `getTitleExtras`
+    // bounds so the page never waits long on it.
+    const [studio, extras] = await Promise.all([
+        lookupStudio(studioSites, { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch }),
+        getTitleExtras(tpdbUuid, { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch })
+    ]);
 
     /*
         The cast, each with a picture served through the backend's TPDB cache
@@ -167,7 +170,7 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
         parent?: Performer | null;
     };
     // Most important first; see `castOrder` for how that is inferred.
-    const cast = (castOrder(item) as Performer[])
+    const cast = (castOrder(item, extras?.cast_order ?? []) as Performer[])
         .filter((p) => p?.name)
         .map((p) => ({
             id: p.parent?.id ?? p.id ?? String(p.name),
@@ -178,6 +181,14 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
     return {
         item,
         cast,
+        // A 16:9 image for the banner: TMDB's backdrop for a movie, the
+        // still for a scene. Null when there is none; the page then keeps
+        // the cover it had.
+        wide: wideSrc(extras?.wide),
+        imdb:
+            extras?.imdb_id && extras.imdb_rating
+                ? { id: extras.imdb_id, rating: extras.imdb_rating, votes: extras.imdb_votes ?? 0 }
+                : null,
         // Null when the storefront carries no page for this site; the page
         // then offers the studio directory searched for the name instead.
         studio: studio ? { id: studio.id, name: studio.name } : null,

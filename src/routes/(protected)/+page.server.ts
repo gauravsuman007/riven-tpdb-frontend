@@ -10,6 +10,7 @@ import { listAddons } from "$lib/addons";
 import { getRailLayout } from "$lib/rails";
 import type { TMDBNowPlayingItem } from "$lib/components/tmdb-now-playing.svelte";
 import { loadUpNext, type UpNextCard } from "$lib/server/up-next";
+import { getTitleExtrasBatch, wideSrc } from "$lib/title-extras";
 
 const logger = createScopedLogger("home");
 
@@ -134,6 +135,33 @@ async function railData(fetch: typeof globalThis.fetch) {
     };
 }
 
+/**
+ * Give hero slides a real 16:9 banner where one is known.
+ *
+ * The hero draws a blurred cover when it has no backdrop, which is every
+ * library title: TPDB has no wide art for movies. The backend's title extras
+ * do (TMDB backdrops, scene stills). Cache-only, so the hero never waits on
+ * TMDB: a slide whose art is not worked out yet keeps its cover this time and
+ * has its banner on the next visit.
+ */
+async function withWideArt(
+    items: TMDBNowPlayingItem[],
+    tpdbIds: (string | null | undefined)[],
+    options: { baseUrl: string; apiKey: string; fetch: typeof globalThis.fetch }
+): Promise<TMDBNowPlayingItem[]> {
+    const extras = await getTitleExtrasBatch(
+        tpdbIds.filter((id): id is string => !!id),
+        options
+    );
+
+    return items.map((item, index) => {
+        const id = tpdbIds[index];
+        const wide = id ? wideSrc(extras[id]?.wide) : null;
+
+        return wide ? { ...item, backdrop_path: wide } : item;
+    });
+}
+
 export const load: PageServerLoad = async ({ locals, fetch }) => {
     if (!locals.user || !locals.session) redirect(302, "/auth/login");
 
@@ -150,8 +178,17 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
             fetch
         });
 
+        const extrasOptions = { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch };
+
         if (upNext.length) {
-            return { nowPlaying: upNext.map(upNextItem), ...(await railData(fetch)) };
+            return {
+                nowPlaying: await withWideArt(
+                    upNext.map(upNextItem),
+                    upNext.map((card) => card.item.tpdb_id ?? card.item.parent_ids?.tpdb_id),
+                    extrasOptions
+                ),
+                ...(await railData(fetch))
+            };
         }
 
         const rows = await getRows(
@@ -161,7 +198,14 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
         const forYou = rows.rails.find((rail) => rail.key === "for-you");
 
         if (forYou?.items.length) {
-            return { nowPlaying: forYou.items.map(heroItem), ...(await railData(fetch)) };
+            return {
+                nowPlaying: await withWideArt(
+                    forYou.items.map(heroItem),
+                    forYou.items.map((item) => item.library_tpdb_id ?? item.tpdb_id),
+                    extrasOptions
+                ),
+                ...(await railData(fetch))
+            };
         }
 
         logger.info("No ranked recommendations yet; the hero falls back to TPDB.");
