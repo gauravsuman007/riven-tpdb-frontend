@@ -13,6 +13,7 @@
     import { Badge } from "$lib/components/ui/badge/index.js";
     import PlayIcon from "@lucide/svelte/icons/play";
     import { cn } from "$lib/utils";
+    import { imdbRating } from "$lib/stores/imdb.svelte";
 
     interface RowItem {
         id?: string | number;
@@ -34,6 +35,12 @@
     const status = $derived(item.state ? describeState(item.state) : null);
     const badge = $derived(stateBadge(item.state));
     const canPlay = $derived(!!item.riven_id && !!status?.available);
+
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const imdb = $derived.by(() => {
+        const uuid = item.tpdb_uuid ?? (item.indexer === "tpdb" ? item.id : null);
+        return typeof uuid === "string" && UUID.test(uuid) ? imdbRating(uuid) : null;
+    });
 
     const meta = $derived(
         [item.site_name, item.year && item.year !== "N/A" ? item.year : null]
@@ -89,8 +96,20 @@
             {/if}
         </div>
 
-        {#if meta}
-            <span class="text-muted-foreground text-xs">{meta}</span>
+        {#if meta || imdb}
+            <span class="text-muted-foreground flex items-center gap-2 text-xs">
+                {#if imdb}
+                    <span
+                        class="inline-flex shrink-0 items-center gap-1 font-mono tabular-nums"
+                        title={`IMDb ${imdb.rating.toFixed(1)} out of 10, ${imdb.votes.toLocaleString()} votes`}>
+                        <span
+                            class="rounded-[3px] bg-amber-400 px-1 text-[9px] leading-[14px] font-extrabold text-black"
+                            >IMDb</span>
+                        {imdb.rating.toFixed(1)}
+                    </span>
+                {/if}
+                {meta}
+            </span>
         {/if}
 
         {#if item.performers?.length}

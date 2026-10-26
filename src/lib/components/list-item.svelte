@@ -4,6 +4,7 @@
     import { cn } from "$lib/utils";
     import { describeState } from "$lib/utils/item-state";
     import { openPlayer } from "$lib/stores/player.svelte";
+    import { imdbRating } from "$lib/stores/imdb.svelte";
 
     const badgeVariantClasses: Record<string, string> = {
         success: "bg-green-600/90 text-white border-0",
@@ -82,6 +83,13 @@
     let canPlay = $derived(!!data.riven_id && describeState(data.state).available);
     let stateColor = $derived(data.state ? describeState(data.state).barColor : null);
 
+    // Only TPDB titles have one; the uuid shape keeps TMDB's numeric ids out.
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let imdb = $derived.by(() => {
+        const uuid = data.tpdb_uuid ?? (indexer === "tpdb" ? data.id : null);
+        return typeof uuid === "string" && UUID.test(uuid) ? imdbRating(uuid) : null;
+    });
+
     // Default container classes (w-full allows grid to control width)
     // Merged with passed className
     const containerClasses = $derived(
@@ -98,6 +106,7 @@
         {subtitle}
         image={data.poster_path}
         rating={data.rating}
+        {imdb}
         {isSelectable}
         isSelected={isSelectable && !!data.riven_id && selectStore?.has(data.riven_id!)}
         onSelectToggle={() => data.riven_id && selectStore?.toggle(data.riven_id!)}

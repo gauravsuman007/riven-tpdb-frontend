@@ -22,7 +22,7 @@
     import { liveState } from "$lib/utils/live-state.svelte";
     import { formatBytes } from "$lib/helpers";
     import { cn } from "$lib/utils";
-    import { SvelteSet } from "svelte/reactivity";
+    import { SvelteMap, SvelteSet } from "svelte/reactivity";
     import { votes } from "$lib/title-extras";
     import TitlePlayback from "$lib/components/media/title-playback.svelte";
     import MediaRowItem from "$lib/components/media/media-row-item.svelte";
@@ -64,7 +64,20 @@
     const poster = $derived(item.poster || item.posters?.large || item.image || null);
     const backdrop = $derived(item.background?.full || item.background?.large || null);
     // A picture the cache could not get (gone from TPDB, refused) shows initials.
+    // Retried before giving up: the backend fetches a picture on first sight,
+    // and a slow or restarting backend used to leave initials until reload.
     const brokenPhotos = new SvelteSet<string>();
+    const photoTries = new SvelteMap<string, number>();
+    function photoFailed(id: string) {
+        const tries = photoTries.get(id) ?? 0;
+
+        if (tries >= 3) {
+            brokenPhotos.add(id);
+            return;
+        }
+
+        setTimeout(() => photoTries.set(id, tries + 1), 1500 * (tries + 1));
+    }
     const initials = (name: string) =>
         name
             .split(/\s+/)
@@ -393,14 +406,16 @@
                                     class="bg-muted text-muted-foreground ring-border group-hover:ring-primary flex aspect-[2/3] w-full items-center justify-center overflow-hidden rounded-lg text-lg font-semibold ring-1 transition">
                                     {#if performer.photo && !brokenPhotos.has(performer.id)}
                                         <img
-                                            src={performer.photo}
+                                            src={(photoTries.get(performer.id) ?? 0)
+                                                ? `${performer.photo}&r=${photoTries.get(performer.id)}`
+                                                : performer.photo}
                                             alt=""
                                             width="96"
                                             height="144"
                                             loading="lazy"
                                             decoding="async"
                                             class="size-full object-cover"
-                                            onerror={() => brokenPhotos.add(performer.id)} />
+                                            onerror={() => photoFailed(performer.id)} />
                                     {:else}
                                         {initials(performer.name)}
                                     {/if}

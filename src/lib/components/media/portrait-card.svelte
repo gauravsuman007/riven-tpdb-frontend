@@ -28,6 +28,8 @@
          * see `rating-badge.svelte` for why zero is not a score.
          */
         rating?: number | null;
+        /** IMDb's rating out of ten, from the backend's title extras. */
+        imdb?: { rating: number; votes: number } | null;
         /** When set, a play affordance is drawn over the poster. */
         onPlay?: () => void;
         /**
@@ -51,6 +53,7 @@
         topRight,
         showContent = true,
         rating = null,
+        imdb = null,
         onPlay,
         stateColor = null
     }: Props = $props();
@@ -165,10 +168,20 @@
                 class="text-foreground group-hover:text-primary line-clamp-2 text-sm leading-tight font-semibold text-balance transition-colors">
                 {title}
             </h3>
-            {#if subtitle || rating}
+            {#if subtitle || rating || imdb}
                 <p
                     class="text-muted-foreground flex min-w-0 items-center gap-2 text-xs font-medium">
                     <RatingBadge {rating} />
+                    {#if imdb}
+                        <span
+                            class="inline-flex shrink-0 items-center gap-1 font-mono tabular-nums"
+                            title={`IMDb ${imdb.rating.toFixed(1)} out of 10, ${imdb.votes.toLocaleString()} votes`}>
+                            <span
+                                class="rounded-[3px] bg-amber-400 px-1 text-[9px] leading-[14px] font-extrabold text-black"
+                                >IMDb</span>
+                            {imdb.rating.toFixed(1)}
+                        </span>
+                    {/if}
                     {#if subtitle}
                         <span class="truncate">{subtitle}</span>
                     {/if}
