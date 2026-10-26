@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { error, fail, redirect } from "@sveltejs/kit";
-import { getStudio, getStudioRows, promoteTitle, setStudioSaved } from "$lib/studios";
+import { STUDIO_ROWS, getStudio, getStudioRow, promoteTitle, setStudioSaved } from "$lib/studios";
 
 export const load: PageServerLoad = async (event) => {
     if (!event.locals.user || !event.locals.session) {
@@ -30,7 +30,13 @@ export const load: PageServerLoad = async (event) => {
         Returning the promise lets SvelteKit paint the page now and fill the
         rows in when they land.
     */
-    return { studio, rows: getStudioRows(Number(event.params.id), options) };
+    return {
+        studio,
+        rows: STUDIO_ROWS.map((row) => ({
+            ...row,
+            titles: getStudioRow(studio.id, row.key, options)
+        }))
+    };
 };
 
 export const actions: Actions = {

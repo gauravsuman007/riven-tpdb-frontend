@@ -146,6 +146,23 @@ export async function getStudioRows(
     return payload?.rows ?? [];
 }
 
+/** The two rows a studio page shows, in order. Static, so the page can draw headings at once. */
+export const STUDIO_ROWS = [
+    { key: "bestseller", name: "Top Sellers", description: "This studio's best-selling titles." },
+    { key: "trending", name: "Trending Now", description: "What is moving for this studio right now." }
+] as const;
+
+/** One ranked row, so each can land on its own instead of waiting for the slower one. */
+export async function getStudioRow(
+    studioId: number,
+    key: string,
+    options: FetchOptions,
+    perRow = 12
+): Promise<StudioTitle[]> {
+    const row = await get<StudioRow>(`/studios/${studioId}/rows/${key}?per_row=${perRow}`, options);
+    return row?.titles ?? [];
+}
+
 export async function setStudioSaved(
     studioId: number,
     saved: boolean,

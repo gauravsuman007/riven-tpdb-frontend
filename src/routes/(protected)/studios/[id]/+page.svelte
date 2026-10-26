@@ -100,19 +100,23 @@
             is ready immediately. The skeleton keeps the layout stable so
             nothing jumps when they arrive.
         -->
-        {#await data.rows}
-            <div class="flex flex-col gap-12 pb-20">
-                {#each ["Top Sellers", "Trending Now"] as placeholder (placeholder)}
-                    <section class="flex flex-col gap-4">
-                        <div class="space-y-1">
-                            <h2
-                                class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                {placeholder}
-                            </h2>
-                            <p class="font-mono text-xs text-zinc-500">
-                                Reading Adult Empire&hellip;
-                            </p>
-                        </div>
+        <!--
+            Each row awaits on its own: the storefront is read one request at a
+            time, so the first row lands seconds before the second and there is
+            no reason to hold it back. Headings are static and draw at once;
+            the skeleton keeps the layout stable.
+        -->
+        <div class="flex flex-col gap-12 pb-20">
+            {#each data.rows as row (row.key)}
+                <section class="flex flex-col gap-4">
+                    <div class="space-y-1">
+                        <h2 class="font-serif text-2xl font-medium tracking-tight text-white/90">
+                            {row.name}
+                        </h2>
+                        <p class="text-sm text-zinc-400">{row.description}</p>
+                    </div>
+
+                    {#await row.titles}
                         <ul class="flex gap-4 overflow-hidden pb-4">
                             {#each [0, 1, 2, 3, 4, 5] as i (i)}
                                 <li class="w-[150px] shrink-0 md:w-[180px]">
@@ -122,92 +126,64 @@
                                 </li>
                             {/each}
                         </ul>
-                    </section>
-                {/each}
-            </div>
-        {:then rows}
-            {@const hasTitles = rows.some((row) => row.titles.length)}
-            {#if !hasTitles}
-                <div class="flex flex-col items-center gap-3 py-24 text-center">
-                    <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
-                    <p class="max-w-lg text-zinc-300">
-                        Adult Empire returned nothing for this studio just now. These rows are read
-                        live, so this is usually the storefront being briefly unavailable rather
-                        than an empty catalogue — reloading generally fixes it.
-                    </p>
-                </div>
-            {:else}
-                <div class="flex flex-col gap-12 pb-20">
-                    {#each rows as row (row.key)}
-                        {#if row.titles.length}
-                            <section class="flex flex-col gap-4">
-                                <div class="space-y-1">
-                                    <h2
-                                        class="font-serif text-2xl font-medium tracking-tight text-white/90">
-                                        {row.name}
-                                    </h2>
-                                    <p class="text-sm text-zinc-400">{row.description}</p>
-                                </div>
+                    {:then titles}
+                        {#if !titles.length}
+                            <p class="font-mono text-xs text-zinc-500">
+                                Adult Empire returned nothing for this row just now. These rows are
+                                read live, so reloading usually fixes it.
+                            </p>
+                        {:else}
+                            <ul
+                                class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
+                                {#each titles as title (title.product_id)}
+                                    <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
+                                        <!-- A form, not a link: opening a title creates its
+                                             catalogue entry, a write a crawler must not trigger. -->
+                                        <form method="POST" action="?/open" use:enhance>
+                                            <input
+                                                type="hidden"
+                                                name="productId"
+                                                value={title.product_id} />
+                                            <button
+                                                type="submit"
+                                                class="group flex w-full flex-col gap-2 text-left focus-visible:outline-none">
+                                                <div
+                                                    class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
+                                                    {#if title.poster}
+                                                        <PosterImage
+                                                            src={title.poster}
+                                                            alt={title.title}
+                                                            class="transition-transform duration-500 group-hover:scale-105" />
+                                                    {:else}
+                                                        <div
+                                                            class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
+                                                            {title.title}
+                                                        </div>
+                                                    {/if}
 
-                                <ul
-                                    class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-                                    {#each row.titles as title (title.product_id)}
-                                        <li class="w-[150px] shrink-0 snap-start md:w-[180px]">
-                                            <!--
-                                            A form rather than a link: opening a
-                                            title creates its catalogue entry,
-                                            which is a write and must not happen
-                                            on a crawler following a href.
-                                        -->
-                                            <form method="POST" action="?/open" use:enhance>
-                                                <input
-                                                    type="hidden"
-                                                    name="productId"
-                                                    value={title.product_id} />
-                                                <button
-                                                    type="submit"
-                                                    class="group flex w-full flex-col gap-2 text-left focus-visible:outline-none">
-                                                    <div
-                                                        class="relative aspect-[3/4] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 transition-all group-hover:border-white/40 group-focus-visible:ring-2 group-focus-visible:ring-white">
-                                                        {#if title.poster}
-                                                            <PosterImage
-                                                                src={title.poster}
-                                                                alt={title.title}
-                                                                class="transition-transform duration-500 group-hover:scale-105" />
-                                                        {:else}
-                                                            <div
-                                                                class="flex h-full items-center justify-center p-3 text-center font-mono text-xs text-zinc-500">
-                                                                {title.title}
-                                                            </div>
-                                                        {/if}
+                                                    <span
+                                                        class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-white">
+                                                        #{title.rank}
+                                                    </span>
+                                                </div>
 
-                                                        <span
-                                                            class="absolute top-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-xs font-semibold text-white">
-                                                            #{title.rank}
-                                                        </span>
-                                                    </div>
-
-                                                    <p
-                                                        class="truncate text-sm text-white/90 group-hover:text-white">
-                                                        {title.title}
-                                                    </p>
-                                                </button>
-                                            </form>
-                                        </li>
-                                    {/each}
-                                </ul>
-                            </section>
+                                                <p
+                                                    class="truncate text-sm text-white/90 group-hover:text-white">
+                                                    {title.title}
+                                                </p>
+                                            </button>
+                                        </form>
+                                    </li>
+                                {/each}
+                            </ul>
                         {/if}
-                    {/each}
-                </div>
-            {/if}
-        {:catch}
-            <div class="flex flex-col items-center gap-3 py-24 text-center">
-                <BuildingIcon class="size-10 text-white/40" aria-hidden="true" />
-                <p class="max-w-lg text-zinc-300">
-                    Could not reach Adult Empire for this studio's rankings.
-                </p>
-            </div>
-        {/await}
+                    {:catch}
+                        <p class="font-mono text-xs text-zinc-500">
+                            Could not reach Adult Empire for this row.
+                        </p>
+                    {/await}
+                </section>
+            {/each}
+        </div>
     </div>
 </PageShell>
