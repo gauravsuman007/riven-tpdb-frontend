@@ -28,7 +28,7 @@
 import type { RequestHandler } from "./$types";
 import { error, json } from "@sveltejs/kit";
 import { listAddons } from "$lib/addons";
-import { addonRails, arrange, EXPLORE_STATIC_RAILS, getRailLayout } from "$lib/rails";
+import { addonRails, EXPLORE_STATIC_RAILS, getRailLayout, tvExploreRails } from "$lib/rails";
 import { getRows } from "$lib/recommendations";
 
 export const GET: RequestHandler = async ({ locals, fetch }) => {
@@ -38,10 +38,11 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
 
     const options = { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch };
 
-    const [rows, listed, layout] = await Promise.all([
+    const [rows, listed, layout, tvLayout] = await Promise.all([
         getRows(options, 20),
         listAddons(fetch),
-        getRailLayout("explore", fetch)
+        getRailLayout("explore", fetch),
+        getRailLayout("tv-explore", fetch)
     ]);
 
     const ranked = new Map(rows.rails.map((rail) => [rail.key, rail]));
@@ -61,21 +62,12 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
 
     return json({
         version: 1,
-        rows: arrange(catalogue, layout, "explore")
+        rows: tvExploreRails(catalogue, layout, tvLayout).map((rail) => ({
+            key: rail.key,
+            title: rail.title,
+            why: rail.description ?? "",
+            addon: rail.source === "built-in" || rail.source === "ranked" ? null : rail.source,
             /*
-                The studio row and the storefront shelves are dropped here,
-                not hidden over there. Each is a grid of covers with its own
-                controls -- following a studio, opening a shelf of 144 titles
-                -- and neither shape survives a renderer that draws one kind
-                of strip. Their `tv` flag says so; this is where it is read.
-            */
-            .filter((rail) => rail.tv)
-            .map((rail) => ({
-                key: rail.key,
-                title: rail.title,
-                why: rail.description ?? "",
-                addon: rail.source === "built-in" || rail.source === "ranked" ? null : rail.source,
-                /*
                     A ranked row arrives with its items; an add-on's row
                     arrives with the path to fetch them from. Two shapes,
                     because the two have genuinely different costs: the
@@ -83,8 +75,8 @@ export const GET: RequestHandler = async ({ locals, fetch }) => {
                     there is not possible, while an add-on's row is one cheap
                     call the television can make for itself.
                 */
-                items: ranked.get(rail.key)?.items ?? null,
-                endpoint: rail.endpoint ?? null
-            }))
+            items: ranked.get(rail.key)?.items ?? null,
+            endpoint: rail.endpoint ?? null
+        }))
     });
 };

@@ -29,6 +29,8 @@
         addonRails,
         arrange,
         EXPLORE_STATIC_RAILS,
+        tvEditingLayout,
+        tvExploreCatalogue,
         type RailDef,
         type RailPlacement
     } from "$lib/rails";
@@ -196,6 +198,21 @@
     });
 
     const shown = $derived(arrange(catalogue, layout, "explore"));
+
+    /*
+        The television's rows, arranged separately. Its catalogue is this one
+        with the ranked rows marked drawable (this page's own renderer draws
+        them, the television's draws them from the manifest) -- the same
+        transformation `/api/tv/explore` applies, from the same function.
+    */
+    const tvFull = $derived<RailDef[]>(
+        catalogue.map((rail) => (rail.source === "ranked" ? { ...rail, tv: true } : rail))
+    );
+    let tvLayout = $state<RailPlacement[]>([]);
+
+    $effect(() => {
+        tvLayout = data.tvRailLayout ?? [];
+    });
 
     /** The engine's own record for one catalogued key, when it has one. */
     function rankedRail(key: string): Rail | undefined {
@@ -481,7 +498,14 @@
             {/if}
         {/if}
 
-        <div class="flex justify-end">
+        <div class="flex justify-end gap-2">
+            <RailEditor
+                page="tv-explore"
+                label="TV rows"
+                heading="Rows on the television"
+                catalogue={tvExploreCatalogue(tvFull)}
+                layout={tvEditingLayout(tvFull, layout, tvLayout)}
+                onsaved={(saved) => (tvLayout = saved)} />
             <RailEditor page="explore" {catalogue} {layout} onsaved={(saved) => (layout = saved)} />
         </div>
 

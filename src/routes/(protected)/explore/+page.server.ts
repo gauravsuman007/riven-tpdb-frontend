@@ -79,7 +79,8 @@ export const load: PageServerLoad = async (event) => {
         addons: await listAddons(event.fetch).then((result) =>
             "error" in result ? [] : result.addons.addons
         ),
-        railLayout: await getRailLayout("explore", event.fetch)
+        railLayout: await getRailLayout("explore", event.fetch),
+        tvRailLayout: await getRailLayout("tv-explore", event.fetch)
     };
 };
 

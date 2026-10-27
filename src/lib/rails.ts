@@ -45,7 +45,7 @@ import type { Addon } from "$lib/addons";
 import { HOME_ROWS } from "$lib/tv/manifest";
 
 /** The three pages that can be arranged, plus `x/<key>` for an add-on's. */
-export type RailPage = "home" | "explore" | `x/${string}`;
+export type RailPage = "home" | "explore" | "tv-explore" | `x/${string}`;
 
 /** One row, as it is offered in a picker and drawn on a page. */
 export interface RailDef {
@@ -237,6 +237,65 @@ export function forEditing(
             .filter((rail) => !shownKeys.has(rail.key))
             .map((rail) => ({ key: rail.key, enabled: false }))
     ];
+}
+
+// -------------------------------------------------------- the television
+
+/*
+    The television's Explore has an arrangement of its own, "tv-explore".
+
+    Until it is arranged it FOLLOWS the web page: the web arrangement, minus
+    whatever a television cannot draw. That is what it always did, and an
+    empty layout keeps meaning "never arranged" here as everywhere else, so
+    nobody who never touches this sees a change.
+
+    Once arranged it stands alone. The catalogue it arranges is only what a
+    television can draw (`tv`), so the picker never offers a row that would
+    silently not appear. A row the app adds later turns itself on only if it
+    would have been on the web page by default, as on every other page.
+
+    `full` is the whole Explore catalogue with the RANKED rows marked `tv`:
+    the web page marks them false because its own renderer draws them itself.
+*/
+export function tvExploreCatalogue(full: RailDef[]): RailDef[] {
+    return full
+        .filter((rail) => rail.tv)
+        .map((rail) => ({
+            ...rail,
+            defaultPage:
+                rail.defaultPage === "explore" ? ("tv-explore" as const) : ("none" as const)
+        }));
+}
+
+/** The rows the television draws, in order. */
+export function tvExploreRails(
+    full: RailDef[],
+    exploreLayout: RailPlacement[],
+    tvLayout: RailPlacement[]
+): RailDef[] {
+    if (!tvLayout.length) {
+        return arrange(full, exploreLayout, "explore").filter((rail) => rail.tv);
+    }
+
+    return arrange(tvExploreCatalogue(full), tvLayout, "tv-explore");
+}
+
+/**
+ * What the TV picker should start from. While the television follows the web
+ * page there is no saved layout of its own, so the picker is seeded with what
+ * is actually drawn: opening it must show the rows you have, not a blank.
+ */
+export function tvEditingLayout(
+    full: RailDef[],
+    exploreLayout: RailPlacement[],
+    tvLayout: RailPlacement[]
+): RailPlacement[] {
+    if (tvLayout.length) return tvLayout;
+
+    return tvExploreRails(full, exploreLayout, []).map((rail) => ({
+        key: rail.key,
+        enabled: true
+    }));
 }
 
 // ----------------------------------------------------------------- the API

@@ -36,9 +36,19 @@
         layout: RailPlacement[];
         /** Called with the saved layout, so the page can redraw itself. */
         onsaved?: (layout: RailPlacement[]) => void;
+        /** The button and the panel heading; "Edit rows" / "Rows on this page". */
+        label?: string;
+        heading?: string;
     }
 
-    let { page, catalogue, layout, onsaved }: Props = $props();
+    let {
+        page,
+        catalogue,
+        layout,
+        onsaved,
+        label = "Edit rows",
+        heading = "Rows on this page"
+    }: Props = $props();
 
     let open = $state(false);
     let saving = $state(false);
@@ -104,7 +114,7 @@
 
 <Button size="sm" variant="secondary" onclick={start} class="rounded-full">
     <SlidersIcon class="mr-2 size-4" aria-hidden="true" />
-    Edit rows
+    {label}
 </Button>
 
 {#if open}
@@ -115,7 +125,7 @@
     <div
         class="border-border bg-background/95 fixed top-0 right-0 bottom-0 z-50 flex w-full max-w-sm flex-col gap-3 border-l p-4 shadow-2xl backdrop-blur">
         <div class="flex items-center justify-between">
-            <h2 class="text-base font-medium text-white/90">Rows on this page</h2>
+            <h2 class="text-base font-medium text-white/90">{heading}</h2>
             <Button
                 size="icon"
                 variant="ghost"
