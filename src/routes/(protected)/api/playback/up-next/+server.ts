@@ -10,6 +10,7 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { loadUpNext } from "$lib/server/up-next";
+import { getTitleExtrasBatch } from "$lib/title-extras";
 
 export const GET: RequestHandler = async ({ url, locals, fetch }) => {
     const userId = locals.user?.id;
@@ -23,8 +24,16 @@ export const GET: RequestHandler = async ({ url, locals, fetch }) => {
         { limit }
     );
 
+    // Cache-only, so the hero never waits on TMDB: a card whose art is not
+    // worked out yet keeps its poster this time and has its banner next.
+    const extras = await getTitleExtrasBatch(
+        cards.map((card) => String(card.item.tpdb_id ?? card.item.parent_ids?.tpdb_id ?? "")),
+        { baseUrl: locals.backendUrl, apiKey: locals.apiKey, fetch }
+    );
+
     return json({
         items: cards.map((card) => ({
+            wide: Boolean(extras[String(card.item.tpdb_id ?? card.item.parent_ids?.tpdb_id ?? "")]?.wide),
             itemId: Number(card.item.id),
             title: card.item.title ?? "",
             poster_path: card.item.poster_path ?? null,
