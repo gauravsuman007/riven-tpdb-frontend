@@ -273,6 +273,29 @@ export const BUNDLE_JS = `
     } catch (e) { log("could not dispatch external-player event", e); }
   }
 
+  /*
+    One id or a list of them, always as a list.
+
+    PlayOptions.ids has always been a list on both bridges; only the callers
+    passed a single id. A MULTI-FILE release now arrives here as one id per
+    file, so the player builds its own queue of plain video URLs -- instead
+    of being handed a single id for a playlist.m3u, which it would have to
+    parse under the HLS media type and cannot (see external_url/+server.ts).
+
+    NOTE: no backticks in here. This whole file is a template literal, and
+    one closes it.
+  */
+  function idList(itemId) {
+    var ids = Array.isArray(itemId) ? itemId : [itemId];
+    var out = [];
+
+    for (var i = 0; i < ids.length; i++) {
+      if (ids[i]) out.push(String(ids[i]));
+    }
+
+    return out;
+  }
+
   window.RivenNative = {
     available: nativeAvailable,
     play: function (itemId, startPositionTicks) {
@@ -385,11 +408,15 @@ export const BUNDLE_JS = `
 
       if (!bridge) { log("no ExternalPlayer bridge"); return false; }
 
+      var ids = idList(itemId);
+
+      if (!ids.length) { log("openInExternalPlayer called with no id"); return false; }
+
       ensureCredentials(function (ok) {
         if (!ok) { log("openInExternalPlayer aborted: no credentials"); report(false); return; }
 
         try {
-          bridge.initPlayer(JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 }));
+          bridge.initPlayer(JSON.stringify({ ids: ids, startIndex: 0, startPositionTicks: 0 }));
           report(true);
         } catch (e) {
           log("initPlayer failed", e);
@@ -407,10 +434,14 @@ export const BUNDLE_JS = `
 
       // Same contract as openInExternalPlayer above: the synchronous return
       // says only that a bridge was found, and 'done' says what happened.
+      var ids = idList(itemId);
+
+      if (!ids.length) { log("playDirect() called with no id"); return false; }
+
       ensureCredentials(function (ok) {
         if (!ok) { log("playDirect() aborted: no credentials for native player"); report(false); return; }
 
-        var options = JSON.stringify({ ids: [itemId], startIndex: 0, startPositionTicks: 0 });
+        var options = JSON.stringify({ ids: ids, startIndex: 0, startPositionTicks: 0 });
 
         try {
           if (externalAvailable()) window.ExternalPlayer.initPlayer(options);

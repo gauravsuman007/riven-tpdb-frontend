@@ -167,6 +167,11 @@
         element = videoElement;
     });
     let hls: Hls | undefined;
+    /*
+        Escalated at most once, so a playlist that hls.js also cannot play
+        reports a real error instead of looping through this forever.
+    */
+    let hlsEscalated = false;
     let error = $state<string | null>(null);
     let mode = $state<string | null>(null);
     let loading = $state(true);
@@ -325,18 +330,7 @@
     /** Play a URL the backend has already resolved for us. */
     function startExternal(url: string) {
         if (isHlsPlaylist(mimeType)) {
-            mode = "transcode";
-            if (videoElement?.canPlayType(mimeType)) {
-                videoElement.src = url;
-                return;
-            }
-            if (!Hls.isSupported()) {
-                error = "This browser cannot play this stream.";
-                return;
-            }
-            hls = new Hls();
-            hls.loadSource(url);
-            if (videoElement) hls.attachMedia(videoElement);
+            playHls(url);
             return;
         }
 
@@ -344,8 +338,64 @@
         if (videoElement) videoElement.src = url;
     }
 
+    /**
+     * Play an HLS playlist, natively where that is better and through hls.js
+     * everywhere else.
+     */
+    function playHls(url: string) {
+        mode = "transcode";
+
+        // Safari plays HLS natively and does it better than hls.js can.
+        if (videoElement?.canPlayType("application/vnd.apple.mpegurl")) {
+            videoElement.src = url;
+            return;
+        }
+
+        if (!Hls.isSupported()) {
+            error = "This browser cannot play this stream.";
+            return;
+        }
+
+        hls = new Hls();
+        hls.loadSource(url);
+        if (videoElement) hls.attachMedia(videoElement);
+    }
+
     function isHlsPlaylist(type: string): boolean {
-        return type.includes("mpegurl") || type.includes("x-mpegURL");
+        return type.toLowerCase().includes("mpegurl");
+    }
+
+    /**
+     * Whether a scraped source is really an HLS playlist, asked of the
+     * SOURCE rather than of whoever described it.
+     *
+     * A scraped site's sources are not all progressive files: hornysimp's
+     * are signed HLS masters, and the add-on reports them correctly as
+     * `application/vnd.apple.mpegurl`. But the type only reaches here if the
+     * add-on's page passed it to `player.openDirect`, and an add-on that
+     * does not gets the store's `video/mp4` default -- so the playlist was
+     * handed to a bare `<video>`, which no Chromium can decode, and the
+     * player died with "This browser cannot play this video".
+     *
+     * Asking the bytes instead means no add-on has to remember to declare
+     * anything, which is the only version of this that stays fixed. One
+     * kilobyte is plenty: `#EXTM3U` is the first line of any playlist, and
+     * the content type the add-on proxy already forwards verbatim is
+     * checked too, for a source that answers a range request with the whole
+     * file.
+     */
+    async function sourceIsHls(url: string): Promise<boolean> {
+        try {
+            const response = await fetch(url, { headers: { range: "bytes=0-1023" } });
+
+            if (!response.ok && response.status !== 206) return false;
+
+            if (isHlsPlaylist(response.headers.get("content-type") ?? "")) return true;
+
+            return (await response.text()).trimStart().startsWith("#EXTM3U");
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -535,8 +585,30 @@
             }
 
             if (mode === "external") {
-                // Nothing to escalate to: there is no library file behind this,
-                // so remux and transcode have nothing to read.
+                /*
+                    There is no library file behind this, so remux and
+                    transcode have nothing to read -- but the source may
+                    simply be a PLAYLIST that was described as a file, which
+                    this browser cannot decode and hls.js can. Ask the source
+                    what it is before giving up; it is one request, and it is
+                    the difference between playing and a dead player.
+                */
+                if (src && !hlsEscalated) {
+                    hlsEscalated = true;
+
+                    void sourceIsHls(src).then((playlist) => {
+                        if (playlist) {
+                            console.log("Direct source is an HLS playlist; switching to hls.js.");
+                            playHls(src);
+                            return;
+                        }
+
+                        error = "This browser cannot play this video.";
+                    });
+
+                    return;
+                }
+
                 error = "This browser cannot play this video.";
                 return;
             }

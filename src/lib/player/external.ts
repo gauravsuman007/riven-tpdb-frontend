@@ -67,7 +67,7 @@ export type HandoffOutcome = "opened" | "failed" | "unavailable" | "choosing";
  */
 async function bridgeHandoff(
     method: "openInExternalPlayer" | "playDirect",
-    itemId: string,
+    itemIds: string[],
     onFailure: (message: string) => void,
     pause: () => void
 ): Promise<HandoffOutcome | null> {
@@ -83,7 +83,7 @@ async function bridgeHandoff(
         let called: boolean;
 
         try {
-            called = !!bridge.call(window.RivenNative, itemId, (ok: boolean) =>
+            called = !!bridge.call(window.RivenNative, itemIds, (ok: boolean) =>
                 resolve(ok ? "accepted" : "failed")
             );
         } catch {
@@ -120,6 +120,16 @@ async function bridgeHandoff(
 export async function handOff(
     target: {
         itemId?: string | null;
+        /**
+         * Every file of a multi-file release, in order.
+         *
+         * The bridge's `PlayOptions.ids` is a list, so the player builds the
+         * queue itself out of plain video URLs. Handing across one id for a
+         * `playlist.m3u` instead -- what this did -- asks the player to parse
+         * a playlist served under the HLS media type, and every HLS demuxer
+         * rejects a plain `#EXTINF` list. See `external_url/+server.ts`.
+         */
+        itemIds?: string[] | null;
         url?: string | null;
         /** The same stream as a playlist, for a desktop browser. */
         m3uUrl?: string | null;
@@ -139,22 +149,21 @@ export async function handOff(
     const onFailure = options.onFailure ?? (() => {});
     const pause = options.pause ?? (() => {});
 
-    if (target.itemId) {
+    // Every file of the release, or the one id there is. A single id is just
+    // the one-entry case of the same list, so there is no second code path.
+    const itemIds = target.itemIds?.length ? target.itemIds : target.itemId ? [target.itemId] : [];
+
+    if (itemIds.length) {
         // The external hand-off first, and NOT gated on the client's default
         // player: `ExternalPlayer.initPlayer()` has no isEnabled() check, so
         // it works even when the web player is selected -- which is the only
         // time the button that calls this is on screen at all.
-        const external = await bridgeHandoff(
-            "openInExternalPlayer",
-            target.itemId,
-            onFailure,
-            pause
-        );
+        const external = await bridgeHandoff("openInExternalPlayer", itemIds, onFailure, pause);
         if (external) return external;
 
         // Then whichever native player is the default, for a shell that has a
         // player bridge but no external one.
-        const native = await bridgeHandoff("playDirect", target.itemId, onFailure, pause);
+        const native = await bridgeHandoff("playDirect", itemIds, onFailure, pause);
         if (native) return native;
     }
 
@@ -346,7 +355,10 @@ export function platform(): Platform {
 function intentUrl(url: string, title: string): string {
     const parsed = new URL(url);
     const scheme = parsed.protocol.replace(":", "");
-    const rest = url.slice(parsed.protocol.length + 2).replace(/;/g, "%3B").replace(/#/g, "%23");
+    const rest = url
+        .slice(parsed.protocol.length + 2)
+        .replace(/;/g, "%3B")
+        .replace(/#/g, "%23");
 
     const extras = [
         `scheme=${scheme}`,
@@ -428,7 +440,13 @@ export function browserOptions(
             id: "m3u",
             label: "Open in your default player",
             href: target.m3uUrl,
-            download: `${title.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "video"}.m3u`
+            download: `${
+                title
+                    .replace(/[^\w\s-]/g, "")
+                    .trim()
+                    .replace(/\s+/g, "-")
+                    .slice(0, 60) || "video"
+            }.m3u`
         });
     }
 

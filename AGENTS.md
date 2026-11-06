@@ -72,6 +72,10 @@ history if it's ever relevant again.
   helper compiles every path with the `i` flag for exactly this reason. Route
   order matters within `ROUTES`: `/Users/AuthenticateByName`, `/Users/Me`, and
   `/Users/Public` are tried before the `/Users/{userId}` pattern.
+- **`bundle.ts` is ONE TEMPLATE LITERAL: no backticks inside it, comments
+  included.** A backtick in a comment closes the string, and what follows is
+  parsed as TypeScript -- which is a wall of unrelated syntax errors a long
+  way from the line that caused them.
 - **The connection trigger is a URL PATH match, not a real bundle.** Reading
   `jellyfin-android` (GPL) rather than guessing:
   `JellyfinWebViewClient.shouldInterceptRequest()` calls
@@ -104,8 +108,8 @@ history if it's ever relevant again.
   carried a token this app has never heard of. On-device (Jellyfin Android
   2.7.1, adb logcat):
 
-          E/MediaSourceResolver: Failed to load media source 0000...035e
-          InvalidStatusException: Invalid HTTP status in response: 401
+            E/MediaSourceResolver: Failed to load media source 0000...035e
+            InvalidStatusException: Invalid HTTP status in response: 401
 
     ExoPlayer and the external player failed identically because both resolve
     the media source through the same `ApiClient` before they diverge. The
@@ -145,8 +149,30 @@ history if it's ever relevant again.
       a place in the chooser any more than `.mp4` did. A direct-play grant may
       therefore stand for a PATH on this origin (`mintPathToken`), and
       `/Videos/{id}/stream` redirects to it, so the playlist travels the typed
-      bridge like everything else. Verified end to end: the minted id 302s to
-      the playlist and all five entries carry their `part`.
+      bridge like everything else.
+    - **TRAP, and it is why the playlist hand-off had to be abandoned
+      entirely: `audio/x-mpegurl` IS the HLS media type.** Minting one id for
+      `playlist.m3u` fixed the chooser and broke the playback: ffmpeg,
+      ExoPlayer and MX Player all route that content type to their HLS
+      demuxer, which rejects a plain `#EXTM3U`/`#EXTINF` list outright because
+      it carries none of the `#EXT-X-` tags HLS requires. Reported as "Drive"
+      simply failing in MX Player while single files and scraped videos
+      played. There is no media type that means "plain multi-entry playlist"
+      and is not also claimed by an HLS parser, so no header fixes this.
+      **A multi-file release is now handed over as ONE ID PER FILE**:
+      `PlayOptions.ids` has always been a list on both bridges (`bundle.ts`'s
+      `idList`), so the queue is the player's own and every entry is a plain
+      video URL on the single-file path that has always worked. Nothing has to
+      parse a playlist. The `.m3u` survives only where a playlist is genuinely
+      the mechanism -- the desktop browser's downloaded one-entry file.
+    - **The lesson about VERIFICATION, which is the reason this recurred
+      three times.** Each attempt was verified server-side -- the id 302s, the
+      entries carry their `part` -- and server-side was never where it failed.
+      The bug was always in what the other application does with what it was
+      handed, which a 200 cannot show. `src/lib/player/__tests__/external.test.ts`
+      now pins the SHAPE of the hand-off (every file, as ids, on the typed
+      bridge, no playlist URL to a native player) because that is the thing
+      that kept regressing; the rest still needs a real device.
 - **TRAP, cost the longest debugging cycle in this feature's history**:
   `toGuid()` silently mis-encodes a STRING id. The backend serialises
   `MediaItem.id` as a string (`"862"`), and `String.prototype.toString()`
@@ -294,6 +320,7 @@ Rail data is `lib/recommendations.ts`, hand-maintained against
 backend.
 
 ### AVN award winners rail
+
 - Explore rail key `avn-categories` (in `EXPLORE_STATIC_RAILS`; a new rail
   switches itself on for arranged layouts). Ten broad award groups from the
   backend's `/collections/avn/categories`, story first. A card opens
@@ -303,6 +330,7 @@ backend.
   awards tab, which is where it is switched on.
 
 ### Wide art, billing order, IMDb rating
+
 - From the backend's title extras (`$lib/title-extras`, TMDB + IMDb's own
   dataset; see the backend AGENTS.md). Wide images are always drawn through
   `/art/wide?u=` (1280px WebP from the backend's cache), never hot-linked.
@@ -423,6 +451,29 @@ to unify them; there is no shared mechanism.
   and `/direct-play/{token}/{name}.m3u` is served from the same grant as the
   video -- same authorisation, same expiry.
 
+### A scraped source may be a PLAYLIST, and nothing declares it reliably
+
+hornysimp's videos are signed HLS masters -- the scraper says so
+(`mime_type="application/vnd.apple.mpegurl"`, verified against the CDN) and
+the add-on proxy forwards the content type verbatim. But the type only
+reaches the player if the add-on's own page passed it to
+`player.openDirect`, and an add-on that does not gets the store's
+`video/mp4` default. The playlist then went to a bare `<video>`, which no
+Chromium decodes, and the player died with "This browser cannot play this
+video" -- reported as a format error on one scraped video while others
+played.
+
+Declaring it in each add-on would fix one site and leave the next one to
+rediscover this, so **the source is asked instead of whoever described it**:
+
+- `sourceIsHls()` in `video-player.svelte` range-fetches the first kilobyte
+  and checks the content type and for a leading `#EXTM3U`. It runs only on a
+  decode failure, so the mp4 path pays nothing, and only once per source.
+- `playDirectNative()` (the bare fullscreen `<video>` inside the WebView,
+  used when the client's default is the web player) has nothing to escalate
+  to, so an undecodable source there hands back to the overlay, which
+  carries hls.js. A declared playlist skips that path outright.
+
 **`navigator.clipboard` is undefined on this deployment.** It requires a
 secure context and the server is reached over plain http on the LAN, so the
 copy path needs the deprecated selection/`execCommand` form. Optional
@@ -519,7 +570,7 @@ own fact, not something in the backend's settings schema.
 
 The overlay player's zoom is a transform on a wrapper around the video. It used
 to be written unconditionally -- at rest it still emitted
-`translate(0px, 0px) scale(1)`, which is *not* the same as `none`.
+`translate(0px, 0px) scale(1)`, which is _not_ the same as `none`.
 
 Any transform promotes that wrapper to its own compositing layer, and the
 `<video>` inside it leaves the hardware video plane. It never came back,
@@ -532,9 +583,9 @@ sound**, so it is impossible to miss. Android fails softly instead, which is
 why this survived here for so long. The picture plays, but as a composited
 texture:
 
-* the phone's own video post-processing no longer touches it, so it looks
+- the phone's own video post-processing no longer touches it, so it looks
   washed out next to a player that draws to a SurfaceView (MX Player, VLC);
-* the frame is scaled through the page's backing store instead of being
+- the frame is scaled through the page's backing store instead of being
   presented at its own resolution by the display controller, so a 4K stream
   also looks softer.
 
@@ -613,8 +664,8 @@ from a television and a search typed into the app do not disagree about what
 exists.
 
 **The multiplexer must be told.** Search is opt-in per app via `searchPath` in
-its `apps.json`; without that entry the mux answers *"No app behind this
-server offers search yet"* — and since search is scoped to the app you are
+its `apps.json`; without that entry the mux answers _"No app behind this
+server offers search yet"_ — and since search is scoped to the app you are
 standing in, that is what searching from inside Riven TPDB showed. Adding the
 route is only half the fix.
 
@@ -650,11 +701,12 @@ tell which file a position was in.
   mount: the teardown report must describe the file that was playing, not
   the one replacing it. A single file passes neither and behaves as before.
 - **Detail pages** use `title-playback.svelte` (`show="actions" | "summary" |
-  "files"`): Resume "1:23:20 · file 3" / Start over, the release's totals,
+"files"`): Resume "1:23:20 · file 3" / Start over, the release's totals,
   and every file with its length and size, each row playing from its start.
   `player.open(id, title, poster, startAt)` takes a whole-title second.
 
 ## Title page: studio link and cast pictures
+
 - The site name on `/details/tpdb/...` links to `/studios/{id}` via the
   backend's `/studios/lookup` (site, then parent, then network); with no match
   it opens `/studios?q=<name>`, which pre-fills the directory search.

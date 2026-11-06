@@ -52,13 +52,20 @@ declare global {
              * because ExternalPlayer.initPlayer() sets the "video/*" type.
              * False when no native player bridge is enabled.
              */
-            playDirect: (itemId: string, done?: (ok: boolean) => void) => boolean;
+            playDirect: (itemIds: string | string[], done?: (ok: boolean) => void) => boolean;
             /**
              * Sends one video to an external app regardless of the client's
              * default player. False only when the shell exposes no
              * ExternalPlayer bridge.
              */
-            openInExternalPlayer: (itemId: string, done?: (ok: boolean) => void) => boolean;
+            /**
+             * One id, or every file of a multi-file release in order --
+             * `PlayOptions.ids` is a list, so the player builds the queue.
+             */
+            openInExternalPlayer: (
+                itemIds: string | string[],
+                done?: (ok: boolean) => void
+            ) => boolean;
             /**
              * Asks the native activity to hide the system UI and lock to
              * landscape. Returns false outside the shell, where the ordinary

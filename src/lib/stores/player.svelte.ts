@@ -20,7 +20,6 @@ function nativePlayerAvailable(): boolean {
     return typeof window !== "undefined" && !!window.RivenNative?.available();
 }
 
-
 /**
  * What fills the video element before the first frame arrives.
  *
@@ -108,7 +107,7 @@ export type PlayerTarget = LibraryTarget | DirectTarget;
  * real native back gesture for free, unlike the overlay's swipe-to-seek
  * stage.
  */
-function playDirectNative(src: string, mimeType: string): void {
+function playDirectNative(src: string, mimeType: string, onUnplayable: () => void): void {
     const video = document.createElement("video");
     video.src = src;
     if (mimeType) video.setAttribute("type", mimeType);
@@ -124,6 +123,31 @@ function playDirectNative(src: string, mimeType: string): void {
 
     const cleanup = () => video.remove();
     video.addEventListener("webkitendfullscreen", cleanup, { once: true });
+
+    /*
+        A bare <video> has nothing to escalate to, and a source it cannot
+        decode leaves a black fullscreen element that never plays and says
+        nothing. The overlay can escalate -- it carries hls.js, and a scraped
+        source that was described as a file may well be an HLS playlist (see
+        `video-player.svelte`'s `sourceIsHls`) -- so hand it over rather than
+        sitting on a dead player.
+    */
+    video.addEventListener(
+        "error",
+        () => {
+            const code = video.error?.code;
+
+            if (
+                code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED ||
+                code === MediaError.MEDIA_ERR_DECODE
+            ) {
+                cleanup();
+                onUnplayable();
+            }
+        },
+        { once: true }
+    );
+
     document.addEventListener(
         "fullscreenchange",
         () => {
@@ -185,7 +209,9 @@ class PlayerStore {
             itemId,
             title,
             poster: posterUrl(poster),
-            ...(startAt !== undefined && Number.isFinite(startAt) ? { startAt: Math.max(0, startAt) } : {})
+            ...(startAt !== undefined && Number.isFinite(startAt)
+                ? { startAt: Math.max(0, startAt) }
+                : {})
         };
     }
 
@@ -238,8 +264,17 @@ class PlayerStore {
             return;
         }
 
-        if (nativePlayerAvailable()) {
-            playDirectNative(src, mimeType);
+        /*
+            The bare native <video> is skipped for a PLAYLIST source: no
+            Chromium decodes HLS, and the WebView is a Chromium. Those go to
+            the overlay, which carries hls.js. A source that turns out to be
+            one without having said so is handed over the same way, from the
+            error handler.
+        */
+        if (nativePlayerAvailable() && !mimeType.toLowerCase().includes("mpegurl")) {
+            playDirectNative(src, mimeType, () => {
+                this.current = this.directTarget(options);
+            });
             return;
         }
 

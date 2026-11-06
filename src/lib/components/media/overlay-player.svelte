@@ -1023,6 +1023,11 @@
                 note below on why openUrl() cannot.
             */
             let itemId: string | null = null;
+            /*
+                Every file of a multi-file release, in order, when this title
+                is one. The player makes its own queue from them.
+            */
+            let itemIds: string[] | null = null;
 
             if (target.kind === "direct") {
                 /*
@@ -1074,27 +1079,21 @@
                     m3uUrl = payload.m3uUrl ?? null;
 
                     /*
-                        A MULTI-FILE release travels as the PLAYLIST, but
-                        still by id.
+                        A MULTI-FILE release travels as ONE ID PER FILE.
 
                         The item's own id names one stream -- the backend
                         defaults the part to 0 -- so handing it across for a
                         six-scene compilation started the external player on
-                        scene one with no way to reach the rest.
-                        `/Videos/{guid}/playlist.m3u` is the one form that can
-                        carry the whole release.
-
-                        Dropping the id and passing that URL instead is what
-                        the previous attempt did, and it cost the chooser:
-                        openExternal() fires an intent with no MIME type, so
-                        Android matches the http scheme alone and the default
-                        browser opens it -- reported exactly that way, for
-                        playlists, after single files had been fixed by moving
-                        them ONTO the id path. So the server mints an id that
-                        stands for the playlist URL, and it goes over the same
-                        bridge as everything else.
+                        scene one with no way to reach the rest. Handing
+                        across the playlist URL instead cost the chooser, and
+                        handing across a single id STANDING FOR that playlist
+                        made the player parse `audio/x-mpegurl`, which every
+                        HLS demuxer rejects for a plain `#EXTINF` list -- the
+                        failure this is the fix for. `PlayOptions.ids` is a
+                        list, so the queue is the player's own and every entry
+                        is a plain video URL. See `external_url/+server.ts`.
                     */
-                    if (payload.itemId) itemId = payload.itemId;
+                    itemIds = payload.itemIds ?? null;
                 }
             }
 
@@ -1110,7 +1109,7 @@
             // `$lib/player/external`, shared with the store so the button and
             // the client's default-player path cannot diverge.
             const outcome = await handOff(
-                { itemId, url, m3uUrl, title: target.title },
+                { itemId, itemIds, url, m3uUrl, title: target.title },
                 {
                     onFailure: (message) => toast.error(message),
                     // A plain browser on a platform with no chooser of its

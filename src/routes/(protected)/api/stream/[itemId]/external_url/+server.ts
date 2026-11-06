@@ -56,35 +56,43 @@ async function containerFor(
 }
 
 /**
- * How many playable files this title has.
+ * Which playable files this title has.
  *
- * 1 on any failure: a title that cannot be asked is played the way every
+ * Empty on any failure: a title that cannot be asked is played the way every
  * title was played before playlists existed, which is right for all but the
  * handful of releases this feature is for.
+ *
+ * The files themselves and not just a count, because each one is handed to
+ * the external player as an item of its own and needs a name on the queue.
  */
 async function partsInfo(
     fetcher: typeof fetch,
     backendUrl: string,
     apiKey: string,
     itemId: number
-): Promise<{ count: number; title: string }> {
+): Promise<{ parts: { index: number; title: string }[]; title: string }> {
     try {
         const response = await fetcher(`${backendUrl}/api/v1/stream/parts/${itemId}`, {
             headers: { "x-api-key": apiKey }
         });
 
-        if (!response.ok) return { count: 1, title: "" };
+        if (!response.ok) return { parts: [], title: "" };
 
         const payload = await response.json();
 
         return {
-            count: Math.max(1, (payload?.parts ?? []).length),
+            parts: ((payload?.parts ?? []) as { index?: unknown; title?: unknown }[]).map(
+                (entry) => ({
+                    index: Number(entry?.index ?? 0),
+                    title: String(entry?.title ?? "")
+                })
+            ),
             // The release's own name, because it is what an external player
-            // has to label the whole playlist with.
+            // has to label the whole thing with.
             title: String(payload?.title ?? "")
         };
     } catch {
-        return { count: 1, title: "" };
+        return { parts: [], title: "" };
     }
 }
 
@@ -122,48 +130,84 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
         containerFor(fetch, locals.backendUrl, locals.apiKey, itemId),
         partsInfo(fetch, locals.backendUrl, locals.apiKey, itemId)
     ]);
-    const parts = info.count;
+    const parts = Math.max(1, info.parts.length);
 
-    // A multi-file release goes over as a PLAYLIST. Handing across one file
-    // is what made a six-scene compilation play one scene in VLC exactly as
-    // it did in the browser -- the app was never told the rest existed.
-    //
-    // `.m3u` earns its place in the Android chooser the same way `.mp4` does
-    // (see the note above): media players declare pathPattern filters for it,
-    // browsers do not.
-    const path =
-        parts > 1
-            ? `/Videos/${toGuid(itemId)}/playlist.m3u?playSessionId=${token}`
-            : `/Videos/${toGuid(itemId)}/stream.${container}?static=true&playSessionId=${token}`;
+    /** One file of this release, as a URL that ends in its real container. */
+    const partPath = (index: number): string => {
+        const query = new URLSearchParams({ static: "true", playSessionId: token });
+
+        // Part 0 is the backend's default, so it is left off -- the URL for a
+        // single-file title stays exactly what it was before parts existed.
+        if (index > 0) query.set("part", String(index));
+
+        return `/Videos/${toGuid(itemId)}/stream.${container}?${query}`;
+    };
+
+    const playlistPath = `/Videos/${toGuid(itemId)}/playlist.m3u?playSessionId=${token}`;
+
+    // The URL form -- the last resort, for a shell with `openUrl` and no
+    // player bridge, and the source of the desktop `.m3u` download. A
+    // multi-file release can only be named as a whole by its playlist here,
+    // because a bare URL is one stream and there is nothing else to put the
+    // rest of the release in.
+    const path = parts > 1 ? playlistPath : partPath(0);
 
     // Absolute: this is handed to another application, which has no page to
     // resolve a relative path against.
     const streamUrl = new URL(path, url.origin).href;
 
     /*
-        A playlist needs an ID of its own, and this is why.
+        A multi-file release goes over as ONE ID PER FILE, and this is the
+        third attempt at it -- the first two each failed in a real player, so
+        the reasoning matters.
 
-        The URL above is only reachable through `NativeInterface.openUrl`,
-        which fires `Intent(ACTION_VIEW, uri)` with NO MIME type. Android then
-        resolves an http URI by scheme, every browser matches, and a phone
-        with a default browser set opens it there without ever showing a
-        chooser -- which is exactly what was reported once multi-file releases
-        started going over as `.m3u`. The `.m3u` extension does not rescue it:
-        the pathPattern filters media players declare are an ADDITION to the
-        browsers already matching, not a replacement.
+        Attempt one handed over the item's own id. The backend defaults the
+        part to 0, so a six-scene compilation started the external player on
+        scene one with no way to reach the rest.
 
-        The bridge that does set a type -- `ExternalPlayer.initPlayer`, which
-        calls `setDataAndType(uri, "video/*")` -- addresses videos by Jellyfin
-        id and accepts nothing else. So the playlist is given one: a path
-        grant, whose `/Videos/{id}/stream` redirects to this URL. The single
-        file case has been travelling that path since it was fixed the same
-        way; this puts playlists on it too.
+        Attempt two handed over the playlist URL, which lost the chooser:
+        `openUrl` fires `Intent(ACTION_VIEW, uri)` with NO MIME type, Android
+        matches the http scheme alone, and the default browser wins. `.m3u`
+        does not rescue it -- the pathPattern filters media players declare
+        are an ADDITION to the browsers already matching, not a replacement.
+
+        Attempt three minted ONE id standing for that playlist URL, so it
+        travelled the typed-intent bridge. The server side of that was
+        verified end to end and the client side never was, which is the whole
+        of why this came back: the player is handed `playlist.m3u`, served
+        `audio/x-mpegurl` -- and that is the HLS media type. ffmpeg, ExoPlayer
+        and MX Player all route it to their HLS demuxer, which then rejects a
+        plain `#EXTM3U`/`#EXTINF` list because it carries none of the
+        `#EXT-X-` tags HLS requires. Reported as the title simply failing in
+        MX Player while single files and scraped videos played.
+
+        There is no MIME type that says "plain multi-entry playlist" and is
+        not also claimed by an HLS parser, so the permanent fix is to stop
+        asking a player to parse a playlist at all. `PlayOptions.ids` is a
+        LIST (see `bundle.ts`, and `ExternalPlayer.initPlayer` /
+        `NativePlayer.loadPlayer`, which both take the same JSON): handing
+        over one id per file makes the queue the player's own, built from
+        plain video URLs on the path that has always worked for a single
+        file. Nothing has to understand a playlist for the release to play
+        through.
 
         Single-file titles keep the real item id, which the player already has
         a catalogue entry for.
     */
-    const handoffId =
-        parts > 1 ? toDirectGuid(mintPathToken(path, info.title || "Video", "m3u")) : null;
+    const itemIds =
+        parts > 1
+            ? info.parts.map((entry) =>
+                  toDirectGuid(
+                      mintPathToken(
+                          partPath(entry.index),
+                          // Named for the queue the player builds, which has
+                          // nothing else to label a row with.
+                          entry.title || `${info.title || "Video"} - file ${entry.index + 1}`,
+                          container
+                      )
+                  )
+              )
+            : null;
 
     /*
         The playlist form, for a desktop browser: no desktop player registers
@@ -172,10 +216,9 @@ export const GET: RequestHandler = async ({ params, locals, url, fetch }) => {
         carries the same play-session token as the stream URL, and for a
         multi-file release it is the same playlist the native hand-off uses.
     */
-    const m3uUrl = new URL(
-        `/Videos/${toGuid(itemId)}/playlist.m3u?playSessionId=${token}`,
-        url.origin
-    ).href;
+    const m3uUrl = new URL(playlistPath, url.origin).href;
 
-    return json({ url: streamUrl, parts, itemId: handoffId, m3uUrl });
+    // `itemId` is kept beside `itemIds` for the single-file shape every other
+    // caller already understands: null here means "use the item's own id".
+    return json({ url: streamUrl, parts, itemId: itemIds?.[0] ?? null, itemIds, m3uUrl });
 };
